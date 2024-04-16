@@ -7,3 +7,6 @@
 [submodule "connect-api"]
 	path = connect-api
 	url = https://github.com/MoreTore/connect-api.git
+[submodule "my-comma-auth"]
+	path = my-comma-auth
+	url = https://github.com/MoreTore/my-comma-auth.git
