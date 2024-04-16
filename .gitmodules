@@ -1,0 +1,9 @@
+[submodule "connect"]
+	path = connect
+	url = https://github.com/MoreTore/connect.git
+[submodule "minikeyvalue"]
+	path = minikeyvalue
+	url = https://github.com/MoreTore/minikeyvalue.git
+[submodule "connect-api"]
+	path = connect-api
+	url = https://github.com/MoreTore/connect-api.git
