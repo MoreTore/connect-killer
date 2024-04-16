@@ -1,0 +1,125 @@
+//! Run with
+//!
+//! ```not_rust
+//! cargo run -p example-reqwest-response
+//! ```
+
+use std::{convert::Infallible, time::Duration};
+
+use axum::http::{HeaderMap, StatusCode};
+use axum::{
+    body::{Body, Bytes},
+    extract::{Path, State},
+    http::{HeaderName, HeaderValue},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
+use reqwest::Client;
+use tokio_stream::StreamExt;
+use tower_http::trace::TraceLayer;
+use tracing::Span;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+async fn get_key(str: String) -> String {
+    format!("http://localhost:3000/swag-{}", str)
+}
+
+async fn get_item_by_id(Path(id): Path<String>) -> String {
+    let client = Client::new();
+    let cloned_id = id.clone();
+    let key = get_key(cloned_id).await;
+    test_put_get_delete(&client, &key);
+    format!("You requested item with id: {}", id)
+    
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "example_reqwest_response=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let client = Client::new();
+
+    let app = Router::new()
+        .route("/", get(proxy_via_reqwest))
+        .route("/stream", get(stream_some_data))
+        .route("/items/:id", get(get_item_by_id))
+        // Add some logging so we can see the streams going through
+        .layer(TraceLayer::new_for_http().on_body_chunk(
+            |chunk: &Bytes, _latency: Duration, _span: &Span| {
+                tracing::debug!("streaming {} bytes", chunk.len());
+            },
+        ))
+        .with_state(client);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:4000")
+        .await
+        .unwrap();
+    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn proxy_via_reqwest(State(client): State<Client>) -> Response {
+    let reqwest_response = match client.get("http://127.0.0.1:4000/stream").send().await {
+        Ok(res) => res,
+        Err(err) => {
+            tracing::error!(%err, "request failed");
+            return (StatusCode::BAD_REQUEST, Body::empty()).into_response();
+        }
+    };
+
+    let response_builder = Response::builder().status(reqwest_response.status().as_u16());
+
+    // Here the mapping of headers is required due to reqwest and axum differ on the http crate versions
+    let mut headers = HeaderMap::with_capacity(reqwest_response.headers().len());
+    headers.extend(reqwest_response.headers().into_iter().map(|(name, value)| {
+        let name = HeaderName::from_bytes(name.as_ref()).unwrap();
+        let value = HeaderValue::from_bytes(value.as_ref()).unwrap();
+        (name, value)
+    }));
+
+    response_builder
+        .body(Body::from_stream(reqwest_response.bytes_stream()))
+        // This unwrap is fine because the body is empty here
+        .unwrap()
+}
+
+async fn stream_some_data() -> Body {
+    let stream = tokio_stream::iter(0..5)
+        .throttle(Duration::from_secs(1))
+        .map(|n| n.to_string())
+        .map(Ok::<_, Infallible>);
+    Body::from_stream(stream)
+}
+
+async fn test_put_get_delete(client: &Client, key: &str) {
+    // PUT request
+    let res = client.put(key)
+                    .body("onyou")
+                    .send()
+                    .await
+                    .expect("Failed to execute request.");
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    // GET request
+    let res = client.get(key)
+                    .send()
+                    .await
+                    .expect("Failed to execute request.");
+    assert_eq!(res.status(), StatusCode::OK);
+    let text = res.text().await.expect("Failed to read response text.");
+    assert_eq!(text, "onyou");
+
+    // DELETE request
+    let res = client.delete(key)
+                    .send()
+                    .await
+                    .expect("Failed to execute request.");
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+}
