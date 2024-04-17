@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+      {
+          "type": "lldb",
+          "request": "launch",
+          "name": "Debug executable 'rust_keyvalue_tests'",
+          "cargo": {
+              "args": [
+                  "build",
+                  "--bin=rust_keyvalue_tests",
+                  "--package=rust_keyvalue_tests"
+              ],
+              "filter": {
+                  "name": "rust_keyvalue_tests",
+                  "kind": "bin"
+              }
+          },
+          "args": [],
+          "cwd": "${workspaceFolder}/rust_keyvalue_tests"
+      },
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Debug executable 'axum_server'",
+        "cargo": {
+            "args": [
+                "build",
+                "--bin=axum_server",
+                "--package=axum_server"
+            ],
+            "filter": {
+                "name": "axum_server",
+                "kind": "bin"
+            }
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}/rust_keyvalue_tests"
+    }
+  ]
+}
