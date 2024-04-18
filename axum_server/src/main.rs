@@ -2,12 +2,14 @@ use axum::{
   body::Bytes,
   extract::{Path, State, Query},
   http::{HeaderMap, StatusCode},
-  response::IntoResponse,
+  response::{IntoResponse, Response},
   routing::get,
   Router,
 
 };
-use reqwest::Client;
+use hyper::header;
+use regex::Regex;
+use reqwest::{Body ,Client};
 use serde_json::{json, Value};
 use std::time::Duration;
 use std::error::Error;
@@ -24,11 +26,15 @@ struct UploadUrlQuery {
 
 
 const MKV_ENDPOINT: &str = "http://localhost:3000";
+const CONNECT_ENDPOINT: &str = "http://127.0.0.1:6734";
 
 async fn list_keys_starting_with(str: &str) -> String {
   format!("{}/{}?list", MKV_ENDPOINT, str)
 }
 
+async fn get_mkv_file_url(file: &str) -> String {
+  format!("{}/{}", MKV_ENDPOINT, file)
+}
 
 #[tokio::main]
 async fn main() {
@@ -43,6 +49,7 @@ async fn main() {
       .route("/v1/route/:route_id/files", get(get_route_files))
       .route("/v1.4/:dongleId/upload_url", get(get_upload_url)) // curl https://api.commadotai.com/v1.4/ccfab3437bea5257/upload_url/?path=2019-06-06--11-30-31--9/fcamera.hevc&expiry_days=1 -H 'Authorization: JWT jwt_signed_with_device_private_key'
       .route("/v1/:dongleId/upload_urls", get(get_upload_urls))
+      .route("/connectdata/:dongle_id/:timestamp/:segment/:file", get(proxy_file_download))
       .layer(TraceLayer::new_for_http().on_body_chunk(
           |chunk: &Bytes, _latency: Duration, _span: &Span| {
               debug!("Streaming {} bytes", chunk.len());
@@ -99,13 +106,65 @@ async fn get_upload_urls(
   }).to_string()
 }
 
+async fn proxy_file_download(
+  Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
+  State(client): State<Client>,
+  headers: HeaderMap, // Include headers from the incoming request
+) -> impl IntoResponse {
+  let lookup_key = format!("{dongle_id}_{timestamp}--{segment}--{file}");
+  let internal_file_url = get_mkv_file_url(&lookup_key).await;
+  let mut request_builder = client.get(&internal_file_url);
+
+  // Check for range header and forward it if present
+  if let Some(range) = headers.get(header::RANGE) {
+      request_builder = request_builder.header(header::RANGE, range.clone());
+  }
+
+  let res = request_builder.send().await;
+
+  match res {
+      Ok(response) => {
+          if response.status().is_success() {
+              let content_length = response.headers().get(header::CONTENT_LENGTH)
+                                  .and_then(|ct_len| ct_len.to_str().ok())
+                                  .and_then(|ct_len| ct_len.parse::<u64>().ok());
+
+              let mut response_builder = Response::builder();
+
+              // Adjust response based on the presence of the Range header
+              if headers.contains_key(header::RANGE) {
+                  response_builder = response_builder.status(StatusCode::PARTIAL_CONTENT);
+              } else {
+                  response_builder = response_builder.status(StatusCode::PARTIAL_CONTENT);
+              }
+
+              response_builder = response_builder
+                  .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{lookup_key}\""));
+
+              // Add Content-Length if available
+              if let Some(length) = content_length {
+                  response_builder = response_builder.header(header::CONTENT_LENGTH, length);
+              }
+
+              let body = Body::wrap_stream(response.bytes_stream());
+              let proxy_response = response_builder.body(body).unwrap();
+
+              Ok(proxy_response)
+          } else {
+              Err((StatusCode::from(response.status()), "Failed to fetch the file"))
+          }
+      },
+      Err(_) => Err((StatusCode::BAD_GATEWAY, "Internal server error")),
+  }
+}
+
 async fn get_links_for_route(route_id: &str, client: &Client) -> Result<(StatusCode, String), Box<dyn Error>> {
-  let key = list_keys_starting_with(&route_id.replace("|", "_")).await;
+  let key = list_keys_starting_with(&route_id.replace("|", "/")).await;
   let response = client.get(&key).send().await?;
   let code = response.status();
   let data: Value = response.json().await?;
   let keys = data["keys"].as_array().unwrap_or(&vec![]).iter()
-      .map(|key| format!("{}{}", MKV_ENDPOINT, key.as_str().unwrap_or_default()))
+      .map(|key| format!("{}/connectdata{}", CONNECT_ENDPOINT, key.as_str().unwrap_or_default()))
       .collect::<Vec<String>>();
   let response_json = sort_keys_to_response(keys).await;
 
@@ -134,4 +193,35 @@ async fn sort_keys_to_response(keys: Vec<String>) -> Value {
     }
   }
   response_json
+}
+
+fn transform_route_string(input_string: &str) -> String {
+  // example input_string = 164080f7933651c4_2024-03-02--19-02-46--0--rlog.bz2 
+  // converts to =          164080f7933651c4/2024-03-02--19-02-46/0/rlog.bz2
+  let re = Regex::new(r"^([a-z0-9]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
+
+  match re.captures(input_string) {
+      Some(caps) => {
+          let transformed = format!("{}/{}/{}--{}/{}",
+              &caps[1], // 16-character alphanumeric string
+              &caps[2], // Date
+              &caps[3], // Time
+              &caps[4], // Segment number
+              &caps[5]  // File name
+          );
+          transformed
+      },
+      None => "No match found".to_string(),
+  }
+}
+
+// Define a struct to capture the raw query string
+struct RawQueryString(String);
+
+impl std::str::FromStr for RawQueryString {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_owned()))
+    }
 }
