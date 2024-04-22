@@ -1,0 +1,67 @@
+#!/bin/bash
+echo "Script executed from: ${PWD}"
+# save current directory
+BASEDIR=$PWD
+
+sudo apt-get update -y
+sudo apt upgrade -y
+sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+# Install Rust, pnpm, nvm, node, docker
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+wget -qO- https://get.pnpm.io/install.sh | sh -
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+nvm install 20
+node -v
+npm -v
+sudo apt-get install nodejs -y
+
+# Configure current shell to include Cargo's bin directory
+source ~/.bashrc
+. "$HOME/.cargo/env"
+
+cargo install loco-cli
+cargo install sea-orm-cli
+
+cd $BASEDIR/frontend
+pnpm install
+pnpm build
+cd $BASEDIR
+
+# Install Docker if we are not in wsl
+if [ ! -f "/proc/sys/fs/binfmt_misc/WSLInterop" ]; then
+    sudo exec bash docker_install.sh
+else
+    echo "WSL detected, skipping Docker installation"
+    echo "Please install Docker manually in your Windows machine and setup WSL2 integration"
+fi
+
+docker run -d -p 5432:5432 -e POSTGRES_USER=loco -e POSTGRES_DB=connect_development -e POSTGRES_PASSWORD="loco" postgres:15.3-alpine
+docker run -p 6379:6379 -d redis redis-server
+# echo current directory
+
+git clone --depth 1 --branch master https://github.com/Moretore/openpilot.git
+cd openpilot
+git submodule update --init --recursive --depth 1
+# build openpilot with docker
+docker build -t openpilot -f Dockerfile.openpilot .
+# or if we need to use custom version of openpilot we need to rebuild it locallly and then use FROM openpilot-base:local
+# docker build -t openpilot:local -f Dockerfile.openpilot_base .
+# modify Dockerfile.openpilot to use FROM openpilot:local instead of FROM ghcr.io/commaai/openpilot-base:latest
+cd $BASEDIR 
+git clone --depth 1 https://github.com/Moretore/minikeyvalue.git
+cd minikeyvalue
+docker build -t minikeyvalue -f Dockerfile .
+docker run -d -p 3000-3005:3000-3005 minikeyvalue
+
+go version
+rustc --version
+pnpm -v
+node -v
+docker -v
+docker-compose -v
+cargo -V
+cd $BASEDIR
+cargo loco start
+
