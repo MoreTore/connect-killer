@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+      {
+          "label": "build_project",
+          "type": "shell",
+          "options": {
+              "cwd": "${workspaceFolder}",
+              "shell": {
+                  "executable": "/bin/bash",
+                  "args": [
+                      "-c",
+                      "-i"
+                  ]
+              }
+          },
+          "command": "cargo",
+          "args": [
+              "build"
+          ]
+      }
+  ]
+}

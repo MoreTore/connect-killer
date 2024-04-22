@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+      {
+          "type": "lldb",
+          "request": "launch",
+          "name": "Debug executable 'lc_api_template-cli'",
+          "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}-cli",
+          "preLaunchTask": "build_project",
+          "args": [
+              "start",
+              "-e",
+              "development"
+          ],
+          "cwd": "${workspaceFolder}",
+      }
+  ]
+}
