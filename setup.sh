@@ -1,8 +1,9 @@
 #!/bin/bash
+
 echo "Script executed from: ${PWD}"
 # save current directory
 BASEDIR=$PWD
-
+git submodule update --init
 sudo apt-get update -y
 sudo apt upgrade -y
 sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
@@ -24,6 +25,14 @@ source ~/.bashrc
 cargo install loco-cli
 cargo install sea-orm-cli
 
+export PATH="$PATH:$HOME/.local/share/pnpm"
+# Verify pnpm installation and add pnpm to PATH immediately
+if command -v pnpm >/dev/null; then
+    echo "pnpm has been successfully installed and is available."
+else
+    echo "There was a problem adding pnpm to the PATH. Please check the installation."
+fi
+
 cd $BASEDIR/frontend
 pnpm install
 pnpm build
@@ -32,7 +41,8 @@ cd $BASEDIR
 # Install Docker if we are not in wsl
 if [ ! -f "/proc/sys/fs/binfmt_misc/WSLInterop" ]; then
     sudo exec bash docker_install.sh
-else
+fi
+if [-f "/proc/sys/fs/binfmt_misc/WSLInterop" ]; then
     echo "WSL detected, skipping Docker installation"
     echo "Please install Docker manually in your Windows machine and setup WSL2 integration"
 fi
@@ -41,20 +51,20 @@ docker run -d -p 5432:5432 -e POSTGRES_USER=loco -e POSTGRES_DB=connect_developm
 docker run -p 6379:6379 -d redis redis-server
 # echo current directory
 
-git clone --depth 1 --branch master https://github.com/Moretore/openpilot.git
-cd openpilot
-git submodule update --init --recursive --depth 1
-# build openpilot with docker
-docker build -t openpilot -f Dockerfile.openpilot .
+# git clone --depth 1 --branch master https://github.com/Moretore/openpilot.git
+# cd openpilot
+# git submodule update --init --recursive --depth 1
+# # build openpilot with docker
+# docker build -t openpilot -f Dockerfile.openpilot .
 # or if we need to use custom version of openpilot we need to rebuild it locallly and then use FROM openpilot-base:local
 # docker build -t openpilot:local -f Dockerfile.openpilot_base .
 # modify Dockerfile.openpilot to use FROM openpilot:local instead of FROM ghcr.io/commaai/openpilot-base:latest
 cd $BASEDIR 
-git clone --depth 1 https://github.com/Moretore/minikeyvalue.git
 cd minikeyvalue
 docker build -t minikeyvalue -f Dockerfile .
 docker run -d -p 3000-3005:3000-3005 minikeyvalue
-
+cd $BASEDIR
+git clone --depth 1 https://github.com/commaai/cereal.git
 go version
 rustc --version
 pnpm -v

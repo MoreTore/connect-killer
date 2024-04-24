@@ -7,3 +7,4 @@ pub mod tasks;
 pub mod views;
 pub mod workers;
 pub mod common;
+pub mod cereal;

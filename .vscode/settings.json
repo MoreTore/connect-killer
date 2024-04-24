@@ -1,0 +1,7 @@
+{
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "javascript.suggest.paths": true,
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "eslint.nodePath": "node_modules/eslint/bin",
+    "npm.packageManager": "pnpm"
+}
