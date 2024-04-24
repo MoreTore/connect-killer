@@ -61,8 +61,19 @@ struct UrlResponse {
     url: String,
 }
 
-pub async fn echo(req_body: String) -> String {
-    req_body
+pub async fn echo(State(ctx): State<AppContext>,
+    req_body: String
+) -> String {
+    let ret = req_body.clone();
+    crate::workers::qlog_parser::QlogParserWorker::perform_later(
+        &ctx,
+        crate::workers::qlog_parser::QlogParserWorkerArgs {
+            path: "/root/unlogger/164080f7933651c4_2024-03-03--06-46-42--43--rlog.bz2".to_string(),
+            output: req_body,
+            },
+    )
+    .await;
+    ret
 }
 
 pub async fn get_route_files(
@@ -150,23 +161,25 @@ async fn upload_urls_handler(
 }
 
 fn transform_route_string(input_string: &String) -> String {
-// example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
-// converts to =          2024-03-02--19-02-46/0/rlog.bz2
-let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
+    // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
+    // converts to =          2024-03-02--19-02-46/0/rlog.bz2
+    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
 
-match re.captures(input_string) {
-    Some(caps) => {
-        let transformed = format!("{}--{}/{}/{}",
-            &caps[1], // Date
-            &caps[2], // Time
-            &caps[3], // Segment number
-            &caps[4]  // File name
-        );
-        transformed
-    },
-    None => "No match found".to_string(),
+    match re.captures(input_string) {
+        Some(caps) => {
+            let transformed = format!("{}--{}/{}/{}",
+                &caps[1], // Date
+                &caps[2], // Time
+                &caps[3], // Segment number
+                &caps[4]  // File name
+            );
+            transformed
+        },
+        None => "No match found".to_string(),
+    }
 }
-}
+
+
 
 pub fn routes() -> Routes {
     Routes::new()
@@ -174,5 +187,6 @@ pub fn routes() -> Routes {
         .add("/route/:route_id/files", get(get_route_files))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
         .add(".4/:dongleId/upload_url/", get(get_upload_url)) 
+        //.add("/devices/:dongle_id/route_segments" get(get_route_segment))
         .add("/echo", post(echo))
 }
