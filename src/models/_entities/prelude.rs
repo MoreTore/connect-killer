@@ -2,4 +2,6 @@
 
 pub use super::devices::Entity as Devices;
 pub use super::notes::Entity as Notes;
+pub use super::routes::Entity as Routes;
+pub use super::sements::Entity as Sements;
 pub use super::users::Entity as Users;

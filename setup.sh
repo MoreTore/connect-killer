@@ -73,5 +73,5 @@ docker -v
 docker-compose -v
 cargo -V
 cd $BASEDIR
-cargo loco start
+cargo loco start --server-and-worker
 

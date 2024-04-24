@@ -4,4 +4,6 @@ pub mod prelude;
 
 pub mod devices;
 pub mod notes;
+pub mod routes;
+pub mod sements;
 pub mod users;
