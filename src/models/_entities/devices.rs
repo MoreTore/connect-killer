@@ -11,11 +11,19 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub dongle_id: Option<String>,
+    pub serial: Option<String>,
+    pub sim_id: Option<String>,
+    pub prime: Option<bool>,
+    pub primetype: Option<i16>,
+    pub last_ping: Option<String>,
+    pub uploads_allowed: Option<bool>,
     pub user_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::routes::Entity")]
+    Routes,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::UserId",
@@ -24,6 +32,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Users,
+}
+
+impl Related<super::routes::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Routes.def()
+    }
 }
 
 impl Related<super::users::Entity> for Entity {

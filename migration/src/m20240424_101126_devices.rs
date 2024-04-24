@@ -10,7 +10,13 @@ impl MigrationTrait for Migration {
             .create_table(
                 table_auto(Devices::Table)
                     .col(pk_auto(Devices::Id))
-                    .col(string_null(Devices::DongleId))
+                    .col(string_null(Devices::DongleId).unique_key())
+                    .col(string_null(Devices::Serial))
+                    .col(string_null(Devices::SimId))
+                    .col(boolean_null(Devices::Prime))
+                    .col(tiny_integer_null(Devices::Primetype))
+                    .col(string_null(Devices::LastPing))
+                    .col(boolean_null(Devices::UploadsAllowed))
                     .col(integer(Devices::UserId))
                     .foreign_key(
                         ForeignKey::create()
@@ -37,6 +43,12 @@ enum Devices {
     Table,
     Id,
     DongleId,
+    Serial,
+    SimId,
+    Prime,
+    Primetype,
+    LastPing,
+    UploadsAllowed,
     UserId,
     
 }
