@@ -4,3 +4,4 @@ pub mod users;
 pub mod devices;
 pub mod sements;
 pub mod routes;
+pub mod authorized_users;

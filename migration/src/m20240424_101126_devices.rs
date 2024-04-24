@@ -17,11 +17,11 @@ impl MigrationTrait for Migration {
                     .col(tiny_integer_null(Devices::Primetype))
                     .col(string_null(Devices::LastPing))
                     .col(boolean_null(Devices::UploadsAllowed))
-                    .col(integer(Devices::UserId))
+                    .col(integer(Devices::OwnerId))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-devices-users")
-                            .from(Devices::Table, Devices::UserId)
+                            .from(Devices::Table, Devices::OwnerId)
                             .to(Users::Table, Users::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
@@ -49,7 +49,7 @@ enum Devices {
     Primetype,
     LastPing,
     UploadsAllowed,
-    UserId,
+    OwnerId,
     
 }
 

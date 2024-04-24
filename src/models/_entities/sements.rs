@@ -36,20 +36,4 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::routes::Entity",
-        from = "Column::CanonicalName",
-        to = "super::routes::Column::CanonicalRouteName",
-        on_update = "Cascade",
-        on_delete = "Cascade"
-    )]
-    Routes,
-}
-
-impl Related<super::routes::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Routes.def()
-    }
-}
-
+pub enum Relation {}

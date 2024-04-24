@@ -10,6 +10,8 @@ mod m20240424_101126_devices;
 mod m20240424_141802_sements;
 
 mod m20240424_144603_routes;
+mod m20240424_155056_authorized_users;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -21,6 +23,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240424_101126_devices::Migration),
             Box::new(m20240424_141802_sements::Migration),
             Box::new(m20240424_144603_routes::Migration),
+            Box::new(m20240424_155056_authorized_users::Migration),
         ]
     }
 }
