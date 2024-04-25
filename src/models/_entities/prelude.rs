@@ -4,5 +4,5 @@ pub use super::authorized_users::Entity as AuthorizedUsers;
 pub use super::devices::Entity as Devices;
 pub use super::notes::Entity as Notes;
 pub use super::routes::Entity as Routes;
-pub use super::sements::Entity as Sements;
+pub use super::segments::Entity as Segments;
 pub use super::users::Entity as Users;

@@ -1,5 +1,5 @@
 mod users;
 mod devices;
-mod sements;
+mod segments;
 mod routes;
 mod authorized_users;

@@ -6,5 +6,5 @@ pub mod authorized_users;
 pub mod devices;
 pub mod notes;
 pub mod routes;
-pub mod sements;
+pub mod segments;
 pub mod users;

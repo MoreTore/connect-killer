@@ -11,15 +11,15 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub user_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub device_id: i32,
+    pub device_dongle_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
         belongs_to = "super::devices::Entity",
-        from = "Column::DeviceId",
-        to = "super::devices::Column::Id",
+        from = "Column::DeviceDongleId",
+        to = "super::devices::Column::DongleId",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]
