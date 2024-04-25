@@ -9,7 +9,8 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 table_auto(Devices::Table)
-                    .col(pk_auto(Devices::Id))
+
+                
                     .col(string_null(Devices::DongleId).unique_key())
                     .col(string_null(Devices::Serial))
                     .col(string_null(Devices::SimId))
