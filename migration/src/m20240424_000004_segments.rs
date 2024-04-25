@@ -12,26 +12,28 @@ impl MigrationTrait for Migration {
                     //.col(pk_auto(Segments::Id))
                     .col(string_uniq(Segments::CanonicalName).unique_key().primary_key())
                     .col(string(Segments::CanonicalRouteName))
-                    .col(string(Segments::Url))
+                    .col(string_null(Segments::Url))
                     .col(string(Segments::QlogUrl))
-                    .col(string(Segments::RlogUrl))
-                    .col(string(Segments::FcamUrl))
-                    .col(string(Segments::DcamUrl))
-                    .col(string(Segments::EcamUrl))
+                    .col(string_null(Segments::QcamUrl))
+                    .col(string_null(Segments::RlogUrl))
+                    .col(string_null(Segments::FcamUrl))
+                    .col(string_null(Segments::DcamUrl))
+                    .col(string_null(Segments::EcamUrl))
+                    .col(boolean(Segments::ProcCamera).default(false))
+                    .col(boolean(Segments::ProcLog).default(false))
+                    .col(boolean(Segments::Can).default(false))
+                    .col(boolean(Segments::Hpgps).default(false))
+                    .col(double(Segments::StartLng).default(0.0))
+                    .col(double(Segments::EndLng).default(0.0))
+                    .col(double(Segments::StartLat).default(0.0))
+                    .col(double(Segments::EndLat).default(0.0))
                     //.col(string_null(Segments::GitRemote))
                     .col(big_integer(Segments::StartTimeUtcMillis))
                     .col(integer_null(Segments::CreateTime))
-                    .col(boolean_null(Segments::Hpgps))
                     .col(big_integer(Segments::EndTimeUtcMillis))
-                    .col(float_null(Segments::EndLng))
-                    .col(float_null(Segments::StartLng))
-                    .col(boolean_null(Segments::Passive))
-                    .col(tiny_integer(Segments::ProcLog))
+                    .col(boolean_null(Segments::Passive).default(true))
                     //.col(string_null(Segments::Version))
                     .col(string_null(Segments::GitBranch))
-                    .col(float_null(Segments::EndLat))
-                    .col(tiny_integer_null(Segments::ProcCamera))
-                    .col(boolean(Segments::Can))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-segments-routes")
@@ -59,6 +61,7 @@ enum Segments {
     CanonicalRouteName,
     Url,
     QlogUrl,
+    QcamUrl,
     RlogUrl,
     FcamUrl,
     DcamUrl,
@@ -70,6 +73,7 @@ enum Segments {
     EndTimeUtcMillis,
     EndLng,
     StartLng,
+    StartLat,
     Passive,
     ProcLog,
     //Version,

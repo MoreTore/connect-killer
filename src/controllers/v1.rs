@@ -68,11 +68,13 @@ pub async fn echo(State(ctx): State<AppContext>,
     crate::workers::qlog_parser::QlogParserWorker::perform_later(
         &ctx,
         crate::workers::qlog_parser::QlogParserWorkerArgs {
-            path: "/root/unlogger/164080f7933651c4_2024-03-03--06-46-42--43--rlog.bz2".to_string(),
-            output: req_body,
+            internal_file_url: "http://localhost:3000/164080f7933651c4_2024-03-03--06-46-42--43--rlog.bz2".to_string(),
+            dongle_id: "164080f7933651c4".to_string(),
+            timestamp: "2024-03-03--06-46-42".to_string(),
+            segment: "43".to_string(),
+            file: "rlog.bz2".to_string(),
             },
-    )
-    .await;
+    ).await.unwrap();
     ret
 }
 
