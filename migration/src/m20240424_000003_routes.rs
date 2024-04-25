@@ -9,7 +9,7 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 table_auto(Routes::Table)
-                    .col(string_uniq(Routes::CanonicalRouteName).unique_key())
+                    .col(string_uniq(Routes::CanonicalRouteName).unique_key().primary_key())
                     .col(string_null(Routes::GitRemote))
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))

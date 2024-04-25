@@ -4,20 +4,13 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "routes")]
+#[sea_orm(table_name = "authorized_users")]
 pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub canonical_route_name: String,
-    pub git_remote: Option<String>,
-    pub version: Option<String>,
-    pub git_branch: Option<String>,
-    pub devicetype: Option<i16>,
-    pub git_dirty: Option<bool>,
-    pub url: String,
-    pub can: bool,
-    pub git_commit: Option<String>,
+    pub user_id: i32,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub device_dongle_id: String,
 }
 
@@ -31,8 +24,14 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Devices,
-    #[sea_orm(has_many = "super::segments::Entity")]
-    Segments,
+    #[sea_orm(
+        belongs_to = "super::users::Entity",
+        from = "Column::UserId",
+        to = "super::users::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    Users,
 }
 
 impl Related<super::devices::Entity> for Entity {
@@ -41,8 +40,8 @@ impl Related<super::devices::Entity> for Entity {
     }
 }
 
-impl Related<super::segments::Entity> for Entity {
+impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Segments.def()
+        Relation::Users.def()
     }
 }
