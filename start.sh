@@ -10,10 +10,10 @@ adddate() {
 }
 
 # Create log file and insert header
-# echo "Log created on $(date +'%Y-%m-%d %H:%M:%S')" | tee "$LOGFILE"
-# echo "System Information:" | tee -a "$LOGFILE"
-# echo "Hostname: $(hostname)" | tee -a "$LOGFILE"
-# echo "Operating System: $(uname -a)" | tee -a "$LOGFILE"
-# echo "-----------------------------------------" | tee -a "$LOGFILE"
+echo "Log created on $(date +'%Y-%m-%d %H:%M:%S')" | tee "$LOGFILE"
+echo "System Information:" | tee -a "$LOGFILE"
+echo "Hostname: $(hostname)" | tee -a "$LOGFILE"
+echo "Operating System: $(uname -a)" | tee -a "$LOGFILE"
+echo "-----------------------------------------" | tee -a "$LOGFILE"
 
 sudo bash setup.sh | adddate >>"$LOGFILE"
