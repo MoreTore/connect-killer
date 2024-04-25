@@ -13,7 +13,7 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 pub struct SegmentParams {
-    pub cononical_name: String,
+    pub canonical_name: String,
     pub url: String,
     pub qlog_url: String,
     pub qcam_url: Option<String>,
@@ -40,7 +40,7 @@ impl super::_entities::segments::Model {
     ) -> ModelResult<Self> {
         let txn = db.begin().await?;
         if segments::Entity::find()
-            .filter(segments::Column::CanonicalName.eq(&params.cononical_name))
+            .filter(segments::Column::CanonicalName.eq(&params.canonical_name))
             .one(&txn)
             .await?
             .is_some()
@@ -53,7 +53,7 @@ impl super::_entities::segments::Model {
         let re = regex::Regex::new(r"^([a-z0-9]{16})\|([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)")
             .expect("Invalid regex");
         let canonical_route;
-        match re.captures(&params.cononical_name) {
+        match re.captures(&params.canonical_name) {
             Some(caps) => {
                 canonical_route = format!("{}|{}--{}",
                     &caps[1], // dongle_id
@@ -66,7 +66,7 @@ impl super::_entities::segments::Model {
         
         let segment = segments::ActiveModel {
             
-            canonical_name: ActiveValue::Set(params.cononical_name.clone()),
+            canonical_name: ActiveValue::Set(params.canonical_name.clone()),
             canonical_route_name: ActiveValue::Set(canonical_route.clone()),
             url: ActiveValue::Set(params.url.clone()),
             qlog_url: ActiveValue::Set(params.qlog_url.clone()),
