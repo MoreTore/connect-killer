@@ -37,7 +37,7 @@ impl MigrationTrait for Migration {
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-segments-routes")
-                            .from(Segments::Table, Segments::CanonicalName)
+                            .from(Segments::Table, Segments::CanonicalRouteName)
                             .to(Routes::Table, Routes::CanonicalRouteName)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),

@@ -79,7 +79,7 @@ impl worker::Worker<QlogParserWorkerArgs> for QlogParserWorker {
                                        args.timestamp,
                                        args.segment);
         let mut sp = SegmentParams {
-            cononical_name: format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment),
+            canonical_name: format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment),
             url: "test".to_string(),
             qlog_url: format!("{}/{}", segment_base_url, args.file),
             qcam_url: None,
@@ -150,8 +150,6 @@ fn process_data(bytes: &[u8]) -> worker::Result<Vec<u8>> {
         match event.which().map_err(Box::from)? {
             log_capnp::event::InitData(init_data) => {
                 //let init_data = init_data.map_err(Box::from)?;
-                
-                
             }
             _ => {}
         }

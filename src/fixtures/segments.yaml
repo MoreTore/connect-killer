@@ -1,0 +1,17 @@
+---
+- canonical_route_name: 164080f7933651c4|2024-03-03--06-46-42
+  canonical_name: 164080f7933651c4|2024-03-03--06-46-42--43
+  qlog_url: localhost:3000/connectdata/164080f7933651c4/2024-03-03--06-46-42/43/rlog.bz2
+  url: localhost:3000/this/is/a/test
+  proc_log: False
+  proc_camera: False
+  can: True
+  hgps: True
+  start_time_utc_millis: 1648033600000
+  end_time_utc_millis:   1648033660000
+  start_lng: 0.0
+  start_lat: 0.0
+  end_lng: 0.0
+  end_lat: 0.0
+  created_at: "2023-11-12T12:34:56.789"
+  updated_at: "2023-11-12T12:34:56.789"

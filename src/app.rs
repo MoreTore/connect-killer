@@ -19,7 +19,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::{
     controllers, initializers,
-    models::_entities::{notes, users},
+    models::_entities::{devices, notes, routes, segments, users},
     tasks,
     workers::downloader::DownloadWorker,
 };
@@ -85,7 +85,10 @@ impl Hooks for App {
 
     async fn seed(db: &DatabaseConnection, base: &Path) -> Result<()> {
         db::seed::<users::ActiveModel>(db, &base.join("users.yaml").display().to_string()).await?;
-        db::seed::<notes::ActiveModel>(db, &base.join("notes.yaml").display().to_string()).await?;
+        //db::seed::<notes::ActiveModel>(db, &base.join("notes.yaml").display().to_string()).await?;
+        db::seed::<devices::ActiveModel>(db, &base.join("devices.yaml").display().to_string()).await?;
+        db::seed::<routes::ActiveModel>(db, &base.join("routes.yaml").display().to_string()).await?;
+        db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
         Ok(())
     }
 
