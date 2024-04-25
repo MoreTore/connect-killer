@@ -3,5 +3,11 @@
     "javascript.suggest.paths": true,
     "javascript.updateImportsOnFileMove.enabled": "always",
     "eslint.nodePath": "node_modules/eslint/bin",
-    "npm.packageManager": "pnpm"
+    "npm.packageManager": "pnpm",
+    "VSCodeCounter.exclude": [
+        "**/.gitignore",
+        "**/.vscode/**",
+        "**/node_modules/**",
+        "*_capnp.rs"
+    ]
 }
