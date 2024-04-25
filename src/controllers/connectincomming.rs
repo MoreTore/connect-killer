@@ -2,6 +2,7 @@
 use loco_rs::prelude::*;
 use bytes::BytesMut;
 use crate::common;
+use crate::workers::qlog_parser::{QlogParserWorker, QlogParserWorkerArgs};
 use axum::{
     body::{Body, Bytes},
     extract::{Multipart, Path, State},
@@ -11,7 +12,7 @@ use axum::{
     Router,
   
   };
-
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn echo(req_body: String) -> String {
     req_body
@@ -57,19 +58,24 @@ pub async fn upload_to_mkv_server(
           StatusCode::FORBIDDEN => return (status, "Duplicate File Upload"),
           StatusCode::CREATED => {
             // enque the file for processing
-            crate::workers::qlog_parser::QlogParserWorker::perform_later(
-              &ctx,
-              crate::workers::qlog_parser::QlogParserWorkerArgs {
-                  internal_file_url: full_url,
-                  dongle_id: dongle_id,
-                  timestamp: timestamp,
-                  segment: segment,
-                  file: file,
-                  },
-          )
-          .await;
-            return (status, "File Uploaded Successfully")
-
+            let result = QlogParserWorker::perform_later(&ctx, 
+              QlogParserWorkerArgs {
+                internal_file_url: full_url,
+                dongle_id: dongle_id,
+                timestamp: timestamp,
+                segment: segment,
+                file: file,
+                create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+              },
+            ).await;
+            match result {
+              Ok(_) => return (status, "File Uploaded Successfully"),
+              Err(e) => {
+                let error_message = format!("{}", e);
+                println!("Error enqueuing file for processing: {}", error_message);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong");
+              }
+            }
           }
            
           _ => return (status, "Unhandled status. File not uploaded.")

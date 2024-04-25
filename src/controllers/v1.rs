@@ -73,6 +73,7 @@ pub async fn echo(State(ctx): State<AppContext>,
             timestamp: "2024-03-03--06-46-42".to_string(),
             segment: "43".to_string(),
             file: "rlog.bz2".to_string(),
+            create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
             },
     ).await.unwrap();
     ret
