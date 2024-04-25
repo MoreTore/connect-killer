@@ -16,3 +16,5 @@ target/
 *.pdb
 
 /log
+/cereal
+/src/cereal
