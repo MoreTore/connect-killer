@@ -16,4 +16,4 @@ adddate() {
 # echo "Operating System: $(uname -a)" | tee -a "$LOGFILE"
 # echo "-----------------------------------------" | tee -a "$LOGFILE"
 
-sudo bash setup.sh | adddate >>"logfile_$DATE.txt"
+sudo bash setup.sh | adddate >>"$LOGFILE"
