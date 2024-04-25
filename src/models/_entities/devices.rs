@@ -9,8 +9,8 @@ pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(primary_key)]
-    pub id: i32,
     pub dongle_id: String,
+    pub public_key: String,
     pub serial: Option<String>,
     pub sim_id: Option<String>,
     pub prime: Option<bool>,

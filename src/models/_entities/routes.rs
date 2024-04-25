@@ -20,15 +20,17 @@ pub struct Model {
     pub url: String,
     pub can: bool,
     pub git_commit: Option<String>,
-    pub devices_id: i32,
+    pub device_dongle_id: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::segments::Entity")]
+    Routes,
     #[sea_orm(
         belongs_to = "super::devices::Entity",
-        from = "Column::DevicesId",
-        to = "super::devices::Column::Id",
+        from = "Column::DeviceDongleId",
+        to = "super::devices::Column::DongleId",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]

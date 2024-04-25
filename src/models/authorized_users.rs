@@ -10,7 +10,7 @@ pub use super::_entities::authorized_users::{self, ActiveModel, Entity, Model};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AuthorizeParams {
     pub user_id: i32,
-    pub device_id: i32,
+    pub device_dongle_id: i32,
 }
 
 impl ActiveModelBehavior for ActiveModel {
@@ -29,7 +29,7 @@ impl super::_entities::authorized_users::Model {
     ) -> bool {
         let permission = authorized_users::Entity::find()
             .filter(authorized_users::Column::UserId.eq(params.user_id))
-            .filter(authorized_users::Column::DeviceId.eq(params.device_id))
+            .filter(authorized_users::Column::DeviceDongleId.eq(params.device_dongle_id))
             .one(db)
             .await
             .expect("Database query failed");
@@ -45,7 +45,7 @@ impl super::_entities::authorized_users::Model {
 
         let permission = authorized_users::ActiveModel {
             user_id: ActiveValue::Set(params.user_id),
-            device_id: ActiveValue::Set(params.device_id),
+            device_dongle_id: ActiveValue::Set(params.device_dongle_id),
         }
         .insert(&txn).await?;
         
@@ -63,7 +63,7 @@ impl super::_entities::authorized_users::Model {
         // Use DeleteMany for deleting multiple records based on a condition
         let rows = authorized_users::Entity::delete_many()
             .filter(authorized_users::Column::UserId.eq(params.user_id))
-            .filter(authorized_users::Column::DeviceId.eq(params.device_id))
+            .filter(authorized_users::Column::DeviceDongleId.eq(params.device_dongle_id))
             .exec(&txn)
             .await?;
     

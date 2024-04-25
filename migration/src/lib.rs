@@ -3,15 +3,11 @@
 pub use sea_orm_migration::prelude::*;
 
 mod m20220101_000001_users;
+mod m20240424_000002_devices;
+mod m20240424_000003_routes;
+mod m20240424_000004_segments;
+mod m20240424_000005_authorized_users;
 mod m20231103_114510_notes;
-
-
-mod m20240424_101126_devices;
-mod m20240424_141802_sements;
-
-mod m20240424_144603_routes;
-mod m20240424_155056_authorized_users;
-
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -20,10 +16,11 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20220101_000001_users::Migration),
             Box::new(m20231103_114510_notes::Migration),
-            Box::new(m20240424_101126_devices::Migration),
-            Box::new(m20240424_141802_sements::Migration),
-            Box::new(m20240424_144603_routes::Migration),
-            Box::new(m20240424_155056_authorized_users::Migration),
+            Box::new(m20240424_000002_devices::Migration),
+            Box::new(m20240424_000003_routes::Migration),
+            Box::new(m20240424_000004_segments::Migration),
+            Box::new(m20240424_000005_authorized_users::Migration),
+            
         ]
     }
 }
