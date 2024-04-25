@@ -1,6 +1,7 @@
 use std::path::Path;
-
+use std::env;
 use async_trait::async_trait;
+use chrono::format;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},
@@ -10,8 +11,10 @@ use loco_rs::{
     task::Tasks,
     worker::{AppWorker, Processor},
     Result,
+    storage,
+    config::Config,
 };
-use migration::Migrator;
+use migration::{Migrator, RcOrArc};
 use sea_orm::DatabaseConnection;
 
 use crate::{
@@ -24,7 +27,9 @@ use crate::{
 use reqwest::{Body ,Client};
 use axum::Extension;
 
-pub struct App;
+pub struct App {
+    client: Client,
+}
 #[async_trait]
 impl Hooks for App {
     fn app_name() -> &'static str {
@@ -42,6 +47,8 @@ impl Hooks for App {
     }
 
     async fn boot(mode: StartMode, environment: &Environment) -> Result<BootResult> {
+        let client = Client::new();
+        let app = App { client };
         create_app::<Self, Migrator>(mode, environment).await
     }
 
@@ -83,8 +90,21 @@ impl Hooks for App {
     }
 
     async fn after_routes(router: axum::Router, _ctx: &AppContext) -> Result<axum::Router> {
-        // cache should reside at: ~/.cache/huggingface/hub
+
         let client = Client::new();
         Ok(router.layer(Extension(client)))
     }
+
+    async fn storage(
+        _config: &Config,
+        environment: &Environment,
+    ) -> Result<Option<storage::Storage>> {
+        // get the project root directory
+        //let root = env::current_dir().expect("Failed to get current directory");
+        
+        let local_storage = storage::Storage::single(storage::drivers::local::new_with_prefix("uploads")
+            .expect("Failed to create local storage driver"));
+        return Ok(Some(local_storage));
+    }
+
 }

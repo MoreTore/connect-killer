@@ -13,24 +13,28 @@ pub struct Model {
     pub canonical_route_name: String,
     pub url: String,
     pub qlog_url: String,
-    pub rlog_url: String,
-    pub fcam_url: String,
-    pub dcam_url: String,
-    pub ecam_url: String,
+    pub qcam_url: Option<String>,
+    pub rlog_url: Option<String>,
+    pub fcam_url: Option<String>,
+    pub dcam_url: Option<String>,
+    pub ecam_url: Option<String>,
     pub start_time_utc_millis: i64,
     pub create_time: Option<i32>,
     pub hpgps: Option<bool>,
     pub end_time_utc_millis: i64,
-    #[sea_orm(column_type = "Float", nullable)]
-    pub end_lng: Option<f32>,
-    #[sea_orm(column_type = "Float", nullable)]
-    pub start_lng: Option<f32>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub end_lng: Option<f64>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub start_lng: Option<f64>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub end_lat: Option<f64>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub start_lat: Option<f64>,
     pub passive: Option<bool>,
-    pub proc_log: i16,
+    pub proc_log: bool,
     pub git_branch: Option<String>,
-    #[sea_orm(column_type = "Float", nullable)]
-    pub end_lat: Option<f32>,
-    pub proc_camera: Option<i16>,
+
+    pub proc_camera: bool,
     pub can: bool,
 }
 

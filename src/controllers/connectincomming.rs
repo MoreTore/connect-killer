@@ -23,8 +23,8 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
 }
 
 pub async fn upload_to_mkv_server(
-    Path((_dongle_id, _timestamp, _segment, file)): Path<(String, String, String, String)>,
-    State(_ctx): State<AppContext>,
+    Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
+    State(ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     mut multipart: Multipart,
   ) -> impl IntoResponse {
@@ -55,7 +55,23 @@ pub async fn upload_to_mkv_server(
         let status = response.status();
         match status {
           StatusCode::FORBIDDEN => return (status, "Duplicate File Upload"),
-          StatusCode::CREATED => return (status, "File Uploaded Successfully"),
+          StatusCode::CREATED => {
+            // enque the file for processing
+            crate::workers::qlog_parser::QlogParserWorker::perform_later(
+              &ctx,
+              crate::workers::qlog_parser::QlogParserWorkerArgs {
+                  internal_file_url: full_url,
+                  dongle_id: dongle_id,
+                  timestamp: timestamp,
+                  segment: segment,
+                  file: file,
+                  },
+          )
+          .await;
+            return (status, "File Uploaded Successfully")
+
+          }
+           
           _ => return (status, "Unhandled status. File not uploaded.")
         }
       },
@@ -69,6 +85,7 @@ pub async fn upload_to_mkv_server(
 
   (StatusCode::BAD_REQUEST, "Invalid multipart file uplaod request")
 }
+
 
 pub fn routes() -> Routes {
     Routes::new()

@@ -34,7 +34,7 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json"] }
 reqwest = { version = "0.12", features = ["stream", "json"] }
 dotenv = "0.15.0"
 bytes = "1.6.0"
-regex = "1.10.4"
+regex = "~1.10.4"
 # view engine i18n
 fluent-templates = { version = "0.8.0", features = ["tera"] }
 unic-langid = "0.9.4"
@@ -42,8 +42,10 @@ capnp = "0.19.3"
 capnpc = "0.19.0"
 bzip2 = "0.4.3"
 anyhow = "1.0.82"
-# /view engine
-
+futures = "0.3.30"
+async-compression = { version = "0.4.8", features = ["tokio", "bzip2"] }
+tokio-util = "0.7.10"
+thiserror = "1.0.30"
 [[bin]]
 name = "connect-cli"
 path = "src/bin/main.rs"
@@ -60,3 +62,7 @@ capnp = "0.19.3"
 capnpc = "0.19.0"
 [patch.crates-io]
 capnp = { git = "https://github.com/moretore/capnproto-rust.git", branch = "format-text" }
+# release with optimizations and no debug info
+[profile.release]
+opt-level = 3
+debug = false
