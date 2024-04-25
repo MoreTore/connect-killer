@@ -4,4 +4,3 @@ pub mod users;
 pub mod devices;
 pub mod segments;
 pub mod routes;
-pub mod authorized_users;

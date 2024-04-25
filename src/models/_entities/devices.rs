@@ -22,8 +22,6 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::authorized_users::Entity")]
-    AuthorizedUsers,
     #[sea_orm(has_many = "super::routes::Entity")]
     Routes,
     #[sea_orm(
@@ -36,11 +34,6 @@ pub enum Relation {
     Users,
 }
 
-impl Related<super::authorized_users::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::AuthorizedUsers.def()
-    }
-}
 
 impl Related<super::routes::Entity> for Entity {
     fn to() -> RelationDef {
@@ -50,9 +43,6 @@ impl Related<super::routes::Entity> for Entity {
 
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        super::authorized_users::Relation::Users.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::authorized_users::Relation::Devices.def().rev())
+        Relation::Users.def()
     }
 }
