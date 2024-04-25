@@ -13,14 +13,15 @@ impl MigrationTrait for Migration {
                     .col(string_uniq(Segments::CanonicalName).unique_key().primary_key())
                     .col(string(Segments::CanonicalRouteName))
                     .col(string_null(Segments::Url))
+                    .col(string_null(Segments::UlogUrl))
                     .col(string(Segments::QlogUrl))
                     .col(string_null(Segments::QcamUrl))
                     .col(string_null(Segments::RlogUrl))
                     .col(string_null(Segments::FcamUrl))
                     .col(string_null(Segments::DcamUrl))
                     .col(string_null(Segments::EcamUrl))
-                    .col(boolean(Segments::ProcCamera).default(false))
-                    .col(boolean(Segments::ProcLog).default(false))
+                    .col(integer(Segments::ProcCamera).default(0))
+                    .col(integer(Segments::ProcLog).default(0))
                     .col(boolean(Segments::Can).default(false))
                     .col(boolean(Segments::Hpgps).default(false))
                     .col(double(Segments::StartLng).default(0.0))
@@ -60,6 +61,7 @@ enum Segments {
     CanonicalName,
     CanonicalRouteName,
     Url,
+    UlogUrl,
     QlogUrl,
     QcamUrl,
     RlogUrl,
@@ -74,11 +76,11 @@ enum Segments {
     EndLng,
     StartLng,
     StartLat,
+    EndLat,
     Passive,
     ProcLog,
     //Version,
     GitBranch,
-    EndLat,
     ProcCamera,
     //Devicetype,
     //GitDirty,

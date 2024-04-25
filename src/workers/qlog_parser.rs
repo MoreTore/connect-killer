@@ -42,6 +42,7 @@ pub struct QlogParserWorkerArgs {
     pub timestamp        : String,
     pub segment          : String,
     pub file             : String,
+    pub create_time      : u64, // This is the time the call was made to the worker.
 }
 
 impl worker::AppWorker<QlogParserWorkerArgs> for QlogParserWorker {
@@ -81,6 +82,7 @@ impl worker::Worker<QlogParserWorkerArgs> for QlogParserWorker {
         let mut sp = SegmentParams {
             canonical_name: format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment),
             url: "test".to_string(),
+            ulog_url: format!("{}/{}", segment_base_url, args.file.replace("rlog.bz2", "rlog.unlog")).into(),
             qlog_url: format!("{}/{}", segment_base_url, args.file),
             qcam_url: None,
             rlog_url: None,
@@ -94,16 +96,14 @@ impl worker::Worker<QlogParserWorkerArgs> for QlogParserWorker {
             end_lat: Some(0.0),
             start_lat: Some(0.0),
             hgps: false,
-            proc_log: false,
-            proc_camera: false,
+            proc_log: 4,
+            proc_camera: 0,
             can: false,
         };
 
         let mut writer = Vec::new();
         {
-            
             let mut cursor = Cursor::new(decompressed_data);
-            
             while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
                 let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
@@ -139,23 +139,6 @@ impl worker::Worker<QlogParserWorkerArgs> for QlogParserWorker {
         tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());
         Ok(())
     }
-}
-
-fn process_data(bytes: &[u8]) -> worker::Result<Vec<u8>> {
-    let mut cursor = Cursor::new(bytes);
-    let mut writer = Vec::new();
-    while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
-        let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
-        writeln!(writer, "{:#?}", event).map_err(Box::from)?;
-        match event.which().map_err(Box::from)? {
-            log_capnp::event::InitData(init_data) => {
-                //let init_data = init_data.map_err(Box::from)?;
-            }
-            _ => {}
-        }
-    }
-
-    Ok(writer)
 }
 
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> MyResult<()> {

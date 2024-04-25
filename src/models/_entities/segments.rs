@@ -12,6 +12,7 @@ pub struct Model {
     pub canonical_name: String,
     pub canonical_route_name: String,
     pub url: String,
+    pub ulog_url: Option<String>,
     pub qlog_url: String,
     pub qcam_url: Option<String>,
     pub rlog_url: Option<String>,
@@ -31,10 +32,9 @@ pub struct Model {
     #[sea_orm(column_type = "Double", nullable)]
     pub start_lat: Option<f64>,
     pub passive: Option<bool>,
-    pub proc_log: bool,
     pub git_branch: Option<String>,
-
-    pub proc_camera: bool,
+    pub proc_log: i32,
+    pub proc_camera: i32,
     pub can: bool,
 }
 
