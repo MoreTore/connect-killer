@@ -6,7 +6,6 @@ mod m20220101_000001_users;
 mod m20240424_000002_devices;
 mod m20240424_000003_routes;
 mod m20240424_000004_segments;
-mod m20240424_000005_authorized_users;
 mod m20231103_114510_notes;
 pub struct Migrator;
 
@@ -19,7 +18,6 @@ impl MigratorTrait for Migrator {
             Box::new(m20240424_000002_devices::Migration),
             Box::new(m20240424_000003_routes::Migration),
             Box::new(m20240424_000004_segments::Migration),
-            Box::new(m20240424_000005_authorized_users::Migration),
             
         ]
     }
