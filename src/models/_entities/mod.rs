@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod authorized_users;
 pub mod devices;
 pub mod notes;
 pub mod routes;

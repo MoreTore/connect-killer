@@ -17,7 +17,7 @@
     - segment can have one of each file: qlog, qcamera, rlog, dcamera, fcamera, ecamera
 
 # Entity-Relationship Diagram
-![Entity-Relationship Diagram](image.png)
+![Entity-Relationship Diagram](ERD.png)
 ```
 User
 ├── Owned Devices (One-to-Many)

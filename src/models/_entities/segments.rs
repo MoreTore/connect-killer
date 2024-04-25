@@ -8,10 +8,15 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(primary_key)]
-    #[sea_orm(unique)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_name: String,
-    pub git_remote: Option<String>,
+    pub canonical_route_name: String,
+    pub url: String,
+    pub qlog_url: String,
+    pub rlog_url: String,
+    pub fcam_url: String,
+    pub dcam_url: String,
+    pub ecam_url: String,
     pub start_time_utc_millis: i64,
     pub create_time: Option<i32>,
     pub hpgps: Option<bool>,
@@ -22,16 +27,11 @@ pub struct Model {
     pub start_lng: Option<f32>,
     pub passive: Option<bool>,
     pub proc_log: i16,
-    pub version: Option<String>,
     pub git_branch: Option<String>,
     #[sea_orm(column_type = "Float", nullable)]
     pub end_lat: Option<f32>,
     pub proc_camera: Option<i16>,
-    pub devicetype: Option<i16>,
-    pub git_dirty: Option<bool>,
-    pub url: String,
     pub can: bool,
-    pub git_commit: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

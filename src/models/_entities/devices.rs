@@ -8,25 +8,28 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(primary_key)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub dongle_id: String,
-    pub public_key: String,
     pub serial: Option<String>,
+    #[sea_orm(unique)]
+    pub public_key: String,
     pub sim_id: Option<String>,
     pub prime: Option<bool>,
     pub primetype: Option<i16>,
     pub last_ping: Option<String>,
     pub uploads_allowed: Option<bool>,
-    pub user_id: i32,
+    pub owner_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::authorized_users::Entity")]
+    AuthorizedUsers,
     #[sea_orm(has_many = "super::routes::Entity")]
     Routes,
     #[sea_orm(
         belongs_to = "super::users::Entity",
-        from = "Column::UserId",
+        from = "Column::OwnerId",
         to = "super::users::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
@@ -34,6 +37,11 @@ pub enum Relation {
     Users,
 }
 
+impl Related<super::authorized_users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AuthorizedUsers.def()
+    }
+}
 
 impl Related<super::routes::Entity> for Entity {
     fn to() -> RelationDef {
@@ -43,6 +51,9 @@ impl Related<super::routes::Entity> for Entity {
 
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Users.def()
+        super::authorized_users::Relation::Users.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::authorized_users::Relation::Devices.def().rev())
     }
 }

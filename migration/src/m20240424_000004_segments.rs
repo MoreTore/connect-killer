@@ -10,7 +10,7 @@ impl MigrationTrait for Migration {
             .create_table(
                 table_auto(Segments::Table)
                     //.col(pk_auto(Segments::Id))
-                    .col(string_uniq(Segments::CanonicalName).unique_key())
+                    .col(string_uniq(Segments::CanonicalName).unique_key().primary_key())
                     .col(string(Segments::CanonicalRouteName))
                     .col(string(Segments::Url))
                     .col(string(Segments::QlogUrl))
