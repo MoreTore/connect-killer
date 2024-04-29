@@ -5,3 +5,4 @@
   device_dongle_id: 164080f7933651c4
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
+  public: true

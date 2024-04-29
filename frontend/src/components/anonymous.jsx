@@ -129,7 +129,7 @@ class AnonymousLanding extends Component {
 
   render() {
     const { classes } = this.props;
-
+    
     return (
       <div className={classes.baseContainer}>
         <div className={classes.base}>
@@ -161,7 +161,7 @@ class AnonymousLanding extends Component {
 
           <a
             className="flex items-center pl-4 pr-3 py-2 font-medium border border-white rounded-full hover:bg-[rgba(255,255,255,0.1)] active:bg-[rgba(255,255,255,0.2)] transition-colors"
-            href={`${window.location.origin}/${demoDevices[0].dongle_id}`}
+            href={`http://localhost:3111/useradmin`}
           >
             Try the demo
             <RightArrow className="ml-1 h-4" />

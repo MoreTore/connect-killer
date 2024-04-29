@@ -10,6 +10,7 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_route_name: String,
+    pub public: bool,
     pub git_remote: Option<String>,
     pub version: Option<String>,
     pub git_branch: Option<String>,

@@ -46,8 +46,8 @@ if [-f "/proc/sys/fs/binfmt_misc/WSLInterop" ]; then
     echo "WSL detected, skipping Docker installation"
     echo "Please install Docker manually in your Windows machine and setup WSL2 integration"
 fi
-
-docker run -d -p 5432:5432 -e POSTGRES_USER=loco -e POSTGRES_DB=connect_development -e POSTGRES_PASSWORD="loco" postgres:15.3-alpine
+docker volume create pgdata
+docker run -d -p 5432:5432 -e POSTGRES_USER=loco -e POSTGRES_DB=connect_development -e POSTGRES_PASSWORD="loco" -v pgdata:/var/lib/postgresql/data postgres:15.3-alpine
 docker run -p 6379:6379 -d redis redis-server
 # echo current directory
 
@@ -61,8 +61,9 @@ docker run -p 6379:6379 -d redis redis-server
 # modify Dockerfile.openpilot to use FROM openpilot:local instead of FROM ghcr.io/commaai/openpilot-base:latest
 cd $BASEDIR 
 cd minikeyvalue
+docker volume create kvstore
 docker build -t minikeyvalue -f Dockerfile .
-docker run -d -p 3000-3005:3000-3005 minikeyvalue
+docker run -d -p 3000-3005:3000-3005 kvstore:/tmp minikeyvalue
 cd $BASEDIR
 git clone --depth 1 https://github.com/commaai/cereal.git
 go version

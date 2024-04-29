@@ -12,14 +12,14 @@ impl MigrationTrait for Migration {
                     //.col(pk_auto(Segments::Id))
                     .col(string_uniq(Segments::CanonicalName).unique_key().primary_key())
                     .col(string(Segments::CanonicalRouteName))
-                    .col(string_null(Segments::Url))
-                    .col(string_null(Segments::UlogUrl))
+                    .col(string(Segments::Url))
+                    .col(string(Segments::UlogUrl))
                     .col(string(Segments::QlogUrl))
-                    .col(string_null(Segments::QcamUrl))
-                    .col(string_null(Segments::RlogUrl))
-                    .col(string_null(Segments::FcamUrl))
-                    .col(string_null(Segments::DcamUrl))
-                    .col(string_null(Segments::EcamUrl))
+                    .col(string(Segments::QcamUrl))
+                    .col(string(Segments::RlogUrl))
+                    .col(string(Segments::FcamUrl))
+                    .col(string(Segments::DcamUrl))
+                    .col(string(Segments::EcamUrl))
                     .col(integer(Segments::ProcCamera).default(0))
                     .col(integer(Segments::ProcLog).default(0))
                     .col(boolean(Segments::Can).default(false))
@@ -56,7 +56,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum Segments {
+pub enum Segments {
     Table,
     CanonicalName,
     CanonicalRouteName,
