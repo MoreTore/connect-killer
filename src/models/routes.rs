@@ -27,11 +27,24 @@ pub struct RouteParams {
     pub public: bool
 }
 
+/// Implementation of the `Model` struct for routes.
 impl super::_entities::routes::Model {
+    /// Adds a route to the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - A reference to the `DatabaseConnection`.
+    /// * `rp` - A reference to the `RouteParams` struct containing the route parameters.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ModelResult` containing the added route on success, or an error on failure.
     pub async fn add_route(db: &DatabaseConnection, rp: &RouteParams) -> ModelResult<Self> {
+        // Begin a transaction
         let txn = db.begin().await;
         match txn {
-            Ok(_) => {tracing::debug!("Transaction began");
+            Ok(_) => {
+                tracing::debug!("Transaction began");
                 ()
             }
             Err(e) => {
@@ -40,6 +53,8 @@ impl super::_entities::routes::Model {
             }
         }
         let txn = txn?;
+
+        // Check if the route already exists
         if routes::Entity::find()
             .filter(routes::Column::CanonicalRouteName.eq(&rp.canonical_route_name))
             .one(&txn)
@@ -49,6 +64,7 @@ impl super::_entities::routes::Model {
             return Err(ModelError::EntityAlreadyExists {});
         }
 
+        // Create a new route
         let route = routes::ActiveModel {
             canonical_route_name: ActiveValue::Set(rp.canonical_route_name.clone()),
             device_dongle_id: ActiveValue::Set(rp.device_dongle_id.clone()),
@@ -65,19 +81,36 @@ impl super::_entities::routes::Model {
         }
         .insert(&txn)
         .await;
+
         match route {
-            Ok(_) => {tracing::debug!("Route Added to database"); 
-                ()}
+            Ok(_) => {
+                tracing::debug!("Route Added to database");
+                ()
+            }
             Err(e) => {
                 tracing::error!("Failed to add route to database: {:?}", e);
                 return Err(e.into());
             }
         }
+
         let route = route?;
+
+        // Commit the transaction
         txn.commit().await?;
+
         Ok(route)
     }
-    
+
+    /// Finds a route by its canonical route name.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - A reference to the `DatabaseConnection`.
+    /// * `canonical_route_name` - A reference to the canonical route name of the route.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ModelResult` containing the found route on success, or an error on failure.
     pub async fn find_route(
         db: &DatabaseConnection,
         canonical_route_name: &String,
@@ -85,10 +118,30 @@ impl super::_entities::routes::Model {
         let route = Entity::find()
             .filter(routes::Column::CanonicalRouteName.eq(canonical_route_name))
             .one(db)
-            .await?;
-        route.ok_or_else(|| ModelError::EntityNotFound)
+            .await;
+        match route {
+            Ok(route) => match route {
+                Some(route) => Ok(route),
+                None => Err(ModelError::EntityNotFound),
+            },
+            Err(e) => {
+                tracing::error!("DataBase Error: {:?}", e);
+                Err(e.into())
+            }
+        }
     }
-    
+        //route.ok_or_else(|| ModelError::EntityNotFound)
+
+    /// Finds all routes associated with a device.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - A reference to the `DatabaseConnection`.
+    /// * `device_dongle_id` - A reference to the device dongle ID.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ModelResult` containing a vector of found routes on success, or an error on failure.
     pub async fn find_device_routes(
         db: &DatabaseConnection,
         device_dongle_id: &String,
@@ -100,13 +153,33 @@ impl super::_entities::routes::Model {
         Ok(routes)
     }
 
+    /// Deletes a route by its canonical route name.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - A reference to the `DatabaseConnection`.
+    /// * `canonical_route_name` - A reference to the canonical route name of the route to delete.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ModelResult` containing the delete result on success, or an error on failure.
     pub async fn delete_route(
         db: &DatabaseConnection,
         canonical_route_name: &String,
     ) -> ModelResult<DeleteResult> {
-        Ok(routes::Entity::delete_by_id(canonical_route_name).exec(db).await?)  
+        Ok(routes::Entity::delete_by_id(canonical_route_name).exec(db).await?)
     }
 
+    /// Deletes all routes associated with a device.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - A reference to the `DatabaseConnection`.
+    /// * `device_dongle_id` - A reference to the device dongle ID.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ModelResult` containing the delete result on success, or an error on failure.
     pub async fn delete_device_routes(
         db: &DatabaseConnection,
         device_dongle_id: &String,
