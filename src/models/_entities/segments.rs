@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "segments")]
 pub struct Model {
     pub created_at: DateTime,
@@ -12,13 +12,13 @@ pub struct Model {
     pub canonical_name: String,
     pub canonical_route_name: String,
     pub url: String,
-    pub ulog_url: Option<String>,
+    pub ulog_url: String,
     pub qlog_url: String,
-    pub qcam_url: Option<String>,
-    pub rlog_url: Option<String>,
-    pub fcam_url: Option<String>,
-    pub dcam_url: Option<String>,
-    pub ecam_url: Option<String>,
+    pub qcam_url: String,
+    pub rlog_url: String,
+    pub fcam_url: String,
+    pub dcam_url: String,
+    pub ecam_url: String,
     pub start_time_utc_millis: i64,
     pub create_time: Option<i32>,
     pub hpgps: Option<bool>,

@@ -22,7 +22,7 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
 
 
 pub async fn file_stream(
-    _auth: auth::JWT,
+    //_auth: auth::JWT,
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
     State(ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,

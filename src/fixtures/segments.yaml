@@ -6,7 +6,7 @@
   proc_log: 40
   proc_camera: 40
   can: True
-  hgps: True
+  hpgps: True
   start_time_utc_millis: 1648033600000
   end_time_utc_millis:   1648033660000
   start_lng: 0.0
@@ -15,3 +15,4 @@
   end_lat: 0.0
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
+  

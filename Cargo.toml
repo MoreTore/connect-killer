@@ -46,6 +46,9 @@ futures = "0.3.30"
 async-compression = { version = "0.4.8", features = ["tokio", "bzip2"] }
 tokio-util = "0.7.10"
 thiserror = "1.0.30"
+rusty-sidekiq = {version = "0.8.2", default-features = false}
+url = "2.5.0"
+
 [[bin]]
 name = "connect-cli"
 path = "src/bin/main.rs"

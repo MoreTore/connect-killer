@@ -13,6 +13,7 @@ impl MigrationTrait for Migration {
                     .col(string_null(Routes::GitRemote))
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))
+                    .col(boolean(Routes::Public).default(false))
                     .col(tiny_integer_null(Routes::Devicetype))
                     .col(boolean_null(Routes::GitDirty))
                     .col(string(Routes::Url))
@@ -40,9 +41,10 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(DeriveIden)]
-enum Routes {
+pub enum Routes {
     Table,
     CanonicalRouteName,
+    Public,
     GitRemote,
     Version,
     GitBranch,

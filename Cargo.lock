@@ -1007,6 +1007,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rstest",
+ "rusty-sidekiq",
  "sea-orm",
  "serde",
  "serde_json",
@@ -1017,6 +1018,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unic-langid",
+ "url",
  "uuid",
  "validator",
 ]

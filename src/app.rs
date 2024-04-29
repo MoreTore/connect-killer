@@ -60,6 +60,7 @@ impl Hooks for App {
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes()
+            .add_route(controllers::useradmin::routes())
             .add_route(controllers::connectincomming::routes())
             .add_route(controllers::connectdata::routes())
             .add_route(controllers::v1::routes())
@@ -69,6 +70,7 @@ impl Hooks for App {
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
+        p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(ctx));
         p.register(crate::workers::qlog_parser::QlogParserWorker::build(ctx));
         p.register(DownloadWorker::build(ctx));
     }

@@ -22,9 +22,14 @@ if (import.meta.env.VITE_APP_GIT_COMMIT_TIMESTAMP) {
   console.info('commit date:', import.meta.env.VITE_APP_GIT_COMMIT_TIMESTAMP || 'unknown');
 }
 
+const router = createBrowserRouter([
+  { path: '/', element: <App /> }
+  /* other routes... */
+], { basename: '/connect' });
+
 ReactDOM.createRoot(document.getElementById('root')).render((
   <MuiThemeProvider theme={Theme}>
     <CssBaseline />
-    <App />
+    <RouterProvider router={router} />
   </MuiThemeProvider>
 ));
