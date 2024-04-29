@@ -21,16 +21,16 @@ pub struct Model {
     pub ecam_url: String,
     pub start_time_utc_millis: i64,
     pub create_time: Option<i32>,
-    pub hpgps: Option<bool>,
+    pub hpgps: bool,
     pub end_time_utc_millis: i64,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub end_lng: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub start_lng: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub end_lat: Option<f64>,
-    #[sea_orm(column_type = "Double", nullable)]
-    pub start_lat: Option<f64>,
+    #[sea_orm(column_type = "Double")]
+    pub end_lng: f64,
+    #[sea_orm(column_type = "Double")]
+    pub start_lng: f64,
+    #[sea_orm(column_type = "Double")]
+    pub end_lat: f64,
+    #[sea_orm(column_type = "Double")]
+    pub start_lat: f64,
     pub passive: Option<bool>,
     pub git_branch: Option<String>,
     pub proc_log: i32,

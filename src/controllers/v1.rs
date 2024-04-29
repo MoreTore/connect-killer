@@ -65,9 +65,9 @@ pub async fn echo(State(ctx): State<AppContext>,
     req_body: String
 ) -> String {
     let ret = req_body.clone();
-    crate::workers::qlog_parser::QlogParserWorker::perform_later(
+    crate::workers::qlog_parser::LogSegmentWorker::perform_later(
         &ctx,
-        crate::workers::qlog_parser::QlogParserWorkerArgs {
+        crate::workers::qlog_parser::LogSegmentWorkerArgs {
             internal_file_url: "http://localhost:3000/406f02914de1a867_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
             dongle_id: "406f02914de1a867".to_string(),
             timestamp: "2024-02-05--16-22-28".to_string(),

@@ -2,7 +2,7 @@
 use loco_rs::prelude::*;
 use bytes::BytesMut;
 use crate::common;
-use crate::workers::qlog_parser::{QlogParserWorker, QlogParserWorkerArgs};
+use crate::workers::qlog_parser::{LogSegmentWorker, LogSegmentWorkerArgs};
 use axum::{
     body::{Body, Bytes},
     extract::{Multipart, Path, State},
@@ -13,6 +13,8 @@ use axum::{
   
   };
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::models::segments::{Model, ActiveModel};
+use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
 
 pub async fn echo(req_body: String) -> String {
     req_body
@@ -58,8 +60,8 @@ pub async fn upload_to_mkv_server(
           StatusCode::FORBIDDEN => return (status, "Duplicate File Upload"),
           StatusCode::CREATED => {
             // enque the file for processing
-            let result = QlogParserWorker::perform_later(&ctx, 
-              QlogParserWorkerArgs {
+            let result = LogSegmentWorker::perform_later(&ctx, 
+              LogSegmentWorkerArgs {
                 internal_file_url: full_url,
                 dongle_id: dongle_id,
                 timestamp: timestamp,
@@ -91,6 +93,7 @@ pub async fn upload_to_mkv_server(
 
   (StatusCode::BAD_REQUEST, "Invalid multipart file uplaod request")
 }
+
 
 
 pub fn routes() -> Routes {
