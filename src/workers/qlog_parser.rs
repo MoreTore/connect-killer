@@ -93,17 +93,17 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
         let mut seg = seg.into_active_model();
         match args.file.as_str() {
-            "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("{}/connectdata/rlog/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             "qlog.bz2" =>  {
                     match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
                         Ok(_) => (),
                         Err(e) => return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string())),
                     }
                 }
-            "qcamera.ts" =>     seg.qcam_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "qcamera.ts" =>     seg.qcam_url = ActiveValue::Set(format!("{}/connectdata/qcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("{}/connectdata/fcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("{}/connectdata/dcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("{}/connectdata/ecam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             (f) => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
         }
         let seg_active_model = seg.into_active_model();
@@ -156,7 +156,7 @@ async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>,
                 )
             ).await
         ));
-    seg.qlog_url = ActiveValue::Set(format!("{}/connectdata/{}/{}/{}/{}", ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file));
+    seg.qlog_url = ActiveValue::Set(format!("{}/connectdata/qlog/{}/{}/{}/{}", ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file));
 
     let mut writer = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);

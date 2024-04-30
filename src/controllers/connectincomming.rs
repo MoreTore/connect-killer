@@ -167,7 +167,7 @@ pub async fn upload_to_mkv_server(
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
-        .add("/:dongle_id/:timestamp/:segment/:file", post(upload_to_mkv_server))
+        .add("/:dongle_id/:timestamp/:segment/:file", put(upload_to_mkv_server))
 
         .add("/", get(hello))
         .add("/echo", post(echo))
