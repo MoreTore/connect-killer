@@ -167,7 +167,7 @@ async fn upload_urls_handler(
 fn transform_route_string(input_string: &String) -> String {
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
+    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
 
     match re.captures(input_string) {
         Some(caps) => {
