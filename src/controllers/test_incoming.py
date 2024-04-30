@@ -6,7 +6,7 @@ def upload_file(file_path, server_url, headers):
     # Open the file in binary mode
     with open(file_path, "rb") as f:
         # Create the PUT request with file data as the payload
-        response = requests.post(server_url, data=f, headers=headers)
+        response = requests.put(server_url, data=f, headers=headers)
 
     # Check the server's response
     if response.status_code in [200, 201]:
