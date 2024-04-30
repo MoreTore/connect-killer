@@ -26,6 +26,8 @@ use crate::{
 
 use reqwest::{Body ,Client};
 use axum::Extension;
+use tower_http::normalize_path::NormalizePathLayer;
+use tower_layer::Layer;
 
 pub struct App {
     client: Client,
@@ -93,10 +95,10 @@ impl Hooks for App {
         db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
         Ok(())
     }
-
     async fn after_routes(router: axum::Router, _ctx: &AppContext) -> Result<axum::Router> {
-
         let client = Client::new();
+        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
+        let router = axum::Router::new().nest_service("", router);
         Ok(router.layer(Extension(client)))
     }
 

@@ -144,6 +144,7 @@ async fn get_upload_url(
     Json(json!({
         //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
         "url": url,
+        "headers": {"Content-Type": "application/octet-stream"},
     }))
 }
 
@@ -166,7 +167,7 @@ async fn upload_urls_handler(
 fn transform_route_string(input_string: &String) -> String {
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
+    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
 
     match re.captures(input_string) {
         Some(caps) => {

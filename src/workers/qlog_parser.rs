@@ -26,21 +26,6 @@ use tokio::io::AsyncReadExt; // for read_to_end
 pub struct LogSegmentWorker {
     pub ctx: AppContext,
 }
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("{0}")]
-    Message(String),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Any(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-pub type MyResult<T> = std::result::Result<T, Error>;
-
 #[derive(Deserialize, Debug, Serialize)]
 pub struct LogSegmentWorkerArgs {
     pub internal_file_url: String,
@@ -207,7 +192,7 @@ async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>,
     Ok(writer)
 }
 
-async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> MyResult<()> {
+async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> worker::Result<()> {
     let response = client.put(url)
         .body(body)
         .send().await
@@ -215,7 +200,7 @@ async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> MyResult<(
 
     if !response.status().is_success() {
         tracing::info!("Response status: {}", response.status());
-        return MyResult::Err(Error::Message("Failed to upload data".to_string()));
+        return Err(sidekiq::Error::Message("Failed to upload data".to_string()));
     }
 
     Ok(())
