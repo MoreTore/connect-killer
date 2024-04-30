@@ -44,7 +44,6 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
 }
 pub async fn render_route(ViewEngine(v): ViewEngine<TeraView>, State(ctx): State<AppContext>) -> Result<impl IntoResponse> {
     let mut segs = segments::Model::find_all_segments(&ctx.db).await?;
-    segs[0].qcam_url = "".to_string();
     let route = SegmentsTemplate { segments: segs };
     views::route::admin_route(v, route)
 }
