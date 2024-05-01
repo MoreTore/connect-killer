@@ -12,6 +12,7 @@ impl MigrationTrait for Migration {
                     //.col(pk_auto(Segments::Id))
                     .col(string_uniq(Segments::CanonicalName).unique_key().primary_key())
                     .col(string(Segments::CanonicalRouteName))
+                    .col(small_integer(Segments::Number))
                     .col(string(Segments::Url))
                     .col(string(Segments::UlogUrl))
                     .col(string(Segments::QlogUrl))
@@ -60,6 +61,7 @@ pub enum Segments {
     Table,
     CanonicalName,
     CanonicalRouteName,
+    Number,
     Url,
     UlogUrl,
     QlogUrl,

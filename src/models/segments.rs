@@ -146,7 +146,7 @@ impl super::_entities::segments::Model {
         segment.ok_or_else(|| ModelError::EntityNotFound)
     }
 
-    pub async fn find_segments(
+    pub async fn find_segments_by_route(
         db: &DatabaseConnection,
         canonical_route_name: &str,
     ) -> ModelResult<Vec<Model>> {
@@ -224,6 +224,8 @@ impl super::_entities::segments::ActiveModel {
             SegmentFields::ProcLog => self.proc_log = ActiveValue::Set(parse_value!(value, i32)),
             SegmentFields::ProcCamera => self.proc_camera = ActiveValue::Set(parse_value!(value, i32)),
             SegmentFields::CreateTime => self.create_time = ActiveValue::Set(Some(parse_value!(value, i32))),
+
+            SegmentFields::Number => self.number = ActiveValue::Set(parse_value!(value, i16)),
 
             SegmentFields::Hpgps => self.hpgps = ActiveValue::Set(parse_value!(value, bool)),
             SegmentFields::Can => self.can = ActiveValue::Set(parse_value!(value, bool)),

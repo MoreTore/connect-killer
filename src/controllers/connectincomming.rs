@@ -121,7 +121,7 @@ pub async fn upload_to_mkv_server(
 
   // Construct the URL to store the file
   let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file)).await;
-
+  tracing::trace!("full_url: {full_url}");
   // Post the binary data to the specified URL
   let response = client.put(&full_url)
       .body(data)
@@ -131,10 +131,12 @@ pub async fn upload_to_mkv_server(
   match response {
       Ok(response) => {
           let status = response.status();
+          tracing::trace!("Got Ok response with status {status}");
           match status {
-              StatusCode::FORBIDDEN => return (status, "Duplicate File Upload"),
+              StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return (status, "Duplicate File Upload"); }
               StatusCode::CREATED | StatusCode::OK => {
                   // Enqueue the file for processing
+                  tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
                   let result = LogSegmentWorker::perform_later(&ctx, 
                       LogSegmentWorkerArgs {
                           internal_file_url: full_url,
@@ -146,24 +148,24 @@ pub async fn upload_to_mkv_server(
                       },
                   ).await;
                   match result {
-                      Ok(_) => return (status, "File Uploaded Successfully"),
+                      Ok(_) => { tracing::debug!("Queued Worker"); return (status, "Queued Worker");}
                       Err(e) => {
-                          let error_message = format!("{}", e);
-                          println!("Error enqueuing file for processing: {}", error_message);
-                          return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong");
+                          tracing::error!("Failed to queue worker: {}", format!("{}", e));
+                          return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker.");
                       }
                   }
               }
-              _ => return (status, "Unhandled status. File not uploaded."),
+              _ => {tracing::error!("Unhandled status. File not uploaded."); return (status, "Unhandled status. File not uploaded.");}
           }
       },
       Err(e) => {
-          let error_message = format!("{}", e);
-          println!("PUT request failed: {}", error_message);
+          
+          tracing::error!("PUT request failed: {}", format!("{}", e));
           return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong");
       }
   }
 }
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
