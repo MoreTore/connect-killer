@@ -11,6 +11,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_name: String,
     pub canonical_route_name: String,
+    pub number: i16,
     pub url: String,
     pub ulog_url: String,
     pub qlog_url: String,

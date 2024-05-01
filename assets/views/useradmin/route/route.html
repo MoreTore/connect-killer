@@ -147,91 +147,231 @@
     
           
         </script>
-        <title>406f02914de1a867/2024-02-05--16-22-28 - comma useradmin</title>
+        <title>{{ onebox }} - comma useradmin</title>
       </head>
 <body>
+  <form>
+      <input name="onebox" placeholder="type a username, route, dongle id" value="{{ onebox }}">
+  </form>
 
+  <hr>results: {{ onebox }}
+  <script>var ROUTE_NAME = '{{ onebox | replace(from="/", to="|")}}';</script>
 
-<form>
-    <input name="onebox" placeholder="type a username, route, dongle id" value="406f02914de1a867/2024-02-05--16-22-28">
-</form>
-
-<hr>results: 406f02914de1a867/2024-02-05--16-22-28
-<script>var ROUTE_NAME = '406f02914de1a867|2024-02-05--16-22-28';</script>
-<hr>
-<a href="link" style="color: green">connect</a>
-<a onclick="unpublicizeRoute('406f02914de1a867|2024-02-05--16-22-28')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
-<hr><b>dongle id:</b> <a href="link">406f02914de1a867</a><br><hr><b>segments:</b><br>
-<table id="data-table">
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Parsed Data</th>
-      <th>qlog</th>
-      <th>qcam</th>
-      <th>rlog</th>
-      <th>fcam</th>
-      <th>dcam</th>
-      <th>ecam</th>
-    </tr>
-  </thead>
-  {% for segment in segments %}
-  <tbody>
-    <tr>
-      <td style="white-space: nowrap">0</td>
-      <td style="white-space: nowrap">
-        {% if segment.ulog_url != "" %}
-        <a href="{{ segment.ulog_url }}">
-          {{ segment.canonical_name }}
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.qlog_url != "" %}
-        <a href="{{ segment.qlog_url }}">
-          qlog.bz2
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.qcam_url != "" %}
-        <a href="{{ segment.qcam_url }}">
-          camera.ts
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.rlog_url != "" %}
-        <a href="{{ segment.rlog_url }}">
-          rlog.bz2
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.fcam_url != "" %}
-        <a href="{{ segment.fcam_url }}">
-          fcamera.hevc
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.dcam_url != "" %}
-        <a href="{{ segment.dcam_url }}">
-          dcamera.hevc
-        </a>
-        {% endif %}
-      </td>
-      <td style="white-space: nowrap">
-        {% if segment.ecam_url != "" %}
-        <a href="{{ segment.ecam_url }}">
-          ecamera.hevc
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-  </tbody>
-  {% endfor %}
+  {% if devices is defined %}
+  <hr>
+  <b>devices:</b><br>
+  <table id="table_devices">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">dongle_id</td>
+        <td style="white-space: nowrap">serial</td>
+        <td style="white-space: nowrap">device_type</td>
+        <td style="white-space: nowrap">alias</td>
+        <td style="white-space: nowrap">sim_id</td>
+        <td style="white-space: nowrap">prime</td>
+        <td style="white-space: nowrap">prime_type</td>
+        <td style="white-space: nowrap">last_ping</td>
+        <td style="white-space: nowrap"></td>
+      </tr>
+      {% for device in devices %}
+      <tr>
+        <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+        <td style="white-space: nowrap">{{ device.serial }}</td>
+        <td style="white-space: nowrap">{{ device.device_type }}</td>
+        <td style="white-space: nowrap">{{ device.alias }}</td>
+        <td style="white-space: nowrap">{{ device.sim_id }}</td>
+        <td style="white-space: nowrap">{{ device.prime }}</td>
+        <td style="white-space: nowrap">{{ device.prime_type }}</td>
+        <td style="white-space: nowrap"><span style="color: green;"><time datetime="{{ device.last_ping }}">{{ device.last_ping }}</time></span></td>
+        <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
-  
+  {% endif %}
+
+  {% if segments is defined %}
+  <hr>
+  <a href="link" style="color: green">connect</a>
+  <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|")}}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
+  <hr>
+  {% for segment in segments %}
+    {% set_global canonical_name = segment.canonical_name %}
+  {% endfor %}
+  <b>dongle id:</b> <a href="link">{{ canonical_name | truncate(length=16, end="") }}</a><br>
+  <hr>
+  <b>segments:</b><br>
+  <table id="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Parsed Data</th>
+        <th>qlog</th>
+        <th>qcam</th>
+        <th>rlog</th>
+        <th>fcam</th>
+        <th>dcam</th>
+        <th>ecam</th>
+      </tr>
+    </thead>
+    {% for segment in segments %}
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">{{ segment.number }}</td>
+        <td style="white-space: nowrap">
+          {% if segment.ulog_url != "" %}
+          <a href="{{ segment.ulog_url }}">
+            {{ segment.canonical_name }}
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.qlog_url != "" %}
+          <a href="{{ segment.qlog_url }}">
+            qlog.bz2
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.qcam_url != "" %}
+          <a href="{{ segment.qcam_url }}">
+            camera.ts
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.rlog_url != "" %}
+          <a href="{{ segment.rlog_url }}">
+            rlog.bz2
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.fcam_url != "" %}
+          <a href="{{ segment.fcam_url }}">
+            fcamera.hevc
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.dcam_url != "" %}
+          <a href="{{ segment.dcam_url }}">
+            dcamera.hevc
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.ecam_url != "" %}
+          <a href="{{ segment.ecam_url }}">
+            ecamera.hevc
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if routes is defined %}
+  <hr>
+  <b>routes:</b><br>
+  <table id="table_routes">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">start_time</td>
+        <td style="white-space: nowrap">route_name</td>
+        <td style="white-space: nowrap">connect</td>
+        <td style="white-space: nowrap">preserve</td>
+        <td style="white-space: nowrap">miles</td>
+        <td style="white-space: nowrap">maxqlog</td>
+        <td style="white-space: nowrap">maxqcamera</td>
+        <td style="white-space: nowrap">platform</td>
+        <td style="white-space: nowrap">git_remote</td>
+        <td style="white-space: nowrap">git_branch</td>
+      </tr>
+      {% for route in routes %}
+      <tr>
+        <td style="white-space: nowrap">{{ route.start_time }}</td>
+        <td style="white-space: nowrap">{{ route.route_name }}</td>
+        <td style="white-space: nowrap">
+          {% if route.connect_url != "" %}
+          <a href="{{ route.connect_url }}">
+            connect
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if route.preserve_url != "" %}
+          <a href="{{ route.preserve_url }}">
+            preserve
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">{{ route.miles }}</td>
+        <td style="white-space: nowrap">{{ route.maxqlog }}</td>
+        <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
+        <td style="white-space: nowrap">{{ route.platform }}</td>
+        <td style="white-space: nowrap">{{ route.git_remote }}</td>
+        <td style="white-space: nowrap">{{ route.git_branch }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if device_users is defined %}
+  <hr>
+  <b>authorized users:</b><br>
+  <table id="table_device_users">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">email</td>
+        <td style="white-space: nowrap"></td>
+        <td style="white-space: nowrap">access_level</td>
+        <td style="white-space: nowrap"></td>
+      </tr>
+      {% for device_user in device_users %}
+      <tr>
+        <td style="white-space: nowrap"><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
+        <td style="white-space: nowrap"></td>
+        <td style="white-space: nowrap">{{ device_user.access_level }}</td>
+        <td style="white-space: nowrap">
+          <a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">
+            remove
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if bootlogs is defined %}
+  <hr>
+  <b>boot logs:</b><br>
+  <table id="table_bootlogs">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">Parsed Boot log</td>
+        <td style="white-space: nowrap">download</td>
+      </tr>
+      {% for bootlog in bootlogs %}
+      <tr>
+        <td style="white-space: nowrap">{{ bootlog.canonical_name }}</td>
+        <td style="white-space: nowrap">
+          {% if bootlog.url != "" %}
+          <a href="{{ bootlog.url }}">
+            download
+          </a>
+          {% endif %}
+        </td>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <hr>
+  <a href="/auth/logout">Sign out</a>
 </body>
 </html>
