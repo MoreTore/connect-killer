@@ -100,13 +100,13 @@ impl Hooks for App {
         db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
         Ok(())
     }
-    async fn after_routes(router: axum::Router, _ctx: &AppContext) -> Result<axum::Router> {
+    async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
         let client = Client::new();
         let router = NormalizePathLayer::trim_trailing_slash().layer(router);
         let router = axum::Router::new().nest_service("", router);
         // Define and add a WebSocket route
 
-        let ws_router = ws_routes().await;
+        let ws_router = ws_routes(ctx.clone()).await;
 
         // Combine routers
         let combined_router = router.merge(ws_router);

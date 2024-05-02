@@ -2,6 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+    },
+    {
       "name": "Launch Edge",
       "request": "launch",
       "type": "msedge",
@@ -9,19 +17,18 @@
       "webRoot": "${workspaceFolder}/frontend"
     },
     {
-        "type": "lldb",
-        "request": "launch",
-        "name": "Debug executable 'lc_api_template-cli'",
-        "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}-cli",
-        "preLaunchTask": "build_project",
-        "args": [
-            "start",
-            "-e",
-            "development",
-            "--server-and-worker"
-
-        ],
-        "cwd": "${workspaceFolder}",
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'lc_api_template-cli'",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        "start",
+        "-e",
+        "development",
+        "--server-and-worker"
+      ],
+      "cwd": "${workspaceFolder}",
     },
   ]
 }
