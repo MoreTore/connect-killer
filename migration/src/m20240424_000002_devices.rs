@@ -14,10 +14,13 @@ impl MigrationTrait for Migration {
                     .col(string(Devices::PublicKey).unique_key())
                     .col(string_null(Devices::SimId))
                     .col(boolean_null(Devices::Prime))
-                    .col(tiny_integer_null(Devices::Primetype))
-                    .col(string_null(Devices::LastPing))
+                    .col(tiny_integer_null(Devices::PrimeType))
+                    .col(boolean(Devices::Online))
+                    .col(date_time(Devices::LastPing))
                     .col(boolean_null(Devices::UploadsAllowed))
                     .col(integer(Devices::OwnerId))
+                    .col(string(Devices::DeviceType))
+                    .col(string(Devices::Alias))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-devices-users")
@@ -46,11 +49,13 @@ enum Devices {
     Serial,
     SimId,
     Prime,
-    Primetype,
+    PrimeType,
+    Online,
     LastPing,
     UploadsAllowed,
     OwnerId,
-    
+    DeviceType,
+    Alias,
 }
 
 

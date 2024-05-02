@@ -3,13 +3,19 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "routes")]
 pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_route_name: String,
+    pub start_time: DateTime,
+    #[sea_orm(column_type = "Float")]
+    pub miles: f32,
+    pub max_qlog: i16,
+    pub max_qcam: i16,
+    pub platform: String,
     pub public: bool,
     pub git_remote: Option<String>,
     pub version: Option<String>,

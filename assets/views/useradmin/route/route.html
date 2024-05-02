@@ -13,13 +13,10 @@
         </style>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
         <script>
-          window.ATHENA_HOST = "https://athena.comma.ai";
-          window.API_HOST = "https://api.comma.ai";
-          window.BILLING_HOST = "https://billing.comma.ai";
+          window.API_HOST = "http://154.38.175.6:3111";
           if (typeof window.API_HOST === 'undefined') {
-      window.API_HOST = 'https://api.comma.ai';
-      window.ATHENA_HOST = 'https://athena.comma.ai';
-      window.BILLING_HOST = 'https://billing.comma.ai';
+      window.API_HOST = 'http://154.38.175.6:3111';
+
     }
     
     Date.prototype.toLocalString = function() {
@@ -157,7 +154,7 @@
   <hr>results: {{ onebox }}
   <script>var ROUTE_NAME = '{{ onebox | replace(from="/", to="|")}}';</script>
 
-  {% if devices is defined %}
+  {% if devices.defined is defined %}
   <hr>
   <b>devices:</b><br>
   <table id="table_devices">
@@ -173,32 +170,40 @@
         <td style="white-space: nowrap">last_ping</td>
         <td style="white-space: nowrap"></td>
       </tr>
-      {% for device in devices %}
+      {% for device in devices.devices %}
       <tr>
-        <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+        <td style="white-space: nowrap"><a href="/useradmin?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
         <td style="white-space: nowrap">{{ device.serial }}</td>
         <td style="white-space: nowrap">{{ device.device_type }}</td>
         <td style="white-space: nowrap">{{ device.alias }}</td>
         <td style="white-space: nowrap">{{ device.sim_id }}</td>
         <td style="white-space: nowrap">{{ device.prime }}</td>
         <td style="white-space: nowrap">{{ device.prime_type }}</td>
+        {% if device.online %}
         <td style="white-space: nowrap"><span style="color: green;"><time datetime="{{ device.last_ping }}">{{ device.last_ping }}</time></span></td>
+        {% else %}
+        <td style="white-space: nowrap"><span style="color: red;"><time datetime="{{ device.last_ping }}">{{ device.last_ping }}</time></span></td>
+        {% endif%}
+        {% if device.uploads_allowed %}
+        <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
+        {% else %}
         <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
+        {% endif%}
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% endif %}
 
-  {% if segments is defined %}
+  {% if segments.defined is defined %}
   <hr>
   <a href="link" style="color: green">connect</a>
   <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|")}}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
   <hr>
-  {% for segment in segments %}
+  {% for segment in segments.segments %}
     {% set_global canonical_name = segment.canonical_name %}
   {% endfor %}
-  <b>dongle id:</b> <a href="link">{{ canonical_name | truncate(length=16, end="") }}</a><br>
+  <b>dongle id:</b> <a href="/useradmin?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
   <hr>
   <b>segments:</b><br>
   <table id="data-table">
@@ -214,7 +219,7 @@
         <th>ecam</th>
       </tr>
     </thead>
-    {% for segment in segments %}
+    {% for segment in segments.segments %}
     <tbody>
       <tr>
         <td style="white-space: nowrap">{{ segment.number }}</td>
@@ -273,7 +278,7 @@
   </table>
   {% endif %}
 
-  {% if routes is defined %}
+  {% if routes.defined is defined %}
   <hr>
   <b>routes:</b><br>
   <table id="table_routes">
@@ -290,27 +295,31 @@
         <td style="white-space: nowrap">git_remote</td>
         <td style="white-space: nowrap">git_branch</td>
       </tr>
-      {% for route in routes %}
+      {% for route in routes.routes %}
       <tr>
         <td style="white-space: nowrap">{{ route.start_time }}</td>
-        <td style="white-space: nowrap">{{ route.route_name }}</td>
         <td style="white-space: nowrap">
-          {% if route.connect_url != "" %}
+          <a href="useradmin?onebox={{ route.canonical_route_name }}">
+            {{ route.canonical_route_name }}
+          </a>
+        </td>
+        <td style="white-space: nowrap">
+          {% if route.connect_url is defined %}
           <a href="{{ route.connect_url }}">
             connect
           </a>
           {% endif %}
         </td>
         <td style="white-space: nowrap">
-          {% if route.preserve_url != "" %}
+          {% if route.preserve_url is defined %}
           <a href="{{ route.preserve_url }}">
             preserve
           </a>
           {% endif %}
         </td>
         <td style="white-space: nowrap">{{ route.miles }}</td>
-        <td style="white-space: nowrap">{{ route.maxqlog }}</td>
-        <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
+        <td style="white-space: nowrap">{{ route.max_qlog }}</td>
+        <td style="white-space: nowrap">{{ route.max_qcam }}</td>
         <td style="white-space: nowrap">{{ route.platform }}</td>
         <td style="white-space: nowrap">{{ route.git_remote }}</td>
         <td style="white-space: nowrap">{{ route.git_branch }}</td>
@@ -320,7 +329,7 @@
   </table>
   {% endif %}
 
-  {% if device_users is defined %}
+  {% if device_users.defined is defined %}
   <hr>
   <b>authorized users:</b><br>
   <table id="table_device_users">
@@ -347,7 +356,7 @@
   </table>
   {% endif %}
 
-  {% if bootlogs is defined %}
+  {% if bootlogs.defined is defined %}
   <hr>
   <b>boot logs:</b><br>
   <table id="table_bootlogs">
@@ -356,7 +365,7 @@
         <td style="white-space: nowrap">Parsed Boot log</td>
         <td style="white-space: nowrap">download</td>
       </tr>
-      {% for bootlog in bootlogs %}
+      {% for bootlog in bootlogs.bootlogs %}
       <tr>
         <td style="white-space: nowrap">{{ bootlog.canonical_name }}</td>
         <td style="white-space: nowrap">

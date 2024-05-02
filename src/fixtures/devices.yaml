@@ -7,8 +7,12 @@
   serial: 1234567890f
   sim_id: 1234567890f
   prime: true
-  primetype: 1
+  prime_type: 1
   uploads_allowed: true
+  device_type: three
+  alias: ryleymcc C3
+  online: true
+  last_ping: "2023-11-12T12:34:56.789"
 - dongle_id: 406f02914de1a867
   public_key: 111f1111-1111-1111-1111-111111111111
   owner_id: 2
@@ -17,6 +21,9 @@
   serial: 1234567890f
   sim_id: 1234567890f
   prime: true
-  primetype: 1
-  uploads_allowed: true
-  
+  prime_type: 1
+  uploads_allowed: false
+  device_type: three
+  alias: idk C3
+  online: false
+  last_ping: "2023-11-12T12:34:56.789"

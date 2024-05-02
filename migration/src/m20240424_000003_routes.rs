@@ -13,6 +13,11 @@ impl MigrationTrait for Migration {
                     .col(string_null(Routes::GitRemote))
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))
+                    .col(date_time(Routes::StartTime))
+                    .col(float(Routes::Miles))
+                    .col(small_integer(Routes::MaxQlog))
+                    .col(small_integer(Routes::MaxQcam))
+                    .col(string(Routes::Platform))
                     .col(boolean(Routes::Public).default(false))
                     .col(tiny_integer_null(Routes::Devicetype))
                     .col(boolean_null(Routes::GitDirty))
@@ -44,6 +49,11 @@ impl MigrationTrait for Migration {
 pub enum Routes {
     Table,
     CanonicalRouteName,
+    StartTime,
+    Platform,
+    Miles,
+    MaxQcam,
+    MaxQlog,
     Public,
     GitRemote,
     Version,

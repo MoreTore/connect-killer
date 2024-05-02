@@ -19,19 +19,52 @@ impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
 }
 
-impl super::_entities::users::Model {
+impl super::_entities::devices::Model {
     /// Find all devices associated with a user
     /// 
     /// 
     /// Returns a list of devices associated with the user.
     /// Can be empty if the user has no devices
-    pub async fn find_user_devices(&self, db: &DatabaseConnection) -> Vec<devices::Model> {
+    pub async fn find_user_devices(
+        db: &DatabaseConnection,
+        user_id: i32,
+    ) -> Vec<devices::Model> {
         devices::Entity::find()
-            .filter(devices::Column::OwnerId.eq(self.id))
+            .filter(devices::Column::OwnerId.eq(user_id))
             .all(db)
             .await
             .expect("Database query failed")
     }
+
+    pub async fn find_all_devices(
+        db: &DatabaseConnection,
+    ) -> Vec<Model> {
+        Entity::find()
+            .all(db)
+            .await
+            .expect("Database query failed")
+    }
+
+    pub async fn find_device(
+        db: &DatabaseConnection,
+        dongle_id: &String,
+    ) -> ModelResult<Model> {
+        let device = Entity::find()
+        .filter(devices::Column::DongleId.eq(dongle_id))
+        .one(db)
+        .await;
+        match device {
+            Ok(device) => match device {
+                Some(device) => Ok(device),
+                None => Err(ModelError::EntityNotFound),
+            },
+            Err(e) => {
+                tracing::error!("DataBase Error: {:?}", e);
+                Err(e.into())
+            }
+        }
+    }
+    
 
     pub async fn add_own_device(
         &self, 
@@ -41,7 +74,7 @@ impl super::_entities::users::Model {
 
         let device = devices::ActiveModel {
             dongle_id: ActiveValue::Set(params.dongle_id.to_string()),   
-            owner_id: ActiveValue::Set(self.id),
+            owner_id: ActiveValue::Set(self.owner_id),
             ..Default::default()
         }
         .insert(&txn)
