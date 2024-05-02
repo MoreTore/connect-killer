@@ -2,13 +2,11 @@ use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use serde_json::json;
 
-use crate::controllers::useradmin::{SegmentsTemplate, UlogText};
+use crate::controllers::useradmin::{MasterTemplate, UlogText};
 
 
 
-pub fn admin_route(v: impl ViewRenderer, template: SegmentsTemplate) -> Result<impl IntoResponse> {
-
-
+pub fn admin_route(v: impl ViewRenderer, template: MasterTemplate) -> Result<impl IntoResponse> {
     // Render the view with the template
     format::render().view(&v, "useradmin/route/route.html", template)
 }

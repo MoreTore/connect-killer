@@ -214,12 +214,19 @@ impl super::_entities::routes::ActiveModel {
         RouteFields::GitBranch => self.git_branch = ActiveValue::Set(Some(value.to_string())),
         RouteFields::Version => self.version = ActiveValue::Set(Some(value.to_string())),
         RouteFields::GitRemote => self.git_remote = ActiveValue::Set(Some(value.to_string())),
+        RouteFields::Platform => self.platform = ActiveValue::Set(value.to_string()),
 
         RouteFields::GitDirty => self.git_dirty = ActiveValue::Set(Some(parse_value!(value, bool))),
         RouteFields::Public => self.public = ActiveValue::Set(parse_value!(value, bool)),
         RouteFields::Can => self.can = ActiveValue::Set(parse_value!(value, bool)),
 
         RouteFields::Devicetype => self.devicetype = ActiveValue::Set(Some(parse_value!(value, i16))),
+        RouteFields::MaxQcam => self.max_qcam = ActiveValue::Set(parse_value!(value, i16)),
+        RouteFields::MaxQlog => self.max_qlog = ActiveValue::Set(parse_value!(value, i16)),
+
+        RouteFields::Miles => self.miles = ActiveValue::Set(parse_value!(value, f32)),
+
+        RouteFields::StartTime => self.start_time = ActiveValue::Set(parse_value!(value, DateTime)),
         
         RouteFields::Table => (),
 

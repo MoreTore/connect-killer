@@ -1,6 +1,7 @@
 ---
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-42
   canonical_name: 164080f7933651c4|2024-03-03--06-46-42--43
+  number: 43
   qlog_url: localhost:3000/connectdata/164080f7933651c4/2024-03-03--06-46-42/43/rlog.bz2
   ulog_url: String
   ulog_url: String
@@ -25,6 +26,7 @@
   updated_at: "2023-11-12T12:34:56.789"
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-42
   canonical_name: 164080f7933651c4|2024-03-03--06-46-42--44
+  number: 44
   qlog_url: localhost:3000/connectdata/164080f7933651c4/2024-03-03--06-46-42/44/rlog.bz2
   ulog_url: String
   ulog_url: String
@@ -49,6 +51,7 @@
   updated_at: "2023-11-12T12:34:56.789"
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-43
   canonical_name: 164080f7933651c4|2024-03-03--06-46-43--43
+  number: 43
   qlog_url: localhost:3000/connectdata/164080f7933651c4/2024-03-03--06-46-43/43/rlog.bz2
   ulog_url: String
   ulog_url: String
@@ -73,6 +76,7 @@
   updated_at: "2023-11-12T12:34:56.789"
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-43
   canonical_name: 164080f7933651c4|2024-03-03--06-46-43--44
+  number: 44
   qlog_url: localhost:3000/connectdata/164080f7933651c4/2024-03-03--06-46-43/44/rlog.bz2
   ulog_url: String
   ulog_url: String

@@ -29,8 +29,14 @@ use axum::Extension;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
 
+
+use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
+use tokio_tungstenite::{accept_async, WebSocketStream};
+use futures_util::{StreamExt, SinkExt};
+use axum::extract::ws::{WebSocketUpgrade, WebSocket};
+use crate::websockets::handler::ws_routes;
+
 pub struct App {
-    client: Client,
 }
 #[async_trait]
 impl Hooks for App {
@@ -49,8 +55,6 @@ impl Hooks for App {
     }
 
     async fn boot(mode: StartMode, environment: &Environment) -> Result<BootResult> {
-        let client = Client::new();
-        let app = App { client };
         create_app::<Self, Migrator>(mode, environment).await
     }
 
@@ -78,6 +82,7 @@ impl Hooks for App {
     }
 
     fn register_tasks(tasks: &mut Tasks) {
+        tasks.register(tasks::seed_from_mkv::SeedFromMkv);
         tasks.register(tasks::seed::SeedData);
     }
 
@@ -99,7 +104,14 @@ impl Hooks for App {
         let client = Client::new();
         let router = NormalizePathLayer::trim_trailing_slash().layer(router);
         let router = axum::Router::new().nest_service("", router);
-        Ok(router.layer(Extension(client)))
+        // Define and add a WebSocket route
+
+        let ws_router = ws_routes().await;
+
+        // Combine routers
+        let combined_router = router.merge(ws_router);
+
+        Ok(combined_router.layer(Extension(client)))
     }
 
     async fn storage(

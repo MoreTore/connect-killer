@@ -15,10 +15,13 @@ pub struct Model {
     pub public_key: String,
     pub sim_id: Option<String>,
     pub prime: Option<bool>,
-    pub primetype: Option<i16>,
-    pub last_ping: Option<String>,
-    pub uploads_allowed: Option<bool>,
+    pub prime_type: Option<i16>,
+    pub online: bool,
+    pub last_ping: DateTime,
+    pub uploads_allowed: bool,
     pub owner_id: i32,
+    pub device_type: String,
+    pub alias: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

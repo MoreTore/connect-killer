@@ -3,8 +3,15 @@ use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
 use migration::m20240424_000004_segments::Segments as SegmentFields;
 use crate::cereal::legacy_capnp::nav_update::segment;
-use crate::models::_entities;
-use crate::models::segments::{Model, ActiveModel};
+use crate::models::_entities::{segments,
+                    routes,
+                    devices,
+                    users,
+                    authorized_users};
+use crate::models::routes::RouteParams;
+//                     devices,
+//                     users,
+//                     authorized_users};
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter, Cursor};
 use std::path::Path;
@@ -15,7 +22,7 @@ use reqwest::{Body ,Client, Response};
 use crate::common;
 
 use std::time::Instant;
-use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
+//use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
                 
 use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
 use tokio_util::io::StreamReader;
@@ -64,6 +71,15 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             ..Default::default()
         };
 
+        // check if the device is in the database
+        let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+            Ok(device) => device,
+            Err(_) => {
+                tracing::info!("Recieved file from an unregistered device. Do something: {}", &args.dongle_id);
+                return Ok(())
+            }
+        };
+
         // Check if the route has been added previously.
         let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
             Ok(route) => route,
@@ -83,8 +99,8 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let seg = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
-                tracing::info!("Recieved file for a new route. Adding to DB: {}", &canonical_name);
-                let default_segment_model = _entities::segments::Model { canonical_name: canonical_name, 
+                tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
+                let default_segment_model = segments::Model { canonical_name: canonical_name, 
                                                                                 canonical_route_name: route.canonical_route_name, 
                                                                                 number: args.segment.parse::<i16>().unwrap_or(0), 
                                                                                 ..Default::default() };

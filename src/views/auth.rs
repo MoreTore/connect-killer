@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::models::_entities::users;
+use loco_rs::prelude::*;
+use serde_json::json;
+
+use crate::controllers::useradmin::{MasterTemplate, UlogText};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginResponse {
@@ -20,4 +24,14 @@ impl LoginResponse {
             is_verified: user.email_verified_at.is_some(),
         }
     }
+}
+
+#[derive(Serialize)]
+struct LoginTemplate {
+    api_host: String,
+}
+
+pub fn login(v: impl ViewRenderer) -> Result<impl IntoResponse> {
+    // Render the view with the template
+    format::render().view(&v, "useradmin/login.html", LoginTemplate {api_host: "http://154.38.175.6:3111".into() })
 }
