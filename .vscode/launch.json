@@ -19,13 +19,41 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'lc_api_template-cli'",
+      "name": "Debug server",
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
       "args": [
         "start",
         "-e",
         "development",
+        "--server-and-worker"
+      ],
+      "cwd": "${workspaceFolder}",
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "dev env debug",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        "start",
+        "-e",
+        "development",
+        "--server-and-worker"
+      ],
+      "cwd": "${workspaceFolder}",
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Test env debug",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        "start",
+        "-e",
+        "test",
         "--server-and-worker"
       ],
       "cwd": "${workspaceFolder}",
