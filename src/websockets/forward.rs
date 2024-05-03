@@ -1,143 +1,176 @@
 use axum::{
-    extract::{ws::{
-        Message,
-        WebSocket,
-        WebSocketUpgrade},
-        Path,
-        FromRequest, 
-        },
-    http::HeaderMap,
-    response::IntoResponse,
+    http::HeaderMap, 
+    response::IntoResponse, 
     routing::get, 
-    Extension, 
-    Router
+    Router,
+    extract::{Path,
+              ws::{Message, 
+                   WebSocket, 
+                   WebSocketUpgrade}, 
+             }, 
 };
-use cookie::Cookie;
-use futures::{stream::SplitStream, SinkExt, StreamExt};
+use futures::stream::SplitSink;
+use loco_rs::app::AppContext;
+use serde::{Deserialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-use serde_json::Value;
-use loco_rs::app::AppContext;
-use futures::stream::SplitSink;
+use futures_util::{SinkExt, StreamExt};
 
-struct DeviceConnections {
-    connections: Mutex<HashMap<String, Arc<Mutex<SplitSink<WebSocket, Message>>>>>,
+use tokio::time::{self, Duration};
+
+use crate::models::_entities as Entity;
+use crate::websockets::identity;
+struct ConnectionManager {
+    devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
+    clients: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
 }
 
-impl DeviceConnections {
-    pub fn new() -> Self {
-        Self {
-            connections: Mutex::new(HashMap::new()),
-        }
+impl ConnectionManager {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            devices: Mutex::new(HashMap::new()),
+            clients: Mutex::new(HashMap::new()),
+        })
     }
 }
 
-async fn extract_jwt_from_cookie(headers: &HeaderMap) -> Option<String> {
-    // Check if the 'cookie' header is present in the request
-    if let Some(cookie_header) = headers.get("cookie") {
-        // Convert the cookie header to a string
-        for cookie in Cookie::split_parse_encoded(cookie_header) {
-            let cookie = cookie.unwrap();
-            match cookie.name() {
-                "name" => {return Some(cookie.value().into());}
-                _ => return None,
-            }
-        }
-    }
-    None
+struct DeviceResponse {
+    result: serde_json::Value,
 }
 
-async fn forward_to_device(
-    devices: Arc<DeviceConnections>,
-    jwt: String,
-    dongle_id: String,
-    message: Value,
-) -> Result<(), String> {
-    let connections = devices.connections.lock().await;
-    if let Some(tx) = connections.get(&dongle_id) {
-        let mut tx = tx.lock().await;  // Properly access the locked SplitSink
-        let json_message = serde_json::to_string(&message).unwrap();
-        if let Err(e) = tx.send(Message::Text(json_message)).await {
-            return Err(format!("Failed to send message: {:?}", e));
-        }
+async fn forward_message_to_client(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
+    let mut clients = manager.clients.lock().await;
+    if let Some(client_sender) = clients.get_mut(endpoint_dongle_id) {
+        client_sender.send(message.clone()).await.map_err(|_| {
+            axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to client"))
+        })
     } else {
-        return Err("Device not connected".to_string());
+        tracing::trace!("No client found for device ID {}. Message: {:?}", endpoint_dongle_id, message);
+        Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Client not found")))
     }
-    Ok(())
 }
 
-async fn handle_ws(
-    mut rx: SplitStream<WebSocket>, 
-    ctx: AppContext, 
-    jwt: String,
-    dongle_id: String, 
-    devices: Arc<DeviceConnections>) {
+async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
+    let mut devices = manager.devices.lock().await;
+    if let Some(device_sender) = devices.get_mut(endpoint_dongle_id) {
+        device_sender.send(message.clone()).await.map_err(|e| {
+            axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
+        })
+    } else {
+        tracing::trace!("No device found for client ID {}. Message: {:?}", endpoint_dongle_id, message);
+        Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Device not found")))
+    }
+}
+
+
+async fn handle_socket(
+    ctx: &AppContext,
+    socket: WebSocket,
+    endpoint_dongle_id: String,
+    jwt_identity: String,
+    manager: Arc<ConnectionManager>,
+) {
+    let is_device = jwt_identity == endpoint_dongle_id;
+    let is_registered = Entity::devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_some();
+    if !is_registered {
+        return
+    } else {
+        //Verify socket
+    }
+
+    let (mut sender, mut receiver) = socket.split();
+
+    {
+        let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = if is_device {
+            manager.devices.lock().await
+        } else {
+            manager.clients.lock().await
+        };
+        connections.insert(endpoint_dongle_id.clone(), sender);
+    }
+
     
-    let msg = rx.next().await;
-    let m =  match msg {
-        Some(msg) => msg,
-        None => return (),
-    };
-    let r = match m {
-        Ok(rx) => rx,
-        Err(e) => {println!("{:?}", e); return ();}
-    };
-    match r {
-        Message::Text(text) => {
-            let parsed: Result<Value, _> = serde_json::from_str(&text);
-            match parsed {
-                Ok(json) => {
-                    println!("Received response: {json}");
-                    // Check if the JSON object has a "method" key
-                    if let Some(method) = json.get("method") {
-                        // Check if the method is a string and proceed
-                        if method.is_string() {
-                            println!("Method found: {}", method.as_str().unwrap());
-                            // If valid, forward the JSON message
-                            if let Err(e) = forward_to_device(devices.clone(), jwt, dongle_id.clone(), json).await {
-                                eprintln!("Error forwarding message: {}", e);
-                            };
-                        } else {
-                            println!("Method key found but is not a string");
-                        }
-                    } else {
-                        println!("JSON object does not contain 'method' key");
-                    }
-                }
-                Err(err) => {
-                    println!("Error parsing JSON: {:?}", err);
+
+    while let Some(message_result) = receiver.next().await {
+        
+        let message = match message_result {
+            Ok(msg) => msg,
+            Err(e) => {
+                tracing::error!("Error receiving message: {:?}", e);
+                continue;  // Skip this iteration and continue listening
+            }
+        };
+        match message {
+            Message::Ping(_) => {println!("Ping: {jwt_identity}")}
+            Message::Pong(_) => {tracing::trace!("Pong: {jwt_identity}");
+                                // update last_ping time here
+                                }
+            Message::Close(_) => {
+                tracing::debug!("{} WebSocket Closed {endpoint_dongle_id}", if is_device { "Device" } else {"Client"} );
+                break;
+            }
+            _ => {
+                // forward between client and device
+                let result = if is_device {
+                    forward_message_to_client(&endpoint_dongle_id, &manager, &message).await
+                } else {
+                    forward_command_to_device(&endpoint_dongle_id, &manager, &message).await
+                };
+                // Check the result of the send operation
+                if let Err(e) = result {
+                    tracing::debug!("Failed to send message: {}", e);
                 }
             }
         }
-        Message::Close(_) => {println!("WebSocket closed.");}
-        Message::Binary(bin) => {println!("Binary: {:?}", bin)}
-        Message::Ping(ping) => {println!("Ping: {:?}", ping)}
-        Message::Pong(pong) => {println!("Pong: {:?}", pong)}
     }
+    tracing::trace!("Connection out of context");
 }
+
 
 async fn handle_device_ws(
     ctx: AppContext,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
-    dongle_id: String,
-    devices: Arc<DeviceConnections>
+    endpoint_dongle_id: String,
+    manager: Arc<ConnectionManager>
 ) -> impl IntoResponse {
-    let jwt = extract_jwt_from_cookie(&headers).await.unwrap_or_default();
-    ws.on_upgrade(move |socket| async move {
-        let (tx, rx) = socket.split();
-        let tx = Arc::new(Mutex::new(tx));
-        devices.connections.lock().await.insert(dongle_id.clone(), tx);
-        handle_ws(rx, ctx, jwt, dongle_id, devices).await;
+    let jwt: String = identity::extract_jwt_from_cookie(&headers).await.unwrap_or_default();
+    ws.on_upgrade(move |socket: WebSocket| async move {
+
+        let jwt_identity = match identity::decode_jwt_identity(&jwt) {
+            Ok(token_data) => token_data.identity,
+            Err(err) => {
+                tracing::debug!("Error decoding JWT: {:?}", err);
+                "".into()
+            }
+        };
+        handle_socket(&ctx, socket, endpoint_dongle_id, jwt_identity, manager).await;
     })
+}
+
+async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
+    let mut devices = manager.devices.lock().await;
+    for (id, sender) in devices.iter_mut() {
+        if let Err(e) = sender.send(Message::Ping(Vec::new())).await {
+            tracing::trace!("Failed to send ping to device {}: {}", id, e);
+        }
+    }
 }
 
 pub fn ws_routes(
     ctx: AppContext
 ) -> Router {
-    let devices = Arc::new(DeviceConnections::new());
+    let manager = ConnectionManager::new();
+    let ping_manager = manager.clone();
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(30)); // Ping every 30 seconds
+        loop {
+            interval.tick().await;
+            send_ping_to_all_devices(ping_manager.clone()).await;
+        }
+    });
     Router::new()
-        .route("/ws/v2/:dongleid", get(move |headers: HeaderMap, ws: WebSocketUpgrade, Path(dongle_id): Path<String>| {
-            handle_device_ws(ctx, headers, ws, dongle_id, devices.clone())
+        .route("/ws/v2/:dongleid", get(move |headers: HeaderMap, ws: WebSocketUpgrade, Path(endpoint_dongle_id): Path<String>| {
+            handle_device_ws(ctx, headers, ws, endpoint_dongle_id, manager.clone())
         }))
 }
