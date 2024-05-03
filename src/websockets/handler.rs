@@ -135,7 +135,7 @@ async fn handle_command(command: Value, tx: &mut Pin<Box<SplitSink<axum::extract
  
  
 pub async fn ws_handler(ws: WebSocketUpgrade, ctx: AppContext) -> impl IntoResponse {
-    ws.on_upgrade(move |ws| handle_ws(ws, ctx))
+    ws.on_upgrade(move |ws: WebSocket| handle_ws(ws, ctx))
 }
 
 pub async fn ws_routes(ctx: AppContext) -> axum::Router {

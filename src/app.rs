@@ -34,7 +34,7 @@ use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use futures_util::{StreamExt, SinkExt};
 use axum::extract::ws::{WebSocketUpgrade, WebSocket};
-use crate::websockets::handler::ws_routes;
+use crate::websockets::forward::ws_routes;
 
 pub struct App {
 }
@@ -106,7 +106,7 @@ impl Hooks for App {
         let router = axum::Router::new().nest_service("", router);
         // Define and add a WebSocket route
 
-        let ws_router = ws_routes(ctx.clone()).await;
+        let ws_router = ws_routes(ctx.clone());
 
         // Combine routers
         let combined_router = router.merge(ws_router);
