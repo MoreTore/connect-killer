@@ -12,15 +12,82 @@ use std::pin::Pin;
 use tracing::error;
 
 
- 
+fn initialize_requests() -> Vec<Value> {
+    vec![
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getPublicKey",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "takeSnapshot",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getNetworks",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getNetworkMetered",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getNetworkType",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getSimInfo",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getGithubUsername",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getSshAuthorizedKeys",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "listUploadQueue",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "listDataDirectory",
+            "params": {},
+            "id": 1,
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "method": "getVersion",
+            "params": {},
+            "id": 1,
+        }),
+    ]
+}
+
 async fn ws_send(tx: &mut Pin<Box<SplitSink<axum::extract::ws::WebSocket, axum::extract::ws::Message>>>) {
-    let data = json!({
-        "jsonrpc": "2.0",
-        "method": "getPublicKey",
-        "params": {},
-        "id": 1,
-    });
-    tx.send(Message::Text(data.to_string())).await.unwrap();
+    let requests = initialize_requests();
+    for req in requests {
+        tx.send(Message::Text(req.to_string())).await.unwrap();
+    }
 }
  
 async fn handle_ws(ws: WebSocket, ctx: AppContext) {
@@ -39,8 +106,8 @@ async fn handle_ws(ws: WebSocket, ctx: AppContext) {
                 let parsed: Result<Value, _> = serde_json::from_str(&text);
                 match parsed {
                     Ok(json) => {
-                        ws_send(&mut tx).await;
-                        handle_command(json, &mut tx).await;
+                        println!("Received response: {}", serde_json::to_string(&json).unwrap());
+                        //handle_command(json, &mut tx).await;
                     }
                     Err(err) => {
                         error!("Error parsing JSON: {:?}", err);
@@ -51,17 +118,19 @@ async fn handle_ws(ws: WebSocket, ctx: AppContext) {
                 error!("WebSocket closed.");
                 break;
             }
-            _ => {}
+            Message::Binary(bin) => {println!("Binary: {:?}", bin)}
+            Message::Ping(ping) => {println!("Ping: {:?}", ping)}
+            Message::Pong(pong) => {println!("Pong: {:?}", pong)}
         }
     }
 }
  
 async fn handle_command(command: Value, tx: &mut Pin<Box<SplitSink<axum::extract::ws::WebSocket, axum::extract::ws::Message>>>) {
-    println!("Received response: {}", serde_json::to_string(&command).unwrap());
+    
 
     let response = json!({ "status": "ok" });
     
-    tx.send(Message::Text(response.to_string())).await.unwrap();
+    //tx.send(Message::Text(response.to_string())).await.unwrap();
 }
  
  
