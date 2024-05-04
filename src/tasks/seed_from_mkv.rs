@@ -3,7 +3,7 @@ use regex::Regex;
 use reqwest::Client;
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{Value, from_str};
-use crate::{common, workers::qlog_parser::{LogSegmentWorker, LogSegmentWorkerArgs}};
+use crate::{common, workers::log_parser::{LogSegmentWorker, LogSegmentWorkerArgs}};
 use loco_rs::prelude::*;
 
 pub struct SeedFromMkv;

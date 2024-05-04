@@ -10,6 +10,9 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_route_name: String,
+    pub git_remote: Option<String>,
+    pub version: Option<String>,
+    pub git_branch: Option<String>,
     pub start_time: DateTime,
     #[sea_orm(column_type = "Float")]
     pub miles: f32,
@@ -17,9 +20,6 @@ pub struct Model {
     pub max_qcam: i16,
     pub platform: String,
     pub public: bool,
-    pub git_remote: Option<String>,
-    pub version: Option<String>,
-    pub git_branch: Option<String>,
     pub devicetype: Option<i16>,
     pub git_dirty: Option<bool>,
     pub url: String,

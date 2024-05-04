@@ -20,30 +20,30 @@ pub struct Model {
     pub fcam_url: String,
     pub dcam_url: String,
     pub ecam_url: String,
-    pub start_time_utc_millis: i64,
-    pub create_time: Option<i32>,
+    pub proc_camera: i32,
+    pub proc_log: i32,
+    pub can: bool,
     pub hpgps: bool,
-    pub end_time_utc_millis: i64,
-    #[sea_orm(column_type = "Double")]
-    pub end_lng: f64,
     #[sea_orm(column_type = "Double")]
     pub start_lng: f64,
     #[sea_orm(column_type = "Double")]
-    pub end_lat: f64,
+    pub end_lng: f64,
     #[sea_orm(column_type = "Double")]
     pub start_lat: f64,
+    #[sea_orm(column_type = "Double")]
+    pub end_lat: f64,
+    pub start_time_utc_millis: i64,
+    pub create_time: Option<i32>,
+    pub end_time_utc_millis: i64,
     pub passive: Option<bool>,
     pub git_branch: Option<String>,
-    pub proc_log: i32,
-    pub proc_camera: i32,
-    pub can: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
         belongs_to = "super::routes::Entity",
-        from = "Column::CanonicalName",
+        from = "Column::CanonicalRouteName",
         to = "super::routes::Column::CanonicalRouteName",
         on_update = "Cascade",
         on_delete = "Cascade"

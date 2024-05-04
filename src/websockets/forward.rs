@@ -160,7 +160,7 @@ async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
 pub fn ws_routes(
     ctx: AppContext
 ) -> Router {
-    let manager = ConnectionManager::new();
+    let manager: Arc<ConnectionManager> = ConnectionManager::new();
     let ping_manager = manager.clone();
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(30)); // Ping every 30 seconds
