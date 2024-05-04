@@ -53,6 +53,10 @@ tower-layer = "0.3.2"
 percent-encoding = "2.3.1"
 futures-util = "0.3.30"
 tokio-tungstenite = "0.21.0"
+cookie = "0.18.1"
+jsonwebtoken = "9"
+base64 = "0.22.1"
+combine = "4.6.7"
 
 [[bin]]
 name = "connect-cli"
