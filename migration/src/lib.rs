@@ -8,6 +8,7 @@ pub mod m20240424_000003_routes;
 pub mod m20240424_000004_segments;
 mod m20231103_114510_notes;
 mod m20240425_071518_authorized_users;
+mod m20240504_174513_bootlogs;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240424_000004_segments::Migration),
             
             Box::new(m20240425_071518_authorized_users::Migration),
+            Box::new(m20240504_174513_bootlogs::Migration),
         ]
     }
 }

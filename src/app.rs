@@ -76,8 +76,9 @@ impl Hooks for App {
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
+        p.register(crate::workers::bootlog_parser::BootlogParserWorker::build(ctx));
         p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(ctx));
-        p.register(crate::workers::qlog_parser::LogSegmentWorker::build(ctx));
+        p.register(crate::workers::log_parser::LogSegmentWorker::build(ctx));
         p.register(DownloadWorker::build(ctx));
     }
 

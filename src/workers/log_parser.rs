@@ -3,11 +3,7 @@ use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
 use migration::m20240424_000004_segments::Segments as SegmentFields;
 use crate::cereal::legacy_capnp::nav_update::segment;
-use crate::models::_entities::{segments,
-                    routes,
-                    devices,
-                    users,
-                    authorized_users};
+use crate::models::_entities::{authorized_users, bootlogs, devices, routes, segments, users};
 use crate::models::routes::RouteParams;
 //                     devices,
 //                     users,
@@ -64,20 +60,19 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         if !response.status().is_success() {
             return Ok(())
         }
+        // check if the device is in the database
+        let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+            Some(device) => device,
+            None => {
+                tracing::info!("Recieved file from an unregistered device. {}", &args.dongle_id);
+                return Ok(())
+            }
+        };
         let mut rp = RouteParams {
             canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
             device_dongle_id: args.dongle_id.clone(),
             url: "Not implemented".to_string(),
             ..Default::default()
-        };
-
-        // check if the device is in the database
-        let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
-            Some(device) => device,
-            None => {
-                tracing::info!("Recieved file from an unregistered device. Do something: {}", &args.dongle_id);
-                return Ok(())
-            }
         };
 
         // Check if the route has been added previously.
@@ -96,7 +91,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
 
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
-        let seg = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
+        let segment = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
                 tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
@@ -110,7 +105,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 }
             }
         };
-        let mut seg = seg.into_active_model();
+        let mut seg = segment.into_active_model();
         match args.file.as_str() {
             "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("{}/connectdata/rlog/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             "qlog.bz2" =>  {
@@ -125,13 +120,14 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("{}/connectdata/ecam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             (f) => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
         }
-        let seg_active_model = seg.into_active_model();
-        match seg_active_model.update(&self.ctx.db).await {
+        //let seg_active_model = seg.into_active_model();
+        match seg.update(&self.ctx.db).await {
             Ok(_) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed()); Ok(())},
             Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
         }
     }
 }
+
 
 async fn handle_qlog(
     seg: &mut segments::ActiveModel,
@@ -159,6 +155,26 @@ async fn handle_qlog(
         Ok(()) => return Ok(()),
         Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
     };
+}
+
+
+async fn parse_bootlog(bootlog: &mut bootlogs::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<(Vec<u8>)> {
+    let mut writer = Vec::new();
+    let mut cursor = Cursor::new(decompressed_data);
+    let mut gps_seen = false;
+    while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
+        let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
+        
+
+        match event.which().map_err(Box::from)? {
+            log_capnp::event::InitData(init_data) => {
+                if let Ok(init_data) = init_data {}
+                writeln!(writer, "{:#?}", event).map_err(Box::from)?;
+            }
+            _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
+        }
+    }
+    Ok(writer)
 }
 
 async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<(Vec<u8>)> {

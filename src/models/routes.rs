@@ -41,18 +41,16 @@ impl super::_entities::routes::Model {
     /// Returns a `ModelResult` containing the added route on success, or an error on failure.
     pub async fn add_route(db: &DatabaseConnection, rp: &RouteParams) -> ModelResult<Self> {
         // Begin a transaction
-        let txn = db.begin().await;
-        match txn {
-            Ok(_) => {
+        let txn = match db.begin().await {
+            Ok(txn) => {
                 tracing::debug!("Transaction began");
-                ()
+                txn
             }
             Err(e) => {
                 tracing::error!("Failed to begin the transaction: {:?}", e);
                 return Err(e.into());
             }
-        }
-        let txn = txn?;
+        };
 
         // Check if the route already exists
         if routes::Entity::find()
@@ -82,18 +80,16 @@ impl super::_entities::routes::Model {
         .insert(&txn)
         .await;
 
-        match route {
-            Ok(_) => {
+        let route = match route {
+            Ok(route) => {
                 tracing::debug!("Route Added to database");
-                ()
+                route
             }
             Err(e) => {
                 tracing::error!("Failed to add route to database: {:?}", e);
                 return Err(e.into());
             }
-        }
-
-        let route = route?;
+        };
 
         // Commit the transaction
         txn.commit().await?;
