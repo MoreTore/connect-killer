@@ -73,8 +73,8 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 
         // check if the device is in the database
         let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
-            Ok(device) => device,
-            Err(_) => {
+            Some(device) => device,
+            None => {
                 tracing::info!("Recieved file from an unregistered device. Do something: {}", &args.dongle_id);
                 return Ok(())
             }

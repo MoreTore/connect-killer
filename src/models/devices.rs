@@ -48,19 +48,16 @@ impl super::_entities::devices::Model {
     pub async fn find_device(
         db: &DatabaseConnection,
         dongle_id: &String,
-    ) -> ModelResult<Model> {
-        let device = Entity::find()
+    ) -> Option<Model> {
+        let result = Entity::find()
         .filter(devices::Column::DongleId.eq(dongle_id))
         .one(db)
         .await;
-        match device {
-            Ok(device) => match device {
-                Some(device) => Ok(device),
-                None => Err(ModelError::EntityNotFound),
-            },
+        match result {
+            Ok(device) => device,
             Err(e) => {
                 tracing::error!("DataBase Error: {:?}", e);
-                Err(e.into())
+                None
             }
         }
     }
