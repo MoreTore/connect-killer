@@ -21,10 +21,15 @@ pub struct RouteParams {
     pub git_commit: Option<String>,
     pub git_dirty: bool,
     pub devicetype: Option<i16>,
+    pub max_qlog: i16,
+    pub max_qcam: i16,
+    pub platform: String,
     pub can: bool,
     pub url: String,
     pub user_id: i32,
-    pub public: bool
+    pub public: bool,
+    pub start_time: i64,
+    pub miles: f32,
 }
 
 /// Implementation of the `Model` struct for routes.
@@ -75,6 +80,8 @@ impl super::_entities::routes::Model {
             can: ActiveValue::Set(rp.can),
             url: ActiveValue::Set(rp.url.clone()),
             public: ActiveValue::Set(rp.public),
+            start_time: ActiveValue::Set(rp.start_time),
+            miles: ActiveValue::Set(rp.miles),
             ..Default::default()
         }
         .insert(&txn)
@@ -97,6 +104,26 @@ impl super::_entities::routes::Model {
         Ok(route)
     }
 
+    pub async fn add_route_self(
+        self,
+        db: &DatabaseConnection,
+    ) -> ModelResult<Self> {
+        let txn = db.begin().await?;
+        if routes::Entity::find()
+            .filter(routes::Column::CanonicalRouteName.eq(&self.canonical_route_name))
+            .one(&txn)
+            .await?
+            .is_some()
+        {
+            return Err(ModelError::EntityAlreadyExists {});
+        }
+        let active_model = self.clone().into_active_model();
+        active_model.insert(&txn)
+        .await?;
+        txn.commit().await?;
+        Ok(self)
+        
+    }
     /// Finds a route by its canonical route name.
     ///
     /// # Arguments
@@ -222,7 +249,7 @@ impl super::_entities::routes::ActiveModel {
 
         RouteFields::Miles => self.miles = ActiveValue::Set(parse_value!(value, f32)),
 
-        RouteFields::StartTime => self.start_time = ActiveValue::Set(parse_value!(value, DateTime)),
+        RouteFields::StartTime => self.start_time = ActiveValue::Set(parse_value!(value, i64)),
         
         RouteFields::Table => (),
 

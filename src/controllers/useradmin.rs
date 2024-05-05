@@ -48,7 +48,7 @@ pub struct DevicesTemplate {
 #[derive(Serialize)]
 pub struct BootlogsTemplate {
     pub defined: bool,
-    //pub bootlogs: Vec<_entities::bootlogs::Model>
+    pub bootlogs: Vec<_entities::bootlogs::Model>
 }
 
 #[derive(Serialize)]
@@ -158,33 +158,33 @@ pub async fn render_segment_ulog(
 /// ?onebox=all <- special case for all segments
 /// route to render_all_routes(v,ctx)
 /// route to the correct view based on the onebox query
-pub async fn onebox_handler_old(
-    ViewEngine(v): ViewEngine<TeraView>,
-    State(ctx): State<AppContext>,
-    Extension(client): Extension<Client>,
-    Query(mut params): Query<OneBox>,
-) -> Result<impl IntoResponse> {
-    let onebox = params.onebox.replace('/', "|");
-    let mut segs: Option<SegmentsTemplate> = None;
-    let mut routes: Option<RoutesTemplate> = None;
-    println!("{onebox}");
+// pub async fn onebox_handler_old(
+//     ViewEngine(v): ViewEngine<TeraView>,
+//     State(ctx): State<AppContext>,
+//     Extension(client): Extension<Client>,
+//     Query(mut params): Query<OneBox>,
+// ) -> Result<impl IntoResponse> {
+//     let onebox = params.onebox.replace('/', "|");
+//     let mut segs: Option<SegmentsTemplate> = None;
+//     let mut routes: Option<RoutesTemplate> = None;
+//     println!("{onebox}");
     
-    // validate 
-    if onebox.as_str() == "all" {
-        segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_all_segments(&ctx.db).await? });
-    } else if onebox.contains('|') {
+//     // validate 
+//     if onebox.as_str() == "all" {
+//         segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_all_segments(&ctx.db).await? });
+//     } else if onebox.contains('|') {
         
-        segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_segments_by_route(&ctx.db, &onebox).await? });
-    } else { // development only
-        //segs = Some(SegmentsTemplate { defined: true, segments: segments::Model::find_all_segments(&ctx.db).await? });
-        if let Some(ref mut segs_template) = segs {
-            segs_template.segments.sort_by(|a, b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
-        }        
-        routes = Some(RoutesTemplate { defined: true, routes: _entities::routes::Model::find_device_routes(&ctx.db, &onebox).await? });
-    }
-    let route = MasterTemplate { segments: segs, onebox: onebox, routes: routes, ..Default::default()};
-    views::route::admin_route(v, route)
-}
+//         segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_segments_by_route(&ctx.db, &onebox).await? });
+//     } else { // development only
+//         //segs = Some(SegmentsTemplate { defined: true, segments: segments::Model::find_all_segments(&ctx.db).await? });
+//         if let Some(ref mut segs_template) = segs {
+//             segs_template.segments.sort_by(|a, b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
+//         }        
+//         routes = Some(RoutesTemplate { defined: true, routes: _entities::routes::Model::find_device_routes(&ctx.db, &onebox).await? });
+//     }
+//     let route = MasterTemplate { segments: segs, onebox: onebox, routes: routes, ..Default::default()};
+//     views::route::admin_route(v, route)
+// }
 
 pub async fn onebox_handler(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -203,7 +203,6 @@ pub async fn onebox_handler(
     // Check for route or dongle ID
     if let Some(caps) = re.captures(&params.onebox) {
         dongle_id = Some(caps[1].to_string());
-
         if let Some(ts) = caps.get(3) {
             timestamp = Some(ts.as_str().to_string());
             canonical_route_name = Some(format!("{}|{}", dongle_id.as_ref().unwrap(), timestamp.as_ref().unwrap()));
@@ -214,20 +213,25 @@ pub async fn onebox_handler(
     println!("{:?}", canonical_route_name);
     println!("{:?}", dongle_id);
     println!("{:?}", timestamp);
-
-    // Processing based on available info
+    let mut segment_models = None;
     if let Some(canonical_route) = canonical_route_name {
-        let segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?;
-
+        segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
+        let mut max_seg = 0;
+        if let Some(segment_models) = segment_models.as_mut() {
+            segment_models.sort_by(|a, b| a.number.cmp(&b.number));
+        }
+    
         // Create and render master template
         let master_template = MasterTemplate { 
-            dongle_id: dongle_id.unwrap_or("".to_string()),
-            segments: Some(SegmentsTemplate { 
+            dongle_id: dongle_id.unwrap_or_default(),
+            segments: segment_models.map(|segments| SegmentsTemplate { 
                 defined: true, 
-                segments: segment_models 
+                segments 
             }), 
             onebox: params.onebox, 
-            ..Default::default() };
+            ..Default::default()
+        };
+    
         views::route::admin_route(v, master_template)
     } else if let Some(d_id) = dongle_id {
         let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?;

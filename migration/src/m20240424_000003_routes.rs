@@ -13,7 +13,7 @@ impl MigrationTrait for Migration {
                     .col(string_null(Routes::GitRemote))
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))
-                    .col(date_time(Routes::StartTime))
+                    .col(big_integer(Routes::StartTime))
                     .col(float(Routes::Miles))
                     .col(small_integer(Routes::MaxQlog))
                     .col(small_integer(Routes::MaxQcam))

@@ -67,7 +67,7 @@ pub async fn upload_bootlogs(
                       internal_file_url: full_url.clone(),
                       dongle_id: dongle_id,
                       file_name: file,
-                      create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+                      create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
                   },
                 ).await;
                 match result { // sorry this is kinda confusing
@@ -139,7 +139,7 @@ pub async fn upload_driving_logs(
                           timestamp: timestamp,
                           segment: segment,
                           file: file,
-                          create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+                          create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
                       },
                   ).await;
                   match result {
@@ -165,7 +165,7 @@ pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
         .add("/:dongle_id/:timestamp/:segment/:file", put(upload_driving_logs))
-        .add("/:dongle_id/bootlogs/:file", put(upload_bootlogs))
+        .add("/:dongle_id/boot/:file", put(upload_bootlogs))
         .add("/", get(hello))
         .add("/echo", post(echo))
 }

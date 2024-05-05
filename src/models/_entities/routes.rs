@@ -13,7 +13,7 @@ pub struct Model {
     pub git_remote: Option<String>,
     pub version: Option<String>,
     pub git_branch: Option<String>,
-    pub start_time: DateTime,
+    pub start_time: i64,
     #[sea_orm(column_type = "Float")]
     pub miles: f32,
     pub max_qlog: i16,

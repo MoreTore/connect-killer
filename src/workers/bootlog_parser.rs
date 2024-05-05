@@ -17,7 +17,7 @@ pub struct BootlogParserWorkerArgs {
     pub internal_file_url: String,
     pub dongle_id: String,
     pub file_name: String,
-    pub create_time: u64, // time we got it
+    pub create_time: i64, // time we got it
 }
 
 impl worker::AppWorker<BootlogParserWorkerArgs> for BootlogParserWorker {

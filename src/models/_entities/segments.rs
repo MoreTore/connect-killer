@@ -33,7 +33,7 @@ pub struct Model {
     #[sea_orm(column_type = "Double")]
     pub end_lat: f64,
     pub start_time_utc_millis: i64,
-    pub create_time: Option<i32>,
+    pub create_time: i64,
     pub end_time_utc_millis: i64,
     pub passive: Option<bool>,
     pub git_branch: Option<String>,

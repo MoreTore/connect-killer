@@ -12,138 +12,16 @@
           #lines_to_deactivate { color: red; font-weight: bold; }
         </style>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-        <script>
-          window.API_HOST = "http://154.38.175.6:3111";
-          if (typeof window.API_HOST === 'undefined') {
-      window.API_HOST = 'http://154.38.175.6:3111';
-
-    }
-    
-    Date.prototype.toLocalString = function() {
-      return this.getUTCFullYear() +
-        '-' + (this.getMonth() + 1).toString().padStart(2, '0') +
-        '-' + this.getDate().toString().padStart(2, '0') +
-        ' ' + this.getHours().toString().padStart(2, '0') +
-        ':' + this.getMinutes().toString().padStart(2, '0') +
-        ':' + this.getSeconds().toString().padStart(2, '0');
-    };
-    
-    $(document).ready(function() {
-      // convert epoch times to localtime
-      $('time').each(function(i, e) {
-        var dt = parseInt($(e).attr('datetime'));
-        if (dt) {
-          $(e).text(new Date(dt * 1000).toLocalString());
-        }
-      });
-    });
-    
-    function api_request(method, endpoint, callback, extraOptions) {
-      var options = $.extend(true, {}, {
-          method: method,
-          headers: {
-            'Authorization': getCookie('Authorization')
-          },
-          url: window.API_HOST + "/" + endpoint,
-          success: callback
-      }, extraOptions);
-      return $.ajax(options);
-    }
-    function api_post(endpoint, data, callback) {
-      return api_request('POST', endpoint, callback, { data: JSON.stringify(data), contentType: 'application/json' });
-    }
-    function api_patch(endpoint, data, callback) {
-      return api_request('PATCH', endpoint, callback, { data: JSON.stringify(data) , contentType: 'application/json' });
-    }
-    function api_get(endpoint, callback) {
-      return api_request('GET', endpoint, callback);
-    }
-    function api_delete(endpoint) {
-      return api_request('DELETE', endpoint);
-    }
-    function bind(dongle_id) {
-      var email = prompt("Granting access for "+dongle_id+" to email?");
-      // check if user clicked cancel
-      if (email === null) {
-        return
-      }
-      api_post("v1/devices/" + dongle_id + "/add_user", {email: email}, function(x) { alert('Bound ' + email + ' to ' + dongle_id); });
-      window.location.reload();
-    }
-    function unbind(dongle_id, email) {
-      var x = confirm("Remove " + (email || "self") + " from " + dongle_id + "?");
-      if (x === false) {
-        return;
-      }
-      api_post("v1/devices/" + dongle_id + "/del_user", email ? {email: email} : {}, function(x) { alert('Unbound ' + (email || 'self') + ' from ' + dongle_id); });
-      if (email) {
-        window.location.reload();
-      } else {
-        window.location.href = '/';
-      }
-    }
-    function unpair(dongle_id) {
-      if (confirm("Unpair "+dongle_id+"?")) {
-        api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) { alert('Unpaired ' + dongle_id); });
-      }
-      window.location.reload();
-    }
-    
-    function preserveRoute(route) {
-      api_post('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert('Preserved ' + route);
-          window.location.reload();
-        } else if (xhr.status === 403) {
-          alert('Maximum number of drives have been preserved. Unpreserve a drive and try again.');
-        } else {
-          console.log('failed to preserve route', route, xhr.url, xhr.status, data);
-        }
-      });
-    }
-    function unpreserveRoute(route) {
-      api_delete('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert('Unpreserved ' + route);
-          window.location.reload();
-        } else {
-          console.log('failed to unpreserve route', route, xhr.url, xhr.status, data);
-        }
-      });
-    }
-    function publicizeRoute(route) {
-      var x = confirm("Publicizing "+route+". This will allow any comma user with the route name to access all route files.");
-      if (x === false) {
-        return;
-      }
-    
-      api_patch('v1/route/' + route + '/', {'is_public': true}).then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert(route + ' is now public.');
-          window.location.reload();
-        } else {
-          console.log('failed to publicize route', route, xhr.url, xhr.status, data);
-        }
-      })
-    }
-    function unpublicizeRoute(route) {
-      api_patch('v1/route/' + route + '/', {'is_public': false}).then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert(route + ' is now private.');
-          window.location.reload();
-        } else {
-          console.log('failed to privatize route', route, xhr.url, xhr.status, data);
-        }
-      })
-    }
-    function getCookie(name) {
-      var value = "; " + document.cookie;
-      var parts = value.split("; " + name + "=");
-      if (parts.length == 2) return parts.pop().split(";").shift().replace(/^"(.*)"$/, '$1');
-    }
-    
-          
-        </script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        var timestamps = document.querySelectorAll('.timestamp');
+        timestamps.forEach(function(el) {
+            var unixTimestamp = el.getAttribute('data-timestamp');
+            var date = new Date(Number(unixTimestamp));
+            el.textContent = date.toUTCString();  // Set the formatted UTC date-time string
+        });
+    });          
+    </script>
         <title>{{ onebox }} - comma useradmin</title>
       </head>
 <body>
@@ -297,7 +175,7 @@
       </tr>
       {% for route in routes.routes %}
       <tr>
-        <td style="white-space: nowrap">{{ route.start_time }}</td>
+        <td style="white-space: nowrap"><span class="timestamp" data-timestamp="{{ route.start_time }}"></span>
         <td style="white-space: nowrap">
           <a href="useradmin?onebox={{ route.canonical_route_name }}">
             {{ route.canonical_route_name }}

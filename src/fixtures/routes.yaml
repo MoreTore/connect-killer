@@ -1,6 +1,6 @@
 ---
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-42
-  start_time: "2024-03-03T06:46:42.000"
+  start_time: 1648033600000
   url: localhost:3000/this/is/a/test
   miles: 69.420
   max_qlog: 1
@@ -14,7 +14,7 @@
   updated_at: "2023-11-12T12:34:56.789"
   public: true
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-43
-  start_time: "2024-03-03T06:46:42.000"
+  start_time: 1648033600000
   miles: 69.420
   max_qlog: 1
   max_qcam: 1
