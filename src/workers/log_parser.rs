@@ -36,7 +36,7 @@ pub struct LogSegmentWorkerArgs {
     pub timestamp        : String,
     pub segment          : String,
     pub file             : String,
-    pub create_time      : u64, // This is the time the call was made to the worker.
+    pub create_time      : i64, // This is the time the call was made to the worker.
 }
 
 impl worker::AppWorker<LogSegmentWorkerArgs> for LogSegmentWorker {
@@ -75,12 +75,30 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             ..Default::default()
         };
 
-        // Check if the route has been added previously.
+        // // Check if the route has been added previously.
+        // let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
+        //     Ok(route) => route,
+        //     Err(_) => { 
+        //         tracing::info!("Recieved file for a new route. Adding to DB: {}", &rp.canonical_route_name);
+        //         match routes::Model::add_route(&self.ctx.db, &rp).await {
+        //             Ok(route) => route,
+        //             Err(e) => {
+        //                 tracing::error!("Failed to add the default route: {}", &rp.canonical_route_name);
+        //                 return Err(sidekiq::Error::Message(e.to_string()));
+        //             }
+        //         }
+        //     }
+        // };
         let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
             Ok(route) => route,
             Err(_) => { 
                 tracing::info!("Recieved file for a new route. Adding to DB: {}", &rp.canonical_route_name);
-                match routes::Model::add_route(&self.ctx.db, &rp).await {
+                let default_route_model = routes::Model {
+                    canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
+                    device_dongle_id: args.dongle_id.clone(),
+                    ..Default::default()
+                };
+                match default_route_model.add_route_self(&self.ctx.db).await {
                     Ok(route) => route,
                     Err(e) => {
                         tracing::error!("Failed to add the default route: {}", &rp.canonical_route_name);
@@ -95,13 +113,16 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
                 tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
-                let default_segment_model = segments::Model { canonical_name: canonical_name, 
+                let default_segment_model = segments::Model { canonical_name: canonical_name.clone(), 
                                                                                 canonical_route_name: route.canonical_route_name, 
                                                                                 number: args.segment.parse::<i16>().unwrap_or(0), 
                                                                                 ..Default::default() };
                 match default_segment_model.add_segment_self(&self.ctx.db).await {
                     Ok(segment) => segment, // The segment was added and here is the row.
-                    Err(e) => return Err(sidekiq::Error::Message("Failed to add the default segment: ".to_string() + &e.to_string()))
+                    Err(e) => {
+                        tracing::error!("Failed to add the default segment {}: {}", &canonical_name, e);
+                        return Err(sidekiq::Error::Message("Failed to add the default segment: ".to_string() + &e.to_string()))
+                    }
                 }
             }
         };

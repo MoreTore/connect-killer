@@ -75,7 +75,7 @@ impl Task for SeedFromMkv {
                             timestamp: timestamp.to_string(),
                             segment: segment.to_string(),
                             file: file_type.to_string(),
-                            create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+                            create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
                         },
                     ).await;
     

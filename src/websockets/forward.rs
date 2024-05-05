@@ -45,7 +45,7 @@ async fn forward_message_to_client(endpoint_dongle_id: &str, manager: &Arc<Conne
             axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to client"))
         })
     } else {
-        tracing::trace!("No client found for device ID {}. Message: {:?}", endpoint_dongle_id, message);
+        tracing::trace!("No client found for device ID {}", endpoint_dongle_id);
         Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Client not found")))
     }
 }
@@ -57,7 +57,7 @@ async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<Conne
             axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
         })
     } else {
-        tracing::trace!("No device found for client ID {}. Message: {:?}", endpoint_dongle_id, message);
+        tracing::trace!("No device found for client ID {}", endpoint_dongle_id);
         Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Device not found")))
     }
 }

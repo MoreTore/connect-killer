@@ -73,7 +73,7 @@ pub async fn echo(State(ctx): State<AppContext>,
             timestamp: "2024-02-05--16-22-28".to_string(),
             segment: "10".to_string(),
             file: "qlog.bz2".to_string(),
-            create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
+            create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
             },
     ).await.unwrap();
     ret
@@ -164,25 +164,28 @@ async fn upload_urls_handler(
     format::json(urls)
 }
 
-fn transform_route_string(input_string: &String) -> String {
+fn transform_route_string(input_string: &str) -> String {
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
+    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
 
-    match re.captures(input_string) {
-        Some(caps) => {
-            let transformed = format!("{}--{}/{}/{}",
-                &caps[1], // Date
-                &caps[2], // Time
-                &caps[3], // Segment number
-                &caps[4]  // File name
-            );
-            transformed
-        },
-        None => format!("/bootlogs/{}", input_string.to_owned()),
+    if let Some(caps) = re_drive_log.captures(input_string) {
+        format!("{}--{}/{}/{}",
+            &caps[1], // Date
+            &caps[2], // Time
+            &caps[3], // Segment number
+            &caps[4]  // File name
+        )
+    } else {
+        // example input_string = boot/0000008c--8a84371aea.bz2
+        let re_boot_log = regex::Regex::new(r"^boot/[0-9a-z]{8}--[0-9a-z]{10}.bz2$").unwrap();
+        if re_boot_log.is_match(input_string) {
+            input_string.to_owned()
+        } else {
+            "Invalid".to_string()
+        }
     }
 }
-
 
 
 pub fn routes() -> Routes {

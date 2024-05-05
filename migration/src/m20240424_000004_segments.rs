@@ -31,7 +31,7 @@ impl MigrationTrait for Migration {
                     .col(double(Segments::EndLat).default(0.0))
                     //.col(string_null(Segments::GitRemote))
                     .col(big_integer(Segments::StartTimeUtcMillis))
-                    .col(integer_null(Segments::CreateTime))
+                    .col(big_integer(Segments::CreateTime))
                     .col(big_integer(Segments::EndTimeUtcMillis))
                     .col(boolean_null(Segments::Passive).default(true))
                     //.col(string_null(Segments::Version))
