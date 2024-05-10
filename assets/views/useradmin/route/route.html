@@ -245,13 +245,15 @@
       </tr>
       {% for bootlog in bootlogs.bootlogs %}
       <tr>
-        <td style="white-space: nowrap">{{ bootlog.canonical_name }}</td>
         <td style="white-space: nowrap">
-          {% if bootlog.url != "" %}
-          <a href="{{ bootlog.url }}">
+          <a href="{{ bootlog.unlog_url }}">
+            {{ bootlog.date_time }}
+          </a>
+        </td>
+        <td style="white-space: nowrap">
+          <a href="{{ bootlog.bootlog_url }}">
             download
           </a>
-          {% endif %}
         </td>
       {% endfor %}
     </tbody>
