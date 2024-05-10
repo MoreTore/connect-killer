@@ -238,6 +238,8 @@ pub async fn onebox_handler(
         //let user = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
         let device_models = _entities::devices::Model::find_all_devices(&ctx.db).await;
 
+        let bootlogs_models = _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?;
+
         let master_template = MasterTemplate { 
             routes: Some(RoutesTemplate { 
                 defined: true, 
@@ -247,6 +249,11 @@ pub async fn onebox_handler(
             devices: Some(DevicesTemplate {
                 defined: true,
                 devices: device_models
+            }),
+
+            bootlogs: Some(BootlogsTemplate {
+                defined: true,
+                bootlogs: bootlogs_models
             }),
 
             onebox: params.onebox, 

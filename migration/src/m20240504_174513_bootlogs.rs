@@ -10,9 +10,10 @@ impl MigrationTrait for Migration {
             .create_table(
                 table_auto(Bootlogs::Table)
                     .col(pk_auto(Bootlogs::Id))
-                    .col(date_time(Bootlogs::Datetime))
+                    .col(string(Bootlogs::DateTime))
                     .col(string(Bootlogs::DongleId))
-                    .col(string_null(Bootlogs::Url))
+                    .col(string(Bootlogs::BootlogUrl))
+                    .col(string(Bootlogs::UnlogUrl))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-bootlogs-devices")
@@ -37,10 +38,10 @@ impl MigrationTrait for Migration {
 enum Bootlogs {
     Table,
     Id,
-    Url,
+    BootlogUrl,
+    UnlogUrl,
     DongleId,
-    Datetime,
-    
+    DateTime,
 }
 
 

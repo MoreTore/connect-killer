@@ -10,7 +10,9 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub dongle_id: String,
-    pub url: String,
+    pub bootlog_url: String,
+    pub unlog_url: String,
+    pub date_time: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
