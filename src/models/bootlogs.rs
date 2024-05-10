@@ -8,7 +8,7 @@ impl ActiveModelBehavior for ActiveModel {
 
 /// Implementation of the `Model` struct for routes.
 impl super::_entities::bootlogs::Model {
-    pub async fn add_bootlog(db: &DatabaseConnection, dongle_id: String, url: String, date_time: DateTime)  -> ModelResult<Self> {
+    pub async fn add_bootlog(db: &DatabaseConnection, dongle_id: &String, bootlog_download_url: &String, unlog_url: &String, date_time: &String)  -> ModelResult<Self> {
         let txn = match db.begin().await {
             Ok(txn) => {
                 tracing::debug!("Transaction began");
@@ -20,8 +20,10 @@ impl super::_entities::bootlogs::Model {
             }
         };
         let bootlog = bootlogs::ActiveModel {
-            dongle_id: ActiveValue::Set(dongle_id),
-            url: ActiveValue::Set(url),
+            dongle_id: ActiveValue::Set(dongle_id.clone()),
+            bootlog_url: ActiveValue::Set(bootlog_download_url.clone()),
+            unlog_url: ActiveValue::Set(unlog_url.clone()),
+            date_time: ActiveValue::Set(date_time.clone()),
             ..Default::default()
         }
         .insert(&txn)
@@ -39,4 +41,16 @@ impl super::_entities::bootlogs::Model {
         };
 
     }
+
+    pub async fn find_device_bootlogs(
+        db: &DatabaseConnection,
+        dongle_id: &String,
+    ) -> ModelResult<Vec<Model>> {
+        let routes = bootlogs::Entity::find()
+            .filter(bootlogs::Column::DongleId.eq(dongle_id))
+            .all(db)
+            .await?;
+        Ok(routes)
+    }
+
 }

@@ -178,26 +178,6 @@ async fn handle_qlog(
     };
 }
 
-
-async fn parse_bootlog(bootlog: &mut bootlogs::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<(Vec<u8>)> {
-    let mut writer = Vec::new();
-    let mut cursor = Cursor::new(decompressed_data);
-    let mut gps_seen = false;
-    while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
-        let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
-        
-
-        match event.which().map_err(Box::from)? {
-            log_capnp::event::InitData(init_data) => {
-                if let Ok(init_data) = init_data {}
-                writeln!(writer, "{:#?}", event).map_err(Box::from)?;
-            }
-            _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
-        }
-    }
-    Ok(writer)
-}
-
 async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<(Vec<u8>)> {
     seg.ulog_url = ActiveValue::Set(
         format!(

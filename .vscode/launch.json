@@ -58,5 +58,18 @@
       ],
       "cwd": "${workspaceFolder}",
     },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Seed from mkv",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        "task",
+        "seed_from_mkv",
+
+      ],
+      "cwd": "${workspaceFolder}",
+    },
   ]
 }

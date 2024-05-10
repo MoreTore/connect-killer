@@ -3,7 +3,7 @@ use regex::Regex;
 use reqwest::Client;
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{Value, from_str};
-use crate::{common, workers::log_parser::{LogSegmentWorker, LogSegmentWorkerArgs}};
+use crate::{common, workers::{bootlog_parser::{BootlogParserWorker, BootlogParserWorkerArgs}, log_parser::{LogSegmentWorker, LogSegmentWorkerArgs}}};
 use loco_rs::prelude::*;
 
 pub struct SeedFromMkv;
@@ -88,12 +88,40 @@ impl Task for SeedFromMkv {
                     }
                 },
                 None => {
-                    tracing::error!("Failed to parse key: {}", file_name);
-                    return Ok(());
+                    
+                    
+                    let re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
+                    match re_boot_log.captures(&file_name) {
+                        Some(caps) => {
+                            let dongle_id = &caps[1];
+                            let file = &caps[2];
+                            let internal_file_url = common::mkv_helpers::get_mkv_file_url(&file_name).await;
+                            let unlog_internal_file_url = internal_file_url.replace(".bz2", ".unlog");
+                            let response = client.delete(&unlog_internal_file_url).send().await.unwrap();
+                            let result = BootlogParserWorker::perform_later(&app_context, 
+                                BootlogParserWorkerArgs {
+                                    internal_file_url: internal_file_url.clone(),
+                                    dongle_id: dongle_id.into(),
+                                    file_name: file.into(),
+                                    create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+                                },
+                              ).await;
+                        }
+                    
+                        
+                        None => {
+                            tracing::error!("Failed to parse key: {}", file_name);
+                            continue;
+                        }
+                    }
                 }
             }
         }
     
         Ok(())
     }
+}
+
+pub async fn boot_logs() {
+
 }
