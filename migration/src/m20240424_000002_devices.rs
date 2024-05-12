@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
                     .col(boolean_null(Devices::Prime))
                     .col(tiny_integer_null(Devices::PrimeType))
                     .col(boolean(Devices::Online))
-                    .col(date_time(Devices::LastPing))
+                    .col(big_integer(Devices::LastPing))
                     .col(boolean_null(Devices::UploadsAllowed))
                     .col(integer(Devices::OwnerId))
                     .col(string(Devices::DeviceType))

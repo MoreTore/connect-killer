@@ -11,15 +11,18 @@ use axum::{
 };
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
+use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
 use serde::{Deserialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use futures_util::{SinkExt, StreamExt};
 
 use tokio::time::{self, Duration};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::models::_entities as Entity;
 use crate::websockets::identity;
+use crate::models::_entities::{devices,};
+
 struct ConnectionManager {
     devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
     clients: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
@@ -62,6 +65,34 @@ async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<Conne
     }
 }
 
+async fn exit_handler(
+    ctx: &AppContext,
+    endpoint_dongle_id: String,
+    jwt_identity: String,
+    manager: Arc<ConnectionManager>,
+) {
+    let is_device = jwt_identity == endpoint_dongle_id;
+    {
+        let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = if is_device {
+            tracing::info!("Adding device to manager: {}", endpoint_dongle_id);
+            manager.devices.lock().await
+        } else {
+            tracing::info!("Adding client to manager: {}", endpoint_dongle_id);
+            manager.clients.lock().await
+        };
+        connections.remove(&endpoint_dongle_id);
+    } // unlock
+    let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
+        Some(device) => device,
+        None => return,
+    };
+    let mut device_active_model = device.into_active_model();
+    device_active_model.online = ActiveValue::Set(false);
+    match device_active_model.update(&ctx.db).await {
+        Ok(_) => (),
+        Err(e) => return,
+    }
+}
 
 async fn handle_socket(
     ctx: &AppContext,
@@ -71,8 +102,9 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let is_registered = Entity::devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_some();
+    let is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_some();
     if !is_registered {
+        tracing::info!("Got athena request from unregistered device: {}", endpoint_dongle_id);
         return
     } else {
         //Verify socket
@@ -82,12 +114,14 @@ async fn handle_socket(
 
     {
         let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = if is_device {
+            tracing::info!("Adding device to manager: {}", endpoint_dongle_id);
             manager.devices.lock().await
         } else {
+            tracing::info!("Adding client to manager: {}", endpoint_dongle_id);
             manager.clients.lock().await
         };
         connections.insert(endpoint_dongle_id.clone(), sender);
-    }
+    } // unlock
 
     
 
@@ -104,6 +138,17 @@ async fn handle_socket(
             Message::Ping(_) => {println!("Ping: {jwt_identity}")}
             Message::Pong(_) => {tracing::trace!("Pong: {jwt_identity}");
                                 // update last_ping time here
+                                let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
+                                    Some(device) => device,
+                                    None => break,
+                                };
+                                let mut device_active_model = device.into_active_model();
+                                device_active_model.last_ping = ActiveValue::Set(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64);
+                                device_active_model.online = ActiveValue::Set(true);
+                                match device_active_model.update(&ctx.db).await {
+                                    Ok(_) => (),
+                                    Err(e) => break,
+                                }
                                 }
             Message::Close(_) => {
                 tracing::debug!("{} WebSocket Closed {endpoint_dongle_id}", if is_device { "Device" } else {"Client"} );
@@ -123,9 +168,9 @@ async fn handle_socket(
             }
         }
     }
-    tracing::trace!("Connection out of context");
+    tracing::trace!("Connection out of context.");
+    exit_handler(ctx,endpoint_dongle_id, jwt_identity, manager).await;
 }
-
 
 async fn handle_device_ws(
     ctx: AppContext,
@@ -151,11 +196,14 @@ async fn handle_device_ws(
 async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
     let mut devices = manager.devices.lock().await;
     for (id, sender) in devices.iter_mut() {
+        tracing::trace!("Sending ping to {}", &id);
         if let Err(e) = sender.send(Message::Ping(Vec::new())).await {
             tracing::trace!("Failed to send ping to device {}: {}", id, e);
+
         }
     }
 }
+
 
 pub fn ws_routes(
     ctx: AppContext

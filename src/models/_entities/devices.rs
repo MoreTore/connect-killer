@@ -17,7 +17,7 @@ pub struct Model {
     pub prime: Option<bool>,
     pub prime_type: Option<i16>,
     pub online: bool,
-    pub last_ping: DateTime,
+    pub last_ping: i64,
     pub uploads_allowed: bool,
     pub owner_id: i32,
     pub device_type: String,
