@@ -83,6 +83,7 @@ impl Hooks for App {
     }
 
     fn register_tasks(tasks: &mut Tasks) {
+        tasks.register(tasks::collect_data::CollectData);
         tasks.register(tasks::seed_from_mkv::SeedFromMkv);
         tasks.register(tasks::seed::SeedData);
     }

@@ -20,8 +20,125 @@
             var date = new Date(Number(unixTimestamp));
             el.textContent = date.toUTCString();  // Set the formatted UTC date-time string
         });
-    });          
+      });
     </script>
+    <script>
+      // Global WebSocket connection
+      let ws;
+      
+      // Function to open a WebSocket connection
+      function openWebSocket() {
+          const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkZyb250RW5kIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.QaGCFMY0NNUtAGcUkVrH27wVqGbcawiPHgh5E8Gam-Y';
+          document.cookie = `jwt=${jwt}; path=/`;
+      
+          const serverUri = "ws://154.38.175.6:3111/ws/v2/" + '{{ dongle_id }}';
+          ws = new WebSocket(serverUri);
+          
+          ws.addEventListener('open', function(event) {
+              console.log('WebSocket connection opened');
+              // Send a ping every 30 seconds to keep the connection alive
+              //setInterval(() => {
+              //  if (ws.readyState === WebSocket.OPEN) {
+              //      ws.send(JSON.stringify({ type: 'ping' }));
+              //  }
+              //}, 30000);
+              // Start polling for progress
+              const progressCommand = {
+                jsonrpc: "2.0",
+                method: "listUploadQueue",
+                params: {},
+                id: 1
+              };
+              setInterval(() => {
+                  ws.send(JSON.stringify(progressCommand));
+              }, 1000);  // Adjust polling interval as needed
+          });
+      
+          ws.addEventListener('message', function(event) {
+              console.log('Received:', event.data);
+              handleWebSocketMessage(event.data);
+          });
+      
+          ws.addEventListener('close', function(event) {
+              console.log('WebSocket connection closed');
+              setTimeout(openWebSocket, 5000);
+          });
+      
+          ws.addEventListener('error', function(event) {
+              console.error('WebSocket error:', event);
+              // Optionally, handle errors, such as attempting to reconnect
+          });
+      }
+      // Function to handle incoming WebSocket messages
+      function handleWebSocketMessage(data) {
+        const response = JSON.parse(data);
+        if (response && response.result && Array.isArray(response.result)) {
+            response.result.forEach(upload => {
+                const pathSegments = upload.path.split("--");
+                const segmentNumber = pathSegments[pathSegments.length - 1].split("/")[0];
+                const fileType = pathSegments[pathSegments.length - 1].split("/")[1];
+    
+                const progressId = `uploadProgress_${segmentNumber}_${fileType}`;
+                const progressContainerId = `progressContainer_${segmentNumber}_${fileType}`;
+                const buttonId = `uploadButton_${segmentNumber}_${fileType}`;
+    
+                const progressBar = document.getElementById(progressId);
+                const progressContainer = document.getElementById(progressContainerId);
+                const uploadButton = document.getElementById(buttonId);
+    
+                if (progressBar && progressContainer && uploadButton) {
+                    progressBar.value = upload.progress * 100;  // Update the progress bar value
+                    progressContainer.style.display = 'block'; // Always show the progress bar container
+                    uploadButton.style.display = 'none';
+                }
+            });
+        }
+    }
+      
+      // Function to send an upload command via WebSocket
+      function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
+          const route_name = canonical_route_name.split("|")[1];
+          const uploadCommand = {
+              jsonrpc: "2.0",
+              method: "uploadFileToUrl",
+              params: {
+                  fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
+                  url: "http://154.38.175.6:3111/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
+                  headers: {},
+              },
+              id: 1
+          };
+      
+          // Send the command via the open WebSocket connection
+          ws.send(JSON.stringify(uploadCommand));
+      
+          // Display the progress bar and hide the button
+          document.getElementById('progressContainer_' + segment_num + '_' + file_type).style.display = 'block';
+          document.getElementById('uploadButton_' + segment_num + '_' + file_type).style.display = 'none';
+      }
+
+      function uploadAllFiles() {
+        // Assuming each row in your table has a class 'segment-row' and the button for uploading has an 'upload-button' class
+        const rows = document.querySelectorAll('.segment-row');
+    
+        rows.forEach(row => {
+            const dongleId = '{{ dongle_id }}';  // Assuming dongleId is constant or retrieved in another way
+            const segmentNumber = row.getAttribute('data-segment-number');
+            const canonicalRouteName = row.getAttribute('data-canonical-route-name');
+            const fileTypes = ['rlog.bz2', 'fcam.hevc', 'dcam.hevc', 'ecam.hevc'];  // List all types of files you need to upload
+    
+            fileTypes.forEach(fileType => {
+                const button = row.querySelector(`button[data-file-type="${fileType}"]`);
+                if (button && button.style.display !== 'none') {  // Check if the button is visible, indicating file needs to be uploaded
+                    uploadFile(dongleId, segmentNumber, canonicalRouteName, fileType, segmentNumber, fileType.replace('.bz2', '').replace('.hevc', ''));
+                }
+            });
+        });
+    }
+      
+      // Open the WebSocket connection when the page loads
+      window.onload = openWebSocket;
+      </script>
         <title>{{ onebox }} - comma useradmin</title>
       </head>
 <body>
@@ -58,10 +175,10 @@
         <td style="white-space: nowrap">{{ device.prime }}</td>
         <td style="white-space: nowrap">{{ device.prime_type }}</td>
         {% if device.online %}
-        <td style="white-space: nowrap"><span style="color: green;"><time datetime="{{ device.last_ping }}">{{ device.last_ping }}</time></span></td>
+        <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_ping }}"></span></td>
         {% else %}
-        <td style="white-space: nowrap"><span style="color: red;"><time datetime="{{ device.last_ping }}">{{ device.last_ping }}</time></span></td>
-        {% endif%}
+        <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_ping }}"></span></td>
+        {% endif %}
         {% if device.uploads_allowed %}
         <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
         {% else %}
@@ -83,6 +200,7 @@
   {% endfor %}
   <b>dongle id:</b> <a href="/useradmin?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
   <hr>
+  <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
   <b>segments:</b><br>
   <table id="data-table">
     <thead>
@@ -122,32 +240,48 @@
           </a>
           {% endif %}
         </td>
-        <td style="white-space: nowrap">
+        <!-- rlog -->
+        <td>
           {% if segment.rlog_url != "" %}
-          <a href="{{ segment.rlog_url }}">
-            rlog.bz2
-          </a>
+          <a href="{{ segment.rlog_url }}">rlog.bz2</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog.bz2', '{{ segment.number }}', 'rlog')">Upload</button>
           {% endif %}
         </td>
-        <td style="white-space: nowrap">
+        <!-- fcam -->
+        <td>
           {% if segment.fcam_url != "" %}
-          <a href="{{ segment.fcam_url }}">
-            fcamera.hevc
-          </a>
+          <a href="{{ segment.fcam_url }}">fcamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_fcam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcam.hevc', '{{ segment.number }}', 'fcam')">Upload</button>
           {% endif %}
         </td>
-        <td style="white-space: nowrap">
+        <!-- dcam -->
+        <td>
           {% if segment.dcam_url != "" %}
-          <a href="{{ segment.dcam_url }}">
-            dcamera.hevc
-          </a>
+          <a href="{{ segment.dcam_url }}">dcamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_dcam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcam.hevc', '{{ segment.number }}', 'dcam')">Upload</button>
           {% endif %}
         </td>
-        <td style="white-space: nowrap">
+        <!-- ecam -->
+        <td>
           {% if segment.ecam_url != "" %}
-          <a href="{{ segment.ecam_url }}">
-            ecamera.hevc
-          </a>
+          <a href="{{ segment.ecam_url }}">ecamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_ecam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecam.hevc', '{{ segment.number }}', 'ecam')">Upload</button>
           {% endif %}
         </td>
       </tr>

@@ -96,69 +96,74 @@ pub async fn upload_driving_logs(
   axum::Extension(client): axum::Extension<reqwest::Client>,
   body: axum::body::Body,
 ) -> impl IntoResponse {
-  // Collect the binary data from the body
-  let mut buffer = BytesMut::new();
-  let mut stream = body.into_data_stream();
 
-  while let Some(chunk) = stream.next().await {
-      match chunk {
-          Ok(data) => buffer.extend_from_slice(&data),
-          Err(_) => return (StatusCode::BAD_REQUEST, "Error reading request body"),
-      }
-  }
+    // Construct the URL to store the file
+    let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file)).await;
+    tracing::trace!("full_url: {full_url}");
+    // Check for duplicate file
+    //let response = client.request(&full_url).send().await;
 
-  println!(
-      "File `{}` received from `{}` is {} bytes",
-      file, dongle_id, buffer.len()
-  );
+    // Collect the binary data from the body
+    let mut buffer = BytesMut::new();
+    let mut stream = body.into_data_stream();
 
-  let data = buffer.freeze();
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(data) => buffer.extend_from_slice(&data),
+            Err(_) => return (StatusCode::BAD_REQUEST, "Error reading request body"),
+        }
+    }
 
-  // Construct the URL to store the file
-  let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file)).await;
-  tracing::trace!("full_url: {full_url}");
-  // Post the binary data to the specified URL
-  let response = client.put(&full_url)
-      .body(data)
-      .send()
-      .await;
+    println!(
+        "File `{}` received from `{}` is {} bytes",
+        file, dongle_id, buffer.len()
+    );
 
-  match response {
-      Ok(response) => {
-          let status = response.status();
-          tracing::trace!("Got Ok response with status {status}");
-          match status {
-              StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return (status, "Duplicate File Upload"); }
-              StatusCode::CREATED | StatusCode::OK => {
-                  // Enqueue the file for processing
-                  tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
-                  let result = LogSegmentWorker::perform_later(&ctx, 
-                      LogSegmentWorkerArgs {
-                          internal_file_url: full_url,
-                          dongle_id: dongle_id,
-                          timestamp: timestamp,
-                          segment: segment,
-                          file: file,
-                          create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
-                      },
-                  ).await;
-                  match result {
-                      Ok(_) => { tracing::debug!("Queued Worker"); return (status, "Queued Worker");}
-                      Err(e) => {
-                          tracing::error!("Failed to queue worker: {}", format!("{}", e));
-                          return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker.");
-                      }
-                  }
-              }
-              _ => {tracing::error!("Unhandled status. File not uploaded."); return (status, "Unhandled status. File not uploaded.");}
-          }
-      },
-      Err(e) => {
-          
-          tracing::error!("PUT request failed: {}", format!("{}", e));
-          return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong");
-      }
-  }
+    let data = buffer.freeze();
+
+
+    // Post the binary data to the specified URL
+    let response = client.put(&full_url)
+        .body(data)
+        .send()
+        .await;
+
+    match response {
+        Ok(response) => {
+            let status = response.status();
+            tracing::trace!("Got Ok response with status {status}");
+            match status {
+                StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return (status, "Duplicate File Upload"); }
+                StatusCode::CREATED | StatusCode::OK => {
+                    // Enqueue the file for processing
+                    tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
+                    let result = LogSegmentWorker::perform_later(&ctx, 
+                        LogSegmentWorkerArgs {
+                            internal_file_url: full_url,
+                            dongle_id: dongle_id,
+                            timestamp: timestamp,
+                            segment: segment,
+                            file: file,
+                            create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+                        },
+                    ).await;
+                    match result {
+                        Ok(_) => { tracing::debug!("Queued Worker"); return (status, "Queued Worker");}
+                        Err(e) => {
+                            tracing::error!("Failed to queue worker: {}", format!("{}", e));
+                            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker.");
+                        }
+                    }
+                }
+                _ => {tracing::error!("Unhandled status. File not uploaded."); return (status, "Unhandled status. File not uploaded.");}
+            }
+        },
+        Err(e) => {
+            
+            tracing::error!("PUT request failed: {}", format!("{}", e));
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong");
+        }
+    }
 }
 
 pub fn routes() -> Routes {

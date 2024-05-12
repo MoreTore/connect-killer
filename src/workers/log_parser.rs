@@ -53,13 +53,21 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let client = Client::new();
         
         // Make sure we have the data in the key value store
-        let response: Response = client.get(&args.internal_file_url)
-            .send().await
-            .map_err(Box::from)?;
+        let response = match client.get(&args.internal_file_url).send().await {
+            Ok(response) => {
+                let status = response.status();
+                tracing::trace!("Got Ok response with status {status}");
+                if !status.is_success() {
+                    return Ok(());
+                }
+                response
+            }
+            Err(e) => {
+                tracing::error!("GET request failed: {}", format!("{}", e));
+                return Err(sidekiq::Error::Message(e.to_string()));
+            }
+        };
 
-        if !response.status().is_success() {
-            return Ok(())
-        }
         // check if the device is in the database
         let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Some(device) => device,
@@ -114,7 +122,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             Err(e) => {  // Need to add the segment now.
                 tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
                 let default_segment_model = segments::Model { canonical_name: canonical_name.clone(), 
-                                                                                canonical_route_name: route.canonical_route_name, 
+                                                                                canonical_route_name: route.canonical_route_name.clone(), 
                                                                                 number: args.segment.parse::<i16>().unwrap_or(0), 
                                                                                 ..Default::default() };
                 match default_segment_model.add_segment_self(&self.ctx.db).await {
@@ -143,12 +151,38 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         }
         //let seg_active_model = seg.into_active_model();
         match seg.update(&self.ctx.db).await {
-            Ok(_) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed()); Ok(())},
+            Ok(_) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());},
             Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
         }
+        update_route_info(&self.ctx, route).await;
+        Ok(())
     }
 }
 
+async fn update_route_info(
+    ctx: &AppContext,
+    route_model: routes::Model
+) -> worker::Result<()> {
+    
+    let segment_models = match segments::Model::find_segments_by_route(&ctx.db, &route_model.canonical_route_name).await {
+        Ok(segments) => segments,
+        Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
+    };
+    
+    let min_start_time_segment = segment_models.iter().min_by_key(|s| &s.start_time_utc_millis);
+    if let Some(segment) = min_start_time_segment {
+        let mut active_route = route_model.into_active_model();
+        active_route.start_time = ActiveValue::Set(segment.start_time_utc_millis);
+        match active_route.update(&ctx.db).await {
+            Ok(_) => return Ok(()),
+            Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
+        }
+    } else {
+        tracing::error!("Could not find min_start_time_segment");
+    }
+    
+    Ok(())
+}
 
 async fn handle_qlog(
     seg: &mut segments::ActiveModel,

@@ -21,7 +21,7 @@ pub(crate) async fn extract_jwt_from_cookie(headers: &axum::http::HeaderMap) -> 
             let cookie = cookie.unwrap();
             match cookie.name() {
                 "jwt" => {return Some(cookie.value().into());}
-                _ => return None,
+                _ => continue,
             }
         }
     }
@@ -41,7 +41,7 @@ pub(crate) fn decode_jwt_identity(jwt: &str) -> Result<JWTPayload, SerdeError> {
     ), payload)
       .map_err(|e| SerdeError::custom(format!("Base64 decode error: {}", e)))?;
 
-    println!("Decoded payload bytes: {:?}", payload_decoded_bytes);
+    //println!("Decoded payload bytes: {:?}", payload_decoded_bytes);
 
     let payload_str: Option<&str> = <dyn combine::parser::combinator::StrLike>::from_utf8(&payload_decoded_bytes);
     match payload_str {

@@ -71,5 +71,18 @@
       ],
       "cwd": "${workspaceFolder}",
     },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "collect data",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        "task",
+        "collect_data",
+
+      ],
+      "cwd": "${workspaceFolder}",
+    },
   ]
 }
