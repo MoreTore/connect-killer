@@ -1,8 +1,12 @@
 use serde::{de::Error, Deserialize};
 use serde_json::Error as SerdeError;
 use base64;
-
-
+use crate::models::devices;
+use loco_rs::app::AppContext;
+use jsonwebtoken::{
+    decode, encode, errors::Result as JWTResult, get_current_timestamp, Algorithm, DecodingKey,
+    EncodingKey, Header, TokenData, Validation,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct JWTPayload {
@@ -48,4 +52,18 @@ pub(crate) fn decode_jwt_identity(jwt: &str) -> Result<JWTPayload, SerdeError> {
         Some(payload) => serde_json::from_str(payload),
         None => return Err(SerdeError::custom("Invalid payload")),
     }
+}
+
+pub(crate) async fn verify(ctx: &AppContext, identity: String, jwt: &str) -> bool {
+    let device = device::Model::find_device(ctx.db, identity).await;
+    let claims = decode::<JWTPayload>(
+        jwt,
+        &DecodingKey::from_rsa_pem(&device.public_key.as_bytes()).unwrap(),
+        &Validation::new(Algorithm::RS256),
+    );
+    match claims {
+        Ok(claims) => Some(claims),
+        Err(e) => None,
+    }
+
 }

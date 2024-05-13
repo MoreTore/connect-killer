@@ -9,6 +9,9 @@ use serde_json::{json, Value};
 use url::Url;
 use tokio::net::TcpStream;
 use http::Request;
+use std::time::SystemTime;
+use uuid::Uuid;
+
 
 async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
     let uri = format!("{}/{}", server_url, dongle_id);
@@ -30,12 +33,13 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
             return;
         }
     };
+    let id: String = Uuid::new_v4().into();
     // Send listDataDirectory command
     let list_command = json!({
         "jsonrpc": "2.0",
         "method": "listDataDirectory",
         "params": {},
-        "id": 1
+        "id": id
     }).to_string();
     if let Err(e) = ws_stream.send(Message::Text(list_command)).await {
         eprintln!("Failed to send message: {:?}", e);
@@ -73,7 +77,7 @@ async fn websocket_client_task(server_url: &str, dongle_id: &str, jwt: &str) {
                             "jsonrpc": "2.0",
                             "method": "uploadFilesToUrls",
                             "params": [upload_commands],
-                            "id": 2
+                            "id": id
                         }).to_string();
                         ws_stream.send(Message::Text(upload_message)).await.expect("Failed to send upload command");
                     }

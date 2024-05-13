@@ -5,6 +5,8 @@
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   serial: 1234567890f
+  imei: 4789df94790d
+  imei2: 45uy89f04037
   sim_id: 1234567890f
   prime: true
   prime_type: 1
@@ -19,6 +21,8 @@
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   serial: 1234567890f
+  imei: 4789df947902
+  imei2: 45uy89f04032
   sim_id: 1234567890f
   prime: true
   prime_type: 1

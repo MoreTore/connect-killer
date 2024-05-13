@@ -1,5 +1,6 @@
 #![allow(clippy::unused_async)]
 use axum::extract::Query;
+use axum::http::StatusCode;
 use loco_rs::prelude::*;
 use serde::{Serialize, Deserialize};
 use jsonwebtoken::{
@@ -8,6 +9,8 @@ use jsonwebtoken::{
 };
 use sha2::{Sha256, Digest};
 use hex;
+
+use crate::models::_entities::devices;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeviceClaims {
@@ -89,9 +92,15 @@ async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<Toke
 pub async fn pilotauth(
     State(ctx): State<AppContext>,
     Query(params): Query<DeviceRegistrationParams>
-) -> Result<Response> {
+) -> impl IntoResponse {
     let _token = decode_register_token(&params).await;
-    format::json(PilotAuthResponse { dongle_id: params.generate_dongle_id(), access_token: "".into()})
+    let dongle_id = params.generate_dongle_id();
+    // TODO Add blacklist or whitelist here. Maybe a db table
+    let result = devices::Model::register_device(&ctx.db, params, &dongle_id).await;
+    match result {
+        Ok(_) => (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()})),
+        Err(result) => (StatusCode::INTERNAL_SERVER_ERROR, Err(loco_rs::Error::Model(result))),
+    }
 }
 
 pub fn routes() -> Routes {

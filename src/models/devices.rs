@@ -6,16 +6,16 @@ use loco_rs::{auth::jwt, hash, prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::controllers::v2::PilotAuthQuery;
+use crate::controllers::v2::DeviceRegistrationParams;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct DeviceRegistrationParams {
-    pub id: i32,
-    pub dongle_id: String,
-    pub serial_number: String,
-    pub user_id: i32,
-    pub sim_id: String,
-}
+// #[derive(Debug, Deserialize, Serialize)]
+// pub struct DeviceRegistrationParams {
+//     pub id: i32,
+//     pub dongle_id: String,
+//     pub serial_number: String,
+//     pub user_id: i32,
+//     pub sim_id: String,
+// }
 
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
@@ -25,9 +25,29 @@ impl super::_entities::devices::Model {
 
     pub async fn register_device(
         db: &DatabaseConnection,
-        params: &PilotAuthQuery,
-    ) -> Result<()> {
-        Ok(())
+        params: DeviceRegistrationParams,
+        dongle_id: &String,
+    ) -> ModelResult<()> {
+        // Check if the device is registered already
+        match devices::Model::find_device(db, dongle_id).await {
+            Some(_) => Ok(()),
+            None => {
+                // Add device to db
+                let txn = db.begin().await?;
+                let device = devices::Model {
+                    dongle_id: dongle_id.clone(),
+                    public_key: params.public_key,
+                    imei: params.imei,
+                    imei2: params.imei2,
+                    serial: params.serial,
+                    uploads_allowed: true,
+                    ..Default::default()
+                };
+                device.into_active_model().insert(&txn).await?;
+                txn.commit().await?;
+                Ok(())
+            },
+        }
     }
     /// Find all devices associated with a user
     /// 
@@ -72,23 +92,23 @@ impl super::_entities::devices::Model {
     }
     
 
-    pub async fn add_own_device(
-        &self, 
-        db: &DatabaseConnection, 
-        params: &DeviceRegistrationParams) -> ModelResult<Model> {
-        let txn = db.begin().await?;
+    // pub async fn add_own_device(
+    //     &self, 
+    //     db: &DatabaseConnection, 
+    //     params: &DeviceRegistrationParams) -> ModelResult<Model> {
+    //     let txn = db.begin().await?;
 
-        let device = devices::ActiveModel {
-            dongle_id: ActiveValue::Set(params.dongle_id.to_string()),   
-            //owner_id: ActiveValue::Set(self.owner_id),
-            ..Default::default()
-        }
-        .insert(&txn)
-        .await?;
+    //     let device = devices::ActiveModel {
+    //         dongle_id: ActiveValue::Set(params.dongle_id.to_string()),   
+    //         //owner_id: ActiveValue::Set(self.owner_id),
+    //         ..Default::default()
+    //     }
+    //     .insert(&txn)
+    //     .await?;
 
-        txn.commit().await?;
+    //     txn.commit().await?;
 
-        Ok(device)
-    }
+    //     Ok(device)
+    // }
 
 }
