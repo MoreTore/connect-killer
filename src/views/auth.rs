@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::_entities::users;
 use loco_rs::prelude::*;
-use serde_json::json;
 
-use crate::controllers::useradmin::{MasterTemplate, UlogText};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginResponse {

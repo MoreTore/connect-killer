@@ -1,20 +1,15 @@
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
-use migration::m20240424_000004_segments::Segments as SegmentFields;
-use crate::cereal::legacy_capnp::nav_update::segment;
-use crate::models::_entities::{authorized_users, bootlogs, devices, routes, segments, users};
+use crate::models::_entities::{devices, routes, segments};
 use crate::models::routes::RouteParams;
 //                     devices,
 //                     users,
 //                     authorized_users};
-use std::fs::File;
-use std::io::{Read, Write, BufReader, BufWriter, Cursor};
-use std::path::Path;
-use anyhow::{Result, Context};
+use std::io::{Read, Write, Cursor};
 //use bzip2::read::BzDecoder;
-use crate::cereal::log_capnp::{self, init_data};
-use reqwest::{Body ,Client, Response};
+use crate::cereal::log_capnp::{self};
+use reqwest::{Client, Response};
 use crate::common;
 
 use std::time::Instant;
@@ -76,7 +71,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 return Ok(())
             }
         };
-        let mut rp = RouteParams {
+        let rp = RouteParams {
             canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
             device_dongle_id: args.dongle_id.clone(),
             url: "Not implemented".to_string(),
@@ -147,7 +142,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("{}/connectdata/fcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("{}/connectdata/dcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
             "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("{}/connectdata/ecam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            (f) => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
+            f => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
         }
         //let seg_active_model = seg.into_active_model();
         match seg.update(&self.ctx.db).await {
@@ -212,7 +207,7 @@ async fn handle_qlog(
     };
 }
 
-async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<(Vec<u8>)> {
+async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
             "{}/useradmin/logs?url={}",

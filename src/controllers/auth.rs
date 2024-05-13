@@ -1,4 +1,4 @@
-use loco_rs::{controller::bad_request, prelude::*};
+use loco_rs::{prelude::*};
 use serde::{Deserialize, Serialize};
 use axum::http::StatusCode;
 

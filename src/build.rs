@@ -1,6 +1,6 @@
 extern crate capnpc; // Ensure this crate is included in your Cargo.toml
 
-use std::fs::{self, File};
+use std::fs::{File};
 use std::io::{self, Write};
 use std::path::Path;
 

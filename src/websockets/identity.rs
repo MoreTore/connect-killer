@@ -4,8 +4,7 @@ use base64;
 use crate::models::devices;
 use loco_rs::app::AppContext;
 use jsonwebtoken::{
-    decode, encode, errors::Result as JWTResult, get_current_timestamp, Algorithm, DecodingKey,
-    EncodingKey, Header, TokenData, Validation,
+    decode, Algorithm, DecodingKey, Validation,
 };
 
 #[derive(Debug, Deserialize)]

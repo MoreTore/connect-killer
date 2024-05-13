@@ -1,12 +1,10 @@
 #![allow(clippy::unused_async)]
-use loco_rs::{controller, prelude::*};
+use loco_rs::{prelude::*};
 use axum::{
-    body::{Body, Bytes},
-    extract::{Multipart, Path, State},
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
-    Router,
   
   };
 use crate::common;
@@ -118,7 +116,7 @@ pub async fn file_stream(
 
 // used for useradmin browser download
 pub async fn bootlog_file_download(
-    Path((bootlog_file)): Path<(String)>,
+    Path(bootlog_file): Path<String>,
     State(ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,

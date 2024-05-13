@@ -1,6 +1,6 @@
 use loco_rs::model::ModelResult;
 use sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait};
-use super::_entities::bootlogs::{self, ActiveModel, Entity, Model};
+use super::_entities::bootlogs::{self, ActiveModel, Model};
 
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)

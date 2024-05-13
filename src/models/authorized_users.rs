@@ -1,9 +1,6 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
-use chrono::offset::Local;
-use uuid::Uuid;
-use loco_rs::{auth::jwt, hash, prelude::*};
+use loco_rs::{prelude::*};
 use sea_orm::DeleteResult;
 pub use super::_entities::authorized_users::{self, ActiveModel, Entity, Model};
 

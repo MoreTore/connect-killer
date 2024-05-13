@@ -1,10 +1,6 @@
 use sea_orm::entity::prelude::*;
 pub use super::_entities::devices::{self, ActiveModel, Entity, Model};
-use async_trait::async_trait;
-use chrono::offset::Local;
-use loco_rs::{auth::jwt, hash, prelude::*};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use loco_rs::{prelude::*};
 
 use crate::controllers::v2::DeviceRegistrationParams;
 

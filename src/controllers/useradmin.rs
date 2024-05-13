@@ -1,24 +1,15 @@
 #![allow(clippy::unused_async)]
-use axum::extract::Request;
 use futures::FutureExt;
 use loco_rs::prelude::*;
 use reqwest::Client;
-use serde_json::json;
 use crate::models::_entities;
 
-use crate::models::devices;
 use crate::views;
-use crate::models::users;
-use crate::models::segments::{SegmentParams, segments};
 use serde::{Deserialize, Serialize};
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, State}, 
-    http::response, Extension,
-    http::{HeaderMap, StatusCode},
+    extract::{Query, State}, Extension,
 };
 extern crate url;
-use url::form_urlencoded;
-use std::cmp::Ordering;
 
 #[derive(Deserialize)]
 struct UlogQuery {
@@ -126,12 +117,12 @@ pub async fn render_segment_ulog(
     ViewEngine(v): ViewEngine<TeraView>, 
     State(ctx): State<AppContext>,
     Extension(client): Extension<Client>,
-    Query(mut params): Query<UlogQuery>
+    Query(params): Query<UlogQuery>
 ) -> Result<impl IntoResponse> {
     let request = client.get(params.url);
     // get the data and save it as a string and pass to admin_segment_ulog
     let res = request.send().await;
-    let mut data: String;
+    let data: String;
     match res {
         Ok(response) => {
             let bytes = response.bytes().await.unwrap();
@@ -190,7 +181,7 @@ pub async fn onebox_handler(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     Extension(client): Extension<Client>,
-    Query(mut params): Query<OneBox>,
+    Query(params): Query<OneBox>,
 ) -> Result<impl IntoResponse> {
     // Regex to match a complete canonical route name
     let re = regex::Regex::new(r"^([0-9a-z]{16})([_|/|]?([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}))?$").unwrap();
@@ -216,7 +207,6 @@ pub async fn onebox_handler(
     let mut segment_models = None;
     if let Some(canonical_route) = canonical_route_name {
         segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
-        let mut max_seg = 0;
         if let Some(segment_models) = segment_models.as_mut() {
             segment_models.sort_by(|a, b| a.number.cmp(&b.number));
         }

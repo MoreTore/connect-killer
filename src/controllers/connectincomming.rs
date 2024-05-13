@@ -1,22 +1,18 @@
 #![allow(clippy::unused_async)]
-use futures::{Future, StreamExt};
+use futures::{StreamExt};
 use loco_rs::prelude::*;
 use bytes::BytesMut;
 use crate::common;
 use crate::workers::bootlog_parser::{BootlogParserWorker, BootlogParserWorkerArgs};
 use crate::workers::log_parser::{LogSegmentWorker, LogSegmentWorkerArgs};
 use axum::{
-    body::{Body, Bytes},
-    extract::{Multipart, Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Path, State},
+    http::{StatusCode},
     response::{IntoResponse, Response},
     routing::get,
-    Router,
   
   };
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::models::segments::{Model, ActiveModel};
-use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
 
 pub async fn echo(req_body: String) -> String {
     req_body
