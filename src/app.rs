@@ -114,7 +114,7 @@ impl Hooks for App {
 
     async fn storage(
         _config: &Config,
-        environment: &Environment,
+        _environment: &Environment,
     ) -> Result<Option<storage::Storage>> {
         // get the project root directory
         //let root = env::current_dir().expect("Failed to get current directory");

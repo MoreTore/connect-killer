@@ -96,7 +96,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
         }
 
         match upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog"), parsed_log.data).await {
-            Ok(()) => return Ok(()),
+            Ok(()) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed()); return Ok(())},
             Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
         };
 
