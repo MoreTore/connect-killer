@@ -97,8 +97,8 @@ impl Task for SeedFromMkv {
                             let file = &caps[2];
                             let internal_file_url = common::mkv_helpers::get_mkv_file_url(&file_name).await;
                             let unlog_internal_file_url = internal_file_url.replace(".bz2", ".unlog");
-                            let response = client.delete(&unlog_internal_file_url).send().await.unwrap();
-                            let result = BootlogParserWorker::perform_later(&app_context, 
+                            let _response = client.delete(&unlog_internal_file_url).send().await.unwrap();
+                            let _result = BootlogParserWorker::perform_later(&app_context, 
                                 BootlogParserWorkerArgs {
                                     internal_file_url: internal_file_url.clone(),
                                     dongle_id: dongle_id.into(),

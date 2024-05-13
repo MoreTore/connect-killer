@@ -20,7 +20,7 @@ use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::websockets::identity;
-use crate::models::_entities::{devices,};
+use crate::models::_entities::devices;
 
 struct ConnectionManager {
     devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
@@ -34,10 +34,6 @@ impl ConnectionManager {
             clients: Mutex::new(HashMap::new()),
         })
     }
-}
-
-struct DeviceResponse {
-    result: serde_json::Value,
 }
 
 async fn forward_message_to_client(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {

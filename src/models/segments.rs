@@ -110,19 +110,19 @@ impl super::_entities::segments::Model {
         // xxxxxxxxxxxxxxxx|2024-03-02--19-02-46--NN+
         // [      0       ] [    1   ]  [   2  ]  [3]
         // remove the last part of the canonical name (--0)
-        let re = regex::Regex::new(r"^([a-z0-9]{16})\|([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)")
-            .expect("Invalid regex");
-        let canonical_route;
-        match re.captures(&self.canonical_name) {
-            Some(caps) => {
-                canonical_route = format!("{}|{}--{}",
-                    &caps[1], // dongle_id
-                    &caps[2], // date
-                    &caps[3], // time
-                );
-            },
-            None => canonical_route = "No match found".to_string(),
-        }
+        // let re = regex::Regex::new(r"^([a-z0-9]{16})\|([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)")
+        //     .expect("Invalid regex");
+        // let canonical_route;
+        // match re.captures(&self.canonical_name) {
+        //     Some(caps) => {
+        //         canonical_route = format!("{}|{}--{}",
+        //             &caps[1], // dongle_id
+        //             &caps[2], // date
+        //             &caps[3], // time
+        //         );
+        //     },
+        //     None => canonical_route = "No match found".to_string(),
+        // }
         let active_model = self.clone().into_active_model();
         active_model.insert(&txn)
         .await?;

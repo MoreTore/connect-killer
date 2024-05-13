@@ -1,5 +1,4 @@
 #![allow(clippy::unused_async)]
-use futures::FutureExt;
 use loco_rs::prelude::*;
 use reqwest::Client;
 use crate::models::_entities;
@@ -12,8 +11,8 @@ use axum::{
 extern crate url;
 
 #[derive(Deserialize)]
-struct UlogQuery {
-    url: String
+pub struct UlogQuery {
+    pub url: String
 }
 
 #[derive(Serialize)]
@@ -68,51 +67,6 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
     format::text("hello")
 }
 
-// pub async fn render_user_devices(
-//     ViewEngine(v): ViewEngine<TeraView>, 
-//     State(ctx): State<AppContext>
-
-// ) -> Result<impl IntoResponse> {
-//     let mut segs = routes::Model::find_user_devices(&ctx.db).await?;
-//     let route = SegmentsTemplate { segments: segs };
-//     views::route::admin_route(v, route)
-// }
-
-// pub async fn render_device_routes(
-//     ViewEngine(v): ViewEngine<TeraView>, 
-//     State(ctx): State<AppContext>
-
-// ) -> Result<impl IntoResponse> {
-//     let mut segs = routes::Model::find_device_routes(&ctx.db).await?;
-//     let route = SegmentsTemplate { segments: segs };
-//     views::route::admin_route(v, route)
-// }
-
-// pub async fn render_route_segments(
-//     v: TeraView, 
-//     ctx: AppContext,
-//     canonical_route_name: String
-// ) -> Result<impl IntoResponse> {
-//     let mut segs = segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
-//     let route = SegmentsTemplate { segments: segs, onebox: canonical_route_name, ..Default::default()};
-//     views::route::admin_route(v, route)
-// }
-
-// pub async fn render_all_routes(
-//     v: TeraView,
-//     ctx: AppContext,
-//     onebox: String
-// ) -> Result<impl IntoResponse> {
-//     let mut segs = segments::Model::find_all_segments(&ctx.db).await?;
-//     // sort from old to new based on seg.start_time_utc_millis
-//     segs.sort_by(|a, b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
-//     for seg in &segs {
-//         println!("{}",seg.start_time_utc_millis);
-//     }
-//     let route = SegmentsTemplate { segments: segs, onebox: onebox, ..Default::default()};
-//     views::route::admin_route(v, route)
-// }
-
 pub async fn render_segment_ulog(
     ViewEngine(v): ViewEngine<TeraView>, 
     State(ctx): State<AppContext>,
@@ -133,49 +87,7 @@ pub async fn render_segment_ulog(
     }
 
     views::route::admin_segment_ulog(v, UlogText { text: data })
-
 }
-
-
-/// ?onebox=406f02914de1a867/2024-02-05--16-22-28 <- example of a specific route
-/// route to render_route_segments(v,ctx,client,"406f02914de1a867_2024-02-05--16-22-28")
-/// 
-/// ?onebox=406f02914de1a867 <- example of a specific dongle
-/// route to render_device_routes(v,ctx,client,"406f02914de1a867")
-///
-/// ?onebox=github_104254025 <- example of a specific user (github user id)
-/// route to render_user_devices(v,ctx,client,"github_104254025")
-/// 
-/// ?onebox=all <- special case for all segments
-/// route to render_all_routes(v,ctx)
-/// route to the correct view based on the onebox query
-// pub async fn onebox_handler_old(
-//     ViewEngine(v): ViewEngine<TeraView>,
-//     State(ctx): State<AppContext>,
-//     Extension(client): Extension<Client>,
-//     Query(mut params): Query<OneBox>,
-// ) -> Result<impl IntoResponse> {
-//     let onebox = params.onebox.replace('/', "|");
-//     let mut segs: Option<SegmentsTemplate> = None;
-//     let mut routes: Option<RoutesTemplate> = None;
-//     println!("{onebox}");
-    
-//     // validate 
-//     if onebox.as_str() == "all" {
-//         segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_all_segments(&ctx.db).await? });
-//     } else if onebox.contains('|') {
-        
-//         segs = Some(SegmentsTemplate { defined: true, segments: _entities::segments::Model::find_segments_by_route(&ctx.db, &onebox).await? });
-//     } else { // development only
-//         //segs = Some(SegmentsTemplate { defined: true, segments: segments::Model::find_all_segments(&ctx.db).await? });
-//         if let Some(ref mut segs_template) = segs {
-//             segs_template.segments.sort_by(|a, b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
-//         }        
-//         routes = Some(RoutesTemplate { defined: true, routes: _entities::routes::Model::find_device_routes(&ctx.db, &onebox).await? });
-//     }
-//     let route = MasterTemplate { segments: segs, onebox: onebox, routes: routes, ..Default::default()};
-//     views::route::admin_route(v, route)
-// }
 
 pub async fn onebox_handler(
     ViewEngine(v): ViewEngine<TeraView>,
@@ -199,14 +111,9 @@ pub async fn onebox_handler(
             canonical_route_name = Some(format!("{}|{}", dongle_id.as_ref().unwrap(), timestamp.as_ref().unwrap()));
         }
     }
-    ctx.config;
-    // Display diagnostic info
-    println!("{:?}", canonical_route_name);
-    println!("{:?}", dongle_id);
-    println!("{:?}", timestamp);
-    let mut segment_models = None;
+
     if let Some(canonical_route) = canonical_route_name {
-        segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
+        let mut segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
         if let Some(segment_models) = segment_models.as_mut() {
             segment_models.sort_by(|a, b| a.number.cmp(&b.number));
         }
@@ -259,7 +166,7 @@ pub async fn onebox_handler(
 
 pub async fn login(
     ViewEngine(v): ViewEngine<TeraView>,
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
 ) -> Result<impl IntoResponse> {
     views::auth::login(v)
 }

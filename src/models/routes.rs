@@ -1,7 +1,7 @@
 use loco_rs::model::{ModelError, ModelResult};
-use loco_rs::{prelude::*};
+use loco_rs::prelude::*;
 use sea_orm::DeleteResult;
-use sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait};
+use sea_orm::{ActiveValue, TransactionTrait};
 use super::_entities::routes::{self, ActiveModel, Entity, Model};
 use migration::m20240424_000003_routes::Routes as RouteFields;
 

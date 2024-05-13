@@ -6,7 +6,7 @@ use crate::models::routes::RouteParams;
 //                     devices,
 //                     users,
 //                     authorized_users};
-use std::io::{Read, Write, Cursor};
+use std::io::{Write, Cursor};
 //use bzip2::read::BzDecoder;
 use crate::cereal::log_capnp::{self};
 use reqwest::{Client, Response};
@@ -64,7 +64,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
 
         // check if the device is in the database
-        let device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+        let _device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Some(device) => device,
             None => {
                 tracing::info!("Recieved file from an unregistered device. {}", &args.dongle_id);
@@ -78,20 +78,6 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             ..Default::default()
         };
 
-        // // Check if the route has been added previously.
-        // let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
-        //     Ok(route) => route,
-        //     Err(_) => { 
-        //         tracing::info!("Recieved file for a new route. Adding to DB: {}", &rp.canonical_route_name);
-        //         match routes::Model::add_route(&self.ctx.db, &rp).await {
-        //             Ok(route) => route,
-        //             Err(e) => {
-        //                 tracing::error!("Failed to add the default route: {}", &rp.canonical_route_name);
-        //                 return Err(sidekiq::Error::Message(e.to_string()));
-        //             }
-        //         }
-        //     }
-        // };
         let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
             Ok(route) => route,
             Err(_) => { 
@@ -114,7 +100,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
         let segment = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
-            Err(e) => {  // Need to add the segment now.
+            Err(_) => {  // Need to add the segment now.
                 tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
                 let default_segment_model = segments::Model { canonical_name: canonical_name.clone(), 
                                                                                 canonical_route_name: route.canonical_route_name.clone(), 
@@ -149,8 +135,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             Ok(_) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());},
             Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
         }
-        update_route_info(&self.ctx, route).await;
-        Ok(())
+        update_route_info(&self.ctx, route).await
     }
 }
 
