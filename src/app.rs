@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::env;
 use async_trait::async_trait;
-use chrono::format;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},
@@ -14,7 +13,7 @@ use loco_rs::{
     storage,
     config::Config,
 };
-use migration::{Migrator, RcOrArc};
+use migration::{Migrator};
 use sea_orm::DatabaseConnection;
 
 use crate::{
@@ -24,16 +23,12 @@ use crate::{
     workers::downloader::DownloadWorker,
 };
 
-use reqwest::{Body ,Client};
+use reqwest::{Client};
 use axum::Extension;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
 
 
-use tokio_tungstenite::tungstenite::protocol::Message as WsMessage;
-use tokio_tungstenite::{accept_async, WebSocketStream};
-use futures_util::{StreamExt, SinkExt};
-use axum::extract::ws::{WebSocketUpgrade, WebSocket};
 use crate::websockets::forward::ws_routes;
 
 pub struct App {

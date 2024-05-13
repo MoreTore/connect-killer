@@ -4,8 +4,7 @@ use axum::http::StatusCode;
 use loco_rs::prelude::*;
 use serde::{Serialize, Deserialize};
 use jsonwebtoken::{
-    decode, encode, errors::Result as JWTResult, get_current_timestamp, Algorithm, DecodingKey,
-    EncodingKey, Header, TokenData, Validation,
+    decode, Algorithm, DecodingKey, TokenData, Validation,
 };
 use sha2::{Sha256, Digest};
 use hex;

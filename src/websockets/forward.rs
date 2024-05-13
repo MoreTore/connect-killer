@@ -12,7 +12,6 @@ use axum::{
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
 use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
-use serde::{Deserialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use futures_util::{SinkExt, StreamExt};
@@ -111,7 +110,7 @@ async fn handle_socket(
         //Verify socket
     }
 
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = socket.split();
 
     {
         let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = if is_device {

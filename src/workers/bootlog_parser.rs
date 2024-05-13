@@ -6,7 +6,7 @@ use loco_rs::prelude::*;
 use tokio::io::AsyncReadExt;
 use std::time::Instant;
 use std::io::Write;
-use crate::{cereal::log_capnp, common, models::_entities::{self, bootlogs}};
+use crate::{cereal::log_capnp, common, models::_entities::{self}};
 
 pub struct BootlogParserWorker {
     pub ctx: AppContext,

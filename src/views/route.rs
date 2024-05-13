@@ -1,6 +1,4 @@
-use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
-use serde_json::json;
 
 use crate::controllers::useradmin::{MasterTemplate, UlogText};
 
