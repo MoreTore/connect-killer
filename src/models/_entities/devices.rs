@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "devices")]
 pub struct Model {
     pub created_at: DateTime,
@@ -15,17 +15,14 @@ pub struct Model {
     pub imei2: String,
     pub public_key: String,
     pub sim_id: Option<String>,
-    pub prime: Option<bool>,
-    pub prime_type: Option<i16>,
+    pub prime: bool,
+    pub prime_type: i16,
     pub online: bool,
     pub last_ping: i64,
     pub uploads_allowed: bool,
     pub owner_id: Option<i32>,
     pub device_type: String,
     pub alias: String,
-
-
-
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
