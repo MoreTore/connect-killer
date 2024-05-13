@@ -6,6 +6,8 @@ use jsonwebtoken::{
     decode, encode, errors::Result as JWTResult, get_current_timestamp, Algorithm, DecodingKey,
     EncodingKey, Header, TokenData, Validation,
 };
+use sha2::{Sha256, Digest};
+use hex;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeviceClaims {
@@ -25,12 +27,30 @@ pub struct DeviceClaims {
 /// 
 /// register_token: JWT token signed by your private key containing payload: {"register": True}
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PilotAuthQuery {
+pub struct DeviceRegistrationParams {
     pub imei: String,
     pub imei2: String,
     pub serial: String,
     pub public_key: String,
     pub register_token: String
+}
+impl DeviceRegistrationParams {
+    pub fn generate_dongle_id(&self) -> String {
+        let mut hasher = Sha256::new();
+
+        // Concatenate the device info
+        hasher.update(&self.imei);
+        hasher.update(&self.imei2);
+        hasher.update(&self.serial);
+        hasher.update(&self.public_key);
+
+        // Compute the hash
+        let result = hasher.finalize();
+
+        // Encode the hash in hexadecimal and trim to 16 characters
+        let hex_encoded = hex::encode(result);
+        hex_encoded[0..16].to_string() // Take only the first 16 characters
+    }
 }
 
 /// Key	    Type    Description
@@ -53,7 +73,7 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
     format::text("hello")
 }
 
-async fn decode_register_token(params: PilotAuthQuery) -> Option<TokenData<DeviceClaims>> {
+async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<TokenData<DeviceClaims>> {
     //let mut validate = Validation::new(Algorithm::RS256);
     //validate.leeway = 0;
     let claims = decode::<DeviceClaims>(
@@ -64,18 +84,14 @@ async fn decode_register_token(params: PilotAuthQuery) -> Option<TokenData<Devic
     match claims {
         Ok(claims) => Some(claims),
         Err(e) => None,
-
     }
 }
 pub async fn pilotauth(
     State(ctx): State<AppContext>,
-    Query(mut params): Query<PilotAuthQuery>
+    Query(params): Query<DeviceRegistrationParams>
 ) -> Result<Response> {
-    let _token = decode_register_token(params).await;
-    
-    let jwt_secret = ctx.config.get_jwt_config()?;
-    
-    format::text("hello")
+    let _token = decode_register_token(&params).await;
+    format::json(PilotAuthResponse { dongle_id: params.generate_dongle_id(), access_token: "".into()})
 }
 
 pub fn routes() -> Routes {
