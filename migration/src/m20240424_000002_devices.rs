@@ -10,7 +10,9 @@ impl MigrationTrait for Migration {
             .create_table(
                 table_auto(Devices::Table)
                     .col(string(Devices::DongleId).unique_key().primary_key())
-                    .col(string_null(Devices::Serial))
+                    .col(string(Devices::Serial))
+                    .col(string(Devices::Imei))
+                    .col(string(Devices::Imei2))
                     .col(string(Devices::PublicKey).unique_key())
                     .col(string_null(Devices::SimId))
                     .col(boolean_null(Devices::Prime))
@@ -18,7 +20,7 @@ impl MigrationTrait for Migration {
                     .col(boolean(Devices::Online))
                     .col(big_integer(Devices::LastPing))
                     .col(boolean_null(Devices::UploadsAllowed))
-                    .col(integer(Devices::OwnerId))
+                    .col(integer_null(Devices::OwnerId))
                     .col(string(Devices::DeviceType))
                     .col(string(Devices::Alias))
                     .foreign_key(
@@ -47,6 +49,8 @@ enum Devices {
     DongleId,
     PublicKey,
     Serial,
+    Imei,
+    Imei2,
     SimId,
     Prime,
     PrimeType,

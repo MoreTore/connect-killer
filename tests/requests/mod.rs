@@ -7,3 +7,4 @@ pub mod v1;
 pub mod connectdata;
 pub mod connectincomming;
 pub mod useradmin;
+pub mod v2;
