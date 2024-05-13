@@ -10,8 +10,9 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub dongle_id: String,
-    pub serial: Option<String>,
-    #[sea_orm(unique)]
+    pub serial: String,
+    pub imei: String,
+    pub imei2: String,
     pub public_key: String,
     pub sim_id: Option<String>,
     pub prime: Option<bool>,
@@ -19,9 +20,12 @@ pub struct Model {
     pub online: bool,
     pub last_ping: i64,
     pub uploads_allowed: bool,
-    pub owner_id: i32,
+    pub owner_id: Option<i32>,
     pub device_type: String,
     pub alias: String,
+
+
+
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

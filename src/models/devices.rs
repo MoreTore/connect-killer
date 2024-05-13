@@ -6,6 +6,8 @@ use loco_rs::{auth::jwt, hash, prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::controllers::v2::PilotAuthQuery;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeviceRegistrationParams {
     pub id: i32,
@@ -20,6 +22,13 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl super::_entities::devices::Model {
+
+    pub async fn register_device(
+        db: &DatabaseConnection,
+        params: &PilotAuthQuery,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// Find all devices associated with a user
     /// 
     /// 
@@ -71,7 +80,7 @@ impl super::_entities::devices::Model {
 
         let device = devices::ActiveModel {
             dongle_id: ActiveValue::Set(params.dongle_id.to_string()),   
-            owner_id: ActiveValue::Set(self.owner_id),
+            //owner_id: ActiveValue::Set(self.owner_id),
             ..Default::default()
         }
         .insert(&txn)

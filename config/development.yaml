@@ -147,5 +147,5 @@ auth:
     # Secret key for token generation and verification
     secret: 4MqUawV3XQUNLNa575gC
     # Token expiration time in seconds
-    expiration: 604800 # 7 days
+    expiration: 7776000 # 90 days
 
