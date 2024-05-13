@@ -5,6 +5,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 fn main() -> io::Result<()> {
+    println!("cargo:rerun-if-changed=cereal");
     let src_prefix = "cereal/";
     let capnp_files = ["log.capnp", "car.capnp", "custom.capnp", "legacy.capnp", "maptile.capnp"];
     let out_dir = Path::new("src/cereal");
