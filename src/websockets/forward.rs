@@ -183,18 +183,13 @@ async fn handle_device_ws(
     let jwt: String = identity::extract_jwt_from_cookie(&headers).await.unwrap_or_default();
     ws.on_upgrade(move |socket: WebSocket| async move {
 
-        let jwt_identity = match identity::decode_jwt_identity(&jwt) {
-            Ok(token_data) => token_data.identity,
+        let jwt_identity = match identity::verify_identity(&ctx, &jwt).await {
+            Ok(jwt_payload) => jwt_payload.identity,
             Err(err) => {
-                tracing::debug!("Error decoding JWT: {:?}", err);
+                tracing::debug!("Error verifying token: {:?}", err);
                 "".into()
             }
         };
-        if identity::verify(&ctx, &jwt_identity, &jwt).await {
-            tracing::debug!("Verified");
-        } else {
-            tracing::debug!("Unverified");
-        }
         handle_socket(&ctx, socket, endpoint_dongle_id, jwt_identity, manager).await;
     })
 }

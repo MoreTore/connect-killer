@@ -187,7 +187,6 @@ pub async fn render_segment_ulog(
 // }
 
 pub async fn onebox_handler(
-    auth: auth::JWT,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     Extension(client): Extension<Client>,
