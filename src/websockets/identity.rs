@@ -71,3 +71,31 @@ pub(crate) async fn verify(ctx: &AppContext, identity: &String, jwt: &str) -> bo
     }
 
 }
+
+pub(crate) async fn verify_identity(ctx: &AppContext, jwt: &str) -> Result<JWTPayload, jsonwebtoken::errors::Error> {
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.insecure_disable_signature_validation();
+    let token_data = match decode::<JWTPayload>(
+        jwt,
+        &DecodingKey::from_secret(&"na".as_bytes()),
+        &validation,
+    ) {
+        Ok(token_data) => token_data,
+        Err(e) => return Err(e),
+    };
+    
+    let device = match devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
+        Some(device) => device,
+        None => return Ok(token_data.claims),
+    };
+
+    let claims = decode::<JWTPayload>(
+        jwt,
+        &DecodingKey::from_rsa_pem(&device.public_key.as_bytes()).unwrap(),
+        &Validation::new(token_data.header.alg),
+    );
+    match claims {
+        Ok(token_data) => Ok(token_data.claims),
+        Err(e) => Err(e),
+    }
+}
