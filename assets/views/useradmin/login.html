@@ -45,7 +45,7 @@
         });
     }
     $.ajax({
-        url: window.API_HOST + "/user/current",
+        url: window.API_HOST + "/api/user/current",
         method: "GET",
         headers: {
            'Authorization': localStorage.getItem('Authorization') // Retrieve JWT
@@ -57,7 +57,7 @@
            alert("Request failed");
         }
      });
-     localStorage.setItem('Authorization', `Bearer ${token}`);
+     
       $("#login-button").click(function() {
          const email = $("#email").val();
          const password = $("#password").val();
