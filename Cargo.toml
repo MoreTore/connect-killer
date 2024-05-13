@@ -58,6 +58,8 @@ jsonwebtoken = "9"
 base64 = "0.22.1"
 combine = "4.6.7"
 http = "1.1.0"
+sha2 = "0.10.8"
+hex = "0.4.3"
 
 [[bin]]
 name = "connect-cli"
