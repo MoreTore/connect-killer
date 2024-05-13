@@ -103,6 +103,7 @@ async fn handle_socket(
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
     let is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_some();
+    
     if !is_registered {
         tracing::info!("Got athena request from unregistered device: {}", endpoint_dongle_id);
         return
@@ -189,6 +190,11 @@ async fn handle_device_ws(
                 "".into()
             }
         };
+        if identity::verify(&ctx, &jwt_identity, &jwt).await {
+            tracing::debug!("Verified");
+        } else {
+            tracing::debug!("Unverified");
+        }
         handle_socket(&ctx, socket, endpoint_dongle_id, jwt_identity, manager).await;
     })
 }

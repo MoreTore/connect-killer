@@ -54,16 +54,20 @@ pub(crate) fn decode_jwt_identity(jwt: &str) -> Result<JWTPayload, SerdeError> {
     }
 }
 
-pub(crate) async fn verify(ctx: &AppContext, identity: String, jwt: &str) -> bool {
-    let device = device::Model::find_device(ctx.db, identity).await;
+pub(crate) async fn verify(ctx: &AppContext, identity: &String, jwt: &str) -> bool {
+    let device = match devices::Model::find_device(&ctx.db, identity).await {
+        Some(device) => device,
+        None => return false,
+    };
+
     let claims = decode::<JWTPayload>(
         jwt,
         &DecodingKey::from_rsa_pem(&device.public_key.as_bytes()).unwrap(),
         &Validation::new(Algorithm::RS256),
     );
     match claims {
-        Ok(claims) => Some(claims),
-        Err(e) => None,
+        Ok(_) => true,
+        Err(_) => false,
     }
 
 }
