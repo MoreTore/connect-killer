@@ -41,7 +41,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
         match self {
             AuthError::Unauthorized => (http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response(),
-            AuthError::RedirectToLogin => Redirect::to("/login").into_response(),
+            AuthError::RedirectToLogin => Redirect::to("/useradmin/login").into_response(),
         }
     }
 }

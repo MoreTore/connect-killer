@@ -21,6 +21,20 @@
             el.textContent = date.toUTCString();  // Set the formatted UTC date-time string
         });
       });
+      function api_post(endpoint, data, callback) {
+        return api_request('POST', endpoint, callback, {
+            data: JSON.stringify(data),
+            contentType: 'application/json'
+        });
+      }
+      function unpair(dongle_id) {
+        if (confirm("Unpair " + dongle_id + "?")) {
+            api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) {
+                alert('Unpaired ' + dongle_id);
+            });
+        }
+        window.location.reload();
+      }
     </script>
     <script>
       // Global WebSocket connection
@@ -31,18 +45,11 @@
           const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkZyb250RW5kIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.QaGCFMY0NNUtAGcUkVrH27wVqGbcawiPHgh5E8Gam-Y';
           document.cookie = `jwt=${jwt}; path=/`;
       
-          const serverUri = "ws://154.38.175.6:3111/ws/v2/" + '{{ dongle_id }}';
+          const serverUri = '{{ ws_host | safe }}/ws/v2/' + '{{ dongle_id | safe }}';
           ws = new WebSocket(serverUri);
           
           ws.addEventListener('open', function(event) {
               console.log('WebSocket connection opened');
-              // Send a ping every 30 seconds to keep the connection alive
-              //setInterval(() => {
-              //  if (ws.readyState === WebSocket.OPEN) {
-              //      ws.send(JSON.stringify({ type: 'ping' }));
-              //  }
-              //}, 30000);
-              // Start polling for progress
               const progressCommand = {
                 jsonrpc: "2.0",
                 method: "listUploadQueue",
@@ -103,7 +110,7 @@
               method: "uploadFileToUrl",
               params: {
                   fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
-                  url: "http://154.38.175.6:3111/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
+                  url: "{{ api_host | safe }}/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
                   headers: {},
               },
               id: 1

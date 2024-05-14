@@ -89,7 +89,6 @@ async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<Toke
     }
 }
 
-
 pub async fn pilotauth(
     State(ctx): State<AppContext>,
     Query(params): Query<DeviceRegistrationParams>
@@ -120,7 +119,6 @@ struct DevicePairClaims {
     identity: String,
     pair: bool,
 }
-
 
 async fn decode_pair_token(ctx: &AppContext, jwt: &str) -> Result<DevicePairClaims, jsonwebtoken::errors::Error> {
     let mut validation = Validation::new(Algorithm::RS256); //alg should not matter here
@@ -167,7 +165,7 @@ async fn pilotpair(
         let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
         let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
         let first_pair = device_model.owner_id.is_none();
-        if first_pair { // only pair if it was unpaired
+        if first_pair { // only pair if it wasn't already
             device_model.owner_id = Some(user_model.id);
             let txn = ctx.db.begin().await?;
             device_model.into_active_model().insert(&txn).await?;

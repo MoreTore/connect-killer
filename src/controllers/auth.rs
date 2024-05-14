@@ -125,11 +125,11 @@ async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -
         return unauthorized("unauthorized!");
     };
 
-    // let valid = user.verify_password(&params.password);
+    let valid = user.verify_password(&params.password);
 
-    // if !valid {
-    //     return unauthorized("unauthorized!");
-    // }
+    if !valid {
+        return unauthorized("unauthorized!");
+    }
 
     let jwt_secret = ctx.config.get_jwt_config()?;
 

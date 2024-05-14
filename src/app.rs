@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::env;
+use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
@@ -15,6 +17,7 @@ use loco_rs::{
 };
 use migration::{Migrator};
 use sea_orm::DatabaseConnection;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     controllers, initializers,
@@ -27,11 +30,30 @@ use reqwest::{Client};
 use axum::Extension;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
+use tokio::sync::{mpsc, oneshot, RwLock};
 
+#[derive(Serialize, Deserialize, Clone)]
+struct JsonRpcCommand {
+    id: String,
+    method: String,
+    params: serde_json::Value,
+}
 
-use crate::websockets::forward::ws_routes;
+#[derive(Serialize, Deserialize, Clone)]
+struct JsonRpcResponse {
+    id: String,
+    result: Option<serde_json::Value>,
+    error: Option<serde_json::Value>,
+}
+
+type SharedState = Arc<RwLock<App>>;
+
+use crate::controllers::ws::ConnectionManager;
 
 pub struct App {
+    command_sender: mpsc::Sender<JsonRpcCommand>,
+    pending_commands: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
+    offline_queues: Arc<Mutex<HashMap<String, Vec<JsonRpcCommand>>>>, // offline queue for each device
 }
 #[async_trait]
 impl Hooks for App {
@@ -61,6 +83,7 @@ impl Hooks for App {
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes()
+            .add_route(controllers::ws::routes())
             .add_route(controllers::v2::routes())
             .add_route(controllers::useradmin::routes())
             .add_route(controllers::connectincomming::routes())
@@ -99,17 +122,26 @@ impl Hooks for App {
         Ok(())
     }
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
+        let (command_sender, command_receiver) = mpsc::channel(100);
+        
+        let shared_state = Arc::new(RwLock::new(App {
+            command_sender,
+            pending_commands: Arc::new(Mutex::new(HashMap::new())),
+            offline_queues: Arc::new(Mutex::new(HashMap::new())),
+        }));
+
         let client = Client::new();
-        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
-        let router = axum::Router::new().nest_service("", router);
-        // Define and add a WebSocket route
+        let manager: Arc<ConnectionManager> = ConnectionManager::new();
 
-        let ws_router = ws_routes(ctx.clone());
+        crate::controllers::ws::send_ping_to_all_devices(manager.clone());
 
-        // Combine routers
-        let combined_router = router.merge(ws_router);
+        let router = router
+            .layer(NormalizePathLayer::trim_trailing_slash())
+            .layer(Extension(client))
+            .layer(Extension(manager))
+            .layer(Extension(shared_state));
 
-        Ok(combined_router.layer(Extension(client)))
+        Ok(router)
     }
 
     async fn storage(
@@ -123,5 +155,6 @@ impl Hooks for App {
             .expect("Failed to create local storage driver"));
         return Ok(Some(local_storage));
     }
+    
 
 }
