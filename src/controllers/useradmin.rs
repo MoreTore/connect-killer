@@ -50,6 +50,8 @@ pub struct SegmentsTemplate {
 
 #[derive(Serialize, Default)]
 pub struct MasterTemplate {
+    pub api_host: String,
+    pub ws_host: String,
     pub onebox: String,
     pub dongle_id: String,
     pub segments: Option<SegmentsTemplate>,
@@ -68,6 +70,7 @@ pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
 }
 
 pub async fn render_segment_ulog(
+    auth: crate::middleware::auth::MyJWT,
     ViewEngine(v): ViewEngine<TeraView>, 
     State(ctx): State<AppContext>,
     Extension(client): Extension<Client>,
@@ -125,7 +128,9 @@ pub async fn onebox_handler(
                 defined: true, 
                 segments 
             }), 
-            onebox: params.onebox, 
+            onebox: params.onebox,
+            api_host: ctx.config.server.full_url(),
+            ws_host: ctx.config.server.full_url().replace("http", "ws"),
             ..Default::default()
         };
     
@@ -152,7 +157,9 @@ pub async fn onebox_handler(
                 defined: true,
                 bootlogs: bootlogs_models
             }),
-            onebox: params.onebox, 
+            onebox: params.onebox,
+            api_host: ctx.config.server.full_url(),
+            ws_host: ctx.config.server.full_url().replace("http", "ws"),
             ..Default::default()
         };
 
@@ -166,7 +173,9 @@ pub async fn onebox_handler(
                 defined: true,
                 devices: device_models
             }),
-            onebox: params.onebox, 
+            onebox: params.onebox,
+            api_host: ctx.config.server.full_url(),
+            ws_host: ctx.config.server.full_url().replace("http", "ws"),
             ..Default::default() 
         };
         // Fallback response
@@ -181,7 +190,7 @@ pub async fn login(
     views::auth::login(
         v, 
         crate::views::auth::LoginTemplate { 
-            api_host: ctx.config.server.full_url() 
+            api_host: ctx.config.server.full_url()
         }
     )
 }
