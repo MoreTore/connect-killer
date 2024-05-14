@@ -65,23 +65,18 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 
         // check if the device is in the database
         let _device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
-            Some(device) => device,
-            None => {
+            Ok(device) => device,
+            Err(e) => {
                 tracing::info!("Recieved file from an unregistered device. {}", &args.dongle_id);
                 return Ok(())
             }
         };
-        let rp = RouteParams {
-            canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
-            device_dongle_id: args.dongle_id.clone(),
-            url: "Not implemented".to_string(),
-            ..Default::default()
-        };
-
-        let route = match routes::Model::find_route(&self.ctx.db,  &rp.canonical_route_name).await {
+        
+        let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
+        let route = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
             Ok(route) => route,
             Err(_) => { 
-                tracing::info!("Recieved file for a new route. Adding to DB: {}", &rp.canonical_route_name);
+                tracing::info!("Recieved file for a new route. Adding to DB: {}", &canonical_route_name);
                 let default_route_model = routes::Model {
                     canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
@@ -90,7 +85,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 match default_route_model.add_route_self(&self.ctx.db).await {
                     Ok(route) => route,
                     Err(e) => {
-                        tracing::error!("Failed to add the default route: {}", &rp.canonical_route_name);
+                        tracing::error!("Failed to add the default route: {}", &canonical_route_name);
                         return Err(sidekiq::Error::Message(e.to_string()));
                     }
                 }

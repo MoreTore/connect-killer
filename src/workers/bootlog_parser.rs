@@ -48,8 +48,8 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
         }
         // check if the device is in the database
         let _device = match _entities::devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
-            Some(device) => device,
-            None => {
+            Ok(device) => device,
+            Err(e) => {
                 tracing::info!("Recieved file from an unregistered device. Do something: {}", &args.dongle_id);
                 return Ok(())
             }

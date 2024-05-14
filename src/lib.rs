@@ -9,3 +9,4 @@ pub mod workers;
 pub mod common;
 pub mod cereal;
 pub mod websockets;
+pub mod middleware;

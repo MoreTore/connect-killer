@@ -82,8 +82,8 @@ pub(crate) async fn verify_identity(ctx: &AppContext, jwt: &str) -> Result<JWTPa
     };
     
     let device = match devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
-        Some(device) => device,
-        None => return Ok(token_data.claims),
+        Ok(device) => device,
+        Err(e) => return Ok(token_data.claims),
     };
 
     let claims = decode::<JWTPayload>(
