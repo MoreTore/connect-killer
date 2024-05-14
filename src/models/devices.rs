@@ -26,8 +26,8 @@ impl super::_entities::devices::Model {
     ) -> ModelResult<()> {
         // Check if the device is registered already
         match devices::Model::find_device(db, dongle_id).await {
-            Some(_) => Ok(()),
-            None => {
+            Ok(_) => Ok(()),
+            Err(e) => {
                 // Add device to db
                 let txn = db.begin().await?;
                 let device = devices::Model {
@@ -73,18 +73,12 @@ impl super::_entities::devices::Model {
     pub async fn find_device(
         db: &DatabaseConnection,
         dongle_id: &String,
-    ) -> Option<Model> {
-        let result = Entity::find()
-        .filter(devices::Column::DongleId.eq(dongle_id))
-        .one(db)
-        .await;
-        match result {
-            Ok(device) => device,
-            Err(e) => {
-                tracing::error!("DataBase Error: {:?}", e);
-                None
-            }
-        }
+    ) -> ModelResult<Model> {
+        let device = Entity::find()
+            .filter(devices::Column::DongleId.eq(dongle_id))
+            .one(db)
+            .await?;
+        device.ok_or_else(|| ModelError::EntityNotFound)
     }
     
 

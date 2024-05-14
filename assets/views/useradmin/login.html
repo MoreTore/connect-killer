@@ -4,7 +4,7 @@
     <title>Login</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
-        window.API_HOST = "http://154.38.175.6:3111"; // API server URL
+        window.API_HOST = "{{ api_host }}"; // API server URL
     </script>
 </head>
 <body>
@@ -18,23 +18,25 @@
    </form>
 
    <script>
-    function setCookie(name, value, days) {
-        const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
-        document.cookie = `${name}=${value}; expires=${expires}; path=/; Secure; HttpOnly`;
-    }
+      function setCookie(name, value, days) {
+         const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+         document.cookie = `${name}=${value}; expires=${expires}; path=/`;
+     }
+
     function login() {
         const email = $("#email").val();
         const password = $("#password").val();
-     
+
         $.ajax({
            url: window.API_HOST + "/api/auth/login",
            method: "POST",
            headers: { 'Content-Type': 'application/json' },
            data: JSON.stringify({ email, password }),
            success: function(response) {
-              if (response.token) {
-                 localStorage.setItem('Authorization', `Bearer ${response.token}`); // Store JWT
-                 window.location.href = "/useradmin?onebox="; // Redirect
+              if (response.token && response.pid) {
+                 setCookie('Authorization', `${response.token}`, 7); // Save JWT as a cookie
+                 localStorage.setItem('Authorization', `${response.token}`);
+                 window.location.href = `/useradmin?onebox=${response.pid}`; // Redirect to a protected page
               } else {
                  alert("Login failed");
               }
@@ -44,54 +46,12 @@
            }
         });
     }
-    $.ajax({
-        url: window.API_HOST + "/api/user/current",
-        method: "GET",
-        headers: {
-           'Authorization': localStorage.getItem('Authorization') // Retrieve JWT
-        },
-        success: function(response) {
-           // Handle response
-        },
-        error: function() {
-           alert("Request failed");
-        }
-     });
-     
-      $("#login-button").click(function() {
-         const email = $("#email").val();
-         const password = $("#password").val();
 
-         // Construct the login request
-         $.ajax({
-            url: window.API_HOST + "/api/auth/login",
-            method: "POST",
-            headers: {
-               'Content-Type': 'application/json',
-               'Authorization': localStorage.getItem('Authorization')
-            },
-            data: JSON.stringify({ email, password }),
-            beforeSend : function(xhr) {
-                xhr.setRequestHeader('Authorization', `${localStorage.getItem('Authorization')}`);
-            },
-            success: function(response) {
-               if (response.token) {
-                  setCookie('Authorization', `Bearer ${response.token}`, 7); // Save JWT as a cookie
-                  localStorage.setItem('Authorization', `Bearer ${response.token}`);
-                  window.location.href = "/useradmin?onebox="; // Redirect to a protected page
-               } else {
-                  alert("Login failed");
-               }
-            },
-            error: function() {
-               alert("Login failed");
-            },
-            xhrFields: {
-                withCredentials: true // Ensures cookies are sent
-                
-            }
-         });
-      });
+    $(document).ready(function() {
+        $("#login-button").click(function() {
+            login();
+        });
+    });
    </script>
 </body>
 </html>

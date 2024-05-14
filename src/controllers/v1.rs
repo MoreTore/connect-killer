@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-use crate::common;
+use crate::{common, models::_entities};
 
 #[derive(Deserialize)]
 struct UploadUrlQuery {
@@ -94,7 +94,11 @@ pub async fn get_route_files(
     }
 }
 
-async fn get_links_for_route(ctx: AppContext, route_id: &str, client: &Client) -> Result<(StatusCode, String), Box<dyn Error>> {
+async fn get_links_for_route(
+    ctx: AppContext, 
+    route_id: &str, 
+    client: &Client
+) -> Result<(StatusCode, String), Box<dyn Error>> {
     let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "/")).await;
     let response = client.get(&key).send().await?;
     let code = response.status();
@@ -187,6 +191,19 @@ fn transform_route_string(input_string: &str) -> String {
     }
 }
 
+async fn unpair(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    device_model.owner_id = None;
+    let txn = ctx.db.begin().await?;
+    device_model.into_active_model().insert(&txn).await?;
+    txn.commit().await?;
+    format::json(r#"{"success": 1}"#)
+}
+
 
 pub fn routes() -> Routes {
     Routes::new()
@@ -196,4 +213,5 @@ pub fn routes() -> Routes {
         .add(".4/:dongleId/upload_url/", get(get_upload_url)) 
         //.add("/devices/:dongle_id/route_segments" get(get_route_segment))
         .add("/echo", post(echo))
+        .add("/devices/:dongle_id/unpair", post(unpair))
 }

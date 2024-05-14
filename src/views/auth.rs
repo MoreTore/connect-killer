@@ -25,11 +25,11 @@ impl LoginResponse {
 }
 
 #[derive(Serialize)]
-struct LoginTemplate {
-    api_host: String,
+pub(crate) struct LoginTemplate {
+    pub api_host: String,
 }
 
-pub fn login(v: impl ViewRenderer) -> Result<impl IntoResponse> {
+pub fn login(v: impl ViewRenderer, template: LoginTemplate) -> Result<impl IntoResponse> {
     // Render the view with the template
-    format::render().view(&v, "useradmin/login.html", LoginTemplate {api_host: "http://154.38.175.6:3111".into() })
+    format::render().view(&v, "useradmin/login.html", template)
 }

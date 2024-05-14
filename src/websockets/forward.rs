@@ -78,8 +78,8 @@ async fn exit_handler(
         connections.remove(&endpoint_dongle_id);
     } // unlock
     let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
-        Some(device) => device,
-        None => return,
+        Ok(device) => device,
+        Err(_) => return,
     };
     let mut device_active_model = device.into_active_model();
     device_active_model.online = ActiveValue::Set(false);
@@ -97,7 +97,7 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_some();
+    let is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
     
     if !is_registered {
         tracing::info!("Got athena request from unregistered device: {}", endpoint_dongle_id);
@@ -135,8 +135,8 @@ async fn handle_socket(
             Message::Pong(_) => {tracing::trace!("Pong: {jwt_identity}");
                                 // update last_ping time here
                                 let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
-                                    Some(device) => device,
-                                    None => break,
+                                    Ok(device) => device,
+                                    Err(e) => break,
                                 };
                                 let mut device_active_model = device.into_active_model();
                                 device_active_model.last_ping = ActiveValue::Set(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64);
@@ -173,7 +173,7 @@ async fn handle_device_ws(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
     endpoint_dongle_id: String,
-    manager: Arc<ConnectionManager>
+    manager: Arc<ConnectionManager>,
 ) -> impl IntoResponse {
     let jwt: String = identity::extract_jwt_from_cookie(&headers).await.unwrap_or_default();
     ws.on_upgrade(move |socket: WebSocket| async move {
@@ -202,7 +202,7 @@ async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
 
 
 pub fn ws_routes(
-    ctx: AppContext
+    ctx: AppContext,
 ) -> Router {
     let manager: Arc<ConnectionManager> = ConnectionManager::new();
     let ping_manager = manager.clone();

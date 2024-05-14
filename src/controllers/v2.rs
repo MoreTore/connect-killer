@@ -9,7 +9,7 @@ use jsonwebtoken::{
 use sha2::{Sha256, Digest};
 use hex;
 
-use crate::models::_entities::devices;
+use crate::models::_entities;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeviceClaims {
@@ -88,6 +88,8 @@ async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<Toke
         Err(e) => None,
     }
 }
+
+
 pub async fn pilotauth(
     State(ctx): State<AppContext>,
     Query(params): Query<DeviceRegistrationParams>
@@ -95,11 +97,86 @@ pub async fn pilotauth(
     let _token = decode_register_token(&params).await;
     let dongle_id = params.generate_dongle_id();
     // TODO Add blacklist or whitelist here. Maybe a db table
-    let result = devices::Model::register_device(&ctx.db, params, &dongle_id).await;
+    let result = _entities::devices::Model::register_device(&ctx.db, params, &dongle_id).await;
     match result {
         Ok(_) => (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()})),
         Err(result) => (StatusCode::INTERNAL_SERVER_ERROR, Err(loco_rs::Error::Model(result))),
     }
+}
+
+/// pair_token	JWT Token signed by your EON private key containing payload {"identity": <dongle-id>, "pair": true}
+#[derive(Debug, Deserialize, Serialize)]
+struct DevicePairParams {
+    pair_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DevicePairResponse {
+    first_pair: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DevicePairClaims {
+    identity: String,
+    pair: bool,
+}
+
+
+async fn decode_pair_token(ctx: &AppContext, jwt: &str) -> Result<DevicePairClaims, jsonwebtoken::errors::Error> {
+    let mut validation = Validation::new(Algorithm::RS256); //alg should not matter here
+    validation.insecure_disable_signature_validation();
+    let token_data = match decode::<DevicePairClaims>(
+        jwt,
+        &DecodingKey::from_secret(&"na".as_bytes()),
+        &validation,
+    ) {
+        Ok(token_data) => token_data,
+        Err(e) => return Err(e),
+    };
+    
+    let device = match _entities::devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
+        Ok(device) => device,
+        Err(e) => return Ok(token_data.claims),
+    };
+
+    let claims = decode::<DevicePairClaims>(
+        jwt,
+        &DecodingKey::from_rsa_pem(&device.public_key.as_bytes()).unwrap(),
+        &Validation::new(token_data.header.alg),
+    );
+    match claims {
+        Ok(token_data) => Ok(token_data.claims),
+        Err(e) => Err(e),
+    }
+}
+
+async fn pilotpair(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Query(params): Query<DevicePairParams>
+) -> Result<Response> {
+    let claims = match decode_pair_token(&ctx, &params.pair_token).await {
+        Ok(claims) => claims,
+        Err(e) => {
+            tracing::error!("Got and invalid pair token: {}", e);
+            return format::json("Got and invalid pair token");//(StatusCode::BAD_REQUEST, format::json("Bad Token"));
+        }
+    };
+
+    if claims.pair {
+        let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+        let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
+        let first_pair = device_model.owner_id.is_none();
+        if first_pair { // only pair if it was unpaired
+            device_model.owner_id = Some(user_model.id);
+            let txn = ctx.db.begin().await?;
+            device_model.into_active_model().insert(&txn).await?;
+            txn.commit().await?;
+        }
+        format::json(DevicePairResponse { first_pair: first_pair})
+    } else {
+        return format::json("If you want to pair, 'pair' should be true!");
+    } 
 }
 
 pub fn routes() -> Routes {
@@ -108,4 +185,5 @@ pub fn routes() -> Routes {
         .add("/", get(hello))
         .add("/echo", post(echo))
         .add("/pilotauth", post(pilotauth))
+        .add("/pilotpair", post(pilotpair))
 }
