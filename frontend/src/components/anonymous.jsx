@@ -129,7 +129,7 @@ class AnonymousLanding extends Component {
 
   render() {
     const { classes } = this.props;
-    
+
     return (
       <div className={classes.baseContainer}>
         <div className={classes.base}>

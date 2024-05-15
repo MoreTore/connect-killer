@@ -212,4 +212,5 @@ pub fn routes() -> Routes {
         .add("/", get(hello))
         .add("/echo", post(echo))
         .add("/v2/:dongle_id", get( handle_device_ws))
+        .add("/:dongle_id", get( handle_device_ws))
 }

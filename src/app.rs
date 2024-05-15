@@ -133,10 +133,11 @@ impl Hooks for App {
         let client = Client::new();
         let manager: Arc<ConnectionManager> = ConnectionManager::new();
 
-        crate::controllers::ws::send_ping_to_all_devices(manager.clone());
+        crate::controllers::ws::send_ping_to_all_devices(manager.clone()).await;
+        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
+        let router = axum::Router::new().nest_service("", router);
 
         let router = router
-            .layer(NormalizePathLayer::trim_trailing_slash())
             .layer(Extension(client))
             .layer(Extension(manager))
             .layer(Extension(shared_state));

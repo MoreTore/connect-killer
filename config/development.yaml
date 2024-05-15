@@ -71,7 +71,7 @@ server:
   #    path: "assets/static"
   #  fallback: "assets/static/404.html"
 
-    # client side app static config
+  # client side app static config
     static:
       enable: true
       must_exist: true
