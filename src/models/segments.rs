@@ -153,6 +153,20 @@ impl super::_entities::segments::Model {
         Ok(segments)
     }
 
+    pub async fn find_time_filtered_device_segments(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+        from: i64,
+        to: i64,
+    ) -> ModelResult<Vec<Model>> {
+        let segments = segments::Entity::find()
+            .filter(segments::Column::CanonicalRouteName.starts_with(dongle_id))
+            .filter(segments::Column::StartTimeUtcMillis.between(from, to))
+            .all(db)
+            .await?;
+        Ok(segments)
+    }
+
     pub async fn find_all_segments(
         db: &DatabaseConnection,
     ) -> ModelResult<Vec<Model>> {
