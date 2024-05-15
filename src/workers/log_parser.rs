@@ -1,8 +1,8 @@
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
 use crate::models::_entities::{devices, routes, segments};
-use crate::models::routes::RouteParams;
 //                     devices,
 //                     users,
 //                     authorized_users};
@@ -80,6 +80,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 let default_route_model = routes::Model {
                     canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
+                    url: format!("{}/connectdata/{}/{}_{}", self.ctx.config.server.full_url(), args.dongle_id, args.dongle_id, args.timestamp),
                     ..Default::default()
                 };
                 match default_route_model.add_route_self(&self.ctx.db).await {
@@ -176,7 +177,7 @@ async fn handle_qlog(
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
     // Prepare route and segment parameters
-    let writer = match parse_qlog(seg, decompressed_data, args, ctx).await { 
+    let writer = match parse_qlog(&client, seg, decompressed_data, args, ctx).await { 
         Ok(writer) => writer, 
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
@@ -187,7 +188,7 @@ async fn handle_qlog(
     };
 }
 
-async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
+async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
             "{}/useradmin/logs?url={}",
@@ -206,6 +207,8 @@ async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>,
     let mut writer = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);
     let mut gps_seen = false;
+    let mut thumbnails: Vec<DynamicImage> = Vec::new();
+
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
         
@@ -230,9 +233,58 @@ async fn parse_qlog(seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>,
                 }
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
             }
-            log_capnp::event::Thumbnail(thumbnail) => {}
+            log_capnp::event::Thumbnail(thumbnail) => {
+                // take the jpg and add it to the array of the other jpgs.
+                // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
+                if let Ok(thumbnail) = thumbnail {
+                    // Assuming the thumbnail data is a JPEG image
+                    let image_data = thumbnail.get_thumbnail().map_err(Box::from)?;
+                    let img = image::load_from_memory(image_data).map_err(Box::from)?;
+                    thumbnails.push(img);
+                }
+            }
             _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
         }
+    }
+    if !thumbnails.is_empty() {
+        let thumb_width = thumbnails[0].width();
+        let thumb_height = thumbnails[0].height();
+        let combined_width = thumb_width * thumbnails.len() as u32;
+
+        // Create a new image with the combined width
+        let mut combined_img = ImageBuffer::new(combined_width, thumb_height);
+
+        for (i, thumbnail) in thumbnails.iter().enumerate() {
+            for y in 0..thumb_height {
+                for x in 0..thumb_width {
+                    combined_img.put_pixel(x + i as u32 * thumb_width, y, thumbnail.get_pixel(x, y));
+                }
+            }
+        }
+
+        // Downscale the combined image to 1536x80
+        let downscaled_img = DynamicImage::ImageRgba8(combined_img).resize_exact(1536, 80, image::imageops::FilterType::Lanczos3);
+
+        // Create a new image with a height of 96px
+        let mut final_img = ImageBuffer::new(1536, 96);
+        
+        // Copy the downscaled image into the new image
+        image::imageops::overlay(&mut final_img, &downscaled_img, 0, 0);
+
+        // Fill the bottom 16px with black
+        for y in 80..96 {
+            for x in 0..1536 {
+                final_img.put_pixel(x, y, Rgba([0, 0, 0, 255]));
+            }
+        }
+
+        // Convert the final image to a byte vector
+        let mut img_bytes: Vec<u8> = Vec::new();
+        let mut encoder = JpegEncoder::new_with_quality(&mut img_bytes, 80);
+        encoder.encode_image(&DynamicImage::ImageRgba8(final_img)).map_err(Box::from)?;
+
+        let url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--sprite.jpg", args.dongle_id, args.timestamp, args.segment)).await;
+        upload_data(client, &url, img_bytes).await?;
     }
     Ok(writer)
 }

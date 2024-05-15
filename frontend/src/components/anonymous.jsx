@@ -161,7 +161,7 @@ class AnonymousLanding extends Component {
 
           <a
             className="flex items-center pl-4 pr-3 py-2 font-medium border border-white rounded-full hover:bg-[rgba(255,255,255,0.1)] active:bg-[rgba(255,255,255,0.2)] transition-colors"
-            href={`http://localhost:3111/useradmin`}
+            href={`${window.location.origin}/${demoDevices[0].dongle_id}`}
           >
             Try the demo
             <RightArrow className="ml-1 h-4" />

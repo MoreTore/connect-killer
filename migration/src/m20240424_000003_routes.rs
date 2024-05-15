@@ -25,6 +25,39 @@ impl MigrationTrait for Migration {
                     .col(boolean(Routes::Can))
                     .col(string_null(Routes::GitCommit))
                     .col(string(Routes::DeviceDongleId))
+                    .col(big_integer(Routes::CreateTime))
+                    .col(float(Routes::EndLat))
+                    .col(float(Routes::EndLng))
+                    .col(string(Routes::EndTime))
+                    .col(big_integer(Routes::EndTimeUtcMillis))
+                    .col(string(Routes::Fullname))
+                    .col(boolean(Routes::Hpgps))
+                    .col(big_integer(Routes::InitLogmonotime))
+                    .col(boolean(Routes::IsPreserved))
+                    .col(boolean(Routes::IsPublic))
+                    .col(float(Routes::Length))
+                    .col(integer(Routes::MaxCamera))
+                    .col(integer(Routes::MaxDcamera))
+                    .col(integer(Routes::MaxEcamera))
+                    .col(integer(Routes::MaxLog))
+                    .col(integer(Routes::MaxQcamera))
+                    .col(boolean(Routes::Passive))
+                    .col(integer(Routes::ProcCamera))
+                    .col(integer(Routes::ProcLog))
+                    .col(integer(Routes::ProcQcamera))
+                    .col(integer(Routes::ProcQlog))
+                    .col(boolean(Routes::Radar))
+                    .col(string_null(Routes::Rating))
+                    .col(json(Routes::SegmentEndTimes))
+                    .col(json(Routes::SegmentNumbers))
+                    .col(json(Routes::SegmentStartTimes))
+                    .col(string(Routes::ShareExp))
+                    .col(string(Routes::ShareSig))
+                    .col(float(Routes::StartLat))
+                    .col(float(Routes::StartLng))
+                    .col(big_integer(Routes::StartTimeUtcMillis))
+                    .col(string(Routes::UserId))
+                    .col(string(Routes::Vin))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-routes-devices")
@@ -64,8 +97,40 @@ pub enum Routes {
     Can,
     GitCommit,
     DeviceDongleId,
+    CreateTime,
+    EndLat,
+    EndLng,
+    EndTime,
+    EndTimeUtcMillis,
+    Fullname,
+    Hpgps,
+    InitLogmonotime,
+    IsPreserved,
+    IsPublic,
+    Length,
+    MaxCamera,
+    MaxDcamera,
+    MaxEcamera,
+    MaxLog,
+    MaxQcamera,
+    Passive,
+    ProcCamera,
+    ProcLog,
+    ProcQcamera,
+    ProcQlog,
+    Radar,
+    Rating,
+    SegmentEndTimes,
+    SegmentNumbers,
+    SegmentStartTimes,
+    ShareExp,
+    ShareSig,
+    StartLat,
+    StartLng,
+    StartTimeUtcMillis,
+    UserId,
+    Vin,
 }
-
 
 #[derive(DeriveIden)]
 enum Devices {

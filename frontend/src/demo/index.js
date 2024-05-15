@@ -5,7 +5,7 @@ export function isDemoDevice(dongleId) {
 }
 
 export function isDemoRoute(route) {
-  return route === 'a2a0ccea32023010|2023-07-27--13-01-19';
+  return route === '164080f7933651c4|2024-03-03--06-46-42';
 }
 
 export function isDemo() {

@@ -9,3 +9,4 @@ pub mod connectincomming;
 pub mod useradmin;
 pub mod v2;
 pub mod ws;
+pub mod sprite;
