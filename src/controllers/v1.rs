@@ -10,6 +10,8 @@ use std::error::Error;
 
 use crate::{common, models::_entities};
 
+use super::device_response::*;
+
 #[derive(Deserialize)]
 struct UploadUrlQuery {
     path: String,
@@ -31,7 +33,7 @@ trait ExpiryValidation {
 impl ExpiryValidation for UploadUrlQuery {
   fn validate_expiry(&mut self) {
     match self.expiry_days {
-      Some(days) => 
+      Some(days) =>
         if !(days >= 1 && days <= 30) {
           self.expiry_days = Some(30);
         }
@@ -45,7 +47,7 @@ impl ExpiryValidation for UploadUrlQuery {
 impl ExpiryValidation for UploadUrlsQuery {
   fn validate_expiry(&mut self) {
     match self.expiry_days {
-      Some(days) => 
+      Some(days) =>
         if !(days >= 1 && days <= 30) {
           self.expiry_days = Some(30);
         }
@@ -95,8 +97,8 @@ pub async fn get_route_files(
 }
 
 async fn get_links_for_route(
-    ctx: AppContext, 
-    route_id: &str, 
+    ctx: AppContext,
+    route_id: &str,
     client: &Client
 ) -> Result<(StatusCode, String), Box<dyn Error>> {
     let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "/")).await;
@@ -107,7 +109,7 @@ async fn get_links_for_route(
         .map(|key| format!("{}/connectdata{}", &ctx.config.server.full_url(), key.as_str().unwrap_or_default()))
         .collect::<Vec<String>>();
     let response_json = sort_keys_to_response(keys).await;
-  
+
     Ok((code, response_json.to_string()))
 }
 
@@ -158,18 +160,18 @@ async fn upload_urls_handler(
     Json(mut data): Json<UploadUrlsQuery>,
 ) -> Result<Response> {
     data.validate_expiry();
-    
+
     let urls = data.paths.iter().map(|path| {
         UrlResponse {
             url: format!("{}/connectincoming/{}/{}", &ctx.config.server.full_url(), dongle_id, transform_route_string(path)),
         }
     }).collect::<Vec<_>>();
-    
+
     format::json(urls)
 }
 
 fn transform_route_string(input_string: &str) -> String {
-    // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 
+    // example input_string = 2024-03-02--19-02-46--0--rlog.bz2
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
     let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
 
@@ -204,14 +206,65 @@ async fn unpair(
     format::json(r#"{"success": 1}"#)
 }
 
+async fn device_info(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    format::json(DeviceInfoResponse {..Default::default()})
+}
+
+async fn device_location(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    format::json(DeviceLocationResponse {..Default::default()})
+}
+
+async fn device_stats(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    format::json(DeviceStatsResponse {..Default::default()})
+}
+
+async fn device_users(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    format::json(DeviceUsersResponse {..Default::default()})
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DeviceSegmentQuery {
+    from: i64,
+    to: i64,
+}
+
+async fn route_segment(
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Query(params): Query<DeviceSegmentQuery>,
+) -> Result<Response> {
+    let segment_models: Vec<_entities::segments::Model> = _entities::segments::Model::find_time_filtered_device_segments(&ctx.db, &dongle_id, params.from, params.to).await?;
+    format::json(segment_models)
+}
 
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v1")
         .add("/route/:route_id/files", get(get_route_files))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
-        .add(".4/:dongleId/upload_url/", get(get_upload_url)) 
-        //.add("/devices/:dongle_id/route_segments" get(get_route_segment))
+        .add(".4/:dongleId/upload_url/", get(get_upload_url))
+        .add("/devices/:dongle_id/route_segments", get(route_segment))
         .add("/echo", post(echo))
         .add("/devices/:dongle_id/unpair", post(unpair))
-}
+        .add("/devices/:dongle_id/location", get(device_location))
+        .add("/devices/:dongle_id/stats", get(device_stats))
+        .add("/devices/:dongle_id/users", get(device_users))
+        .add(".1/devices/:dongle_id", get(device_info))
+    }
