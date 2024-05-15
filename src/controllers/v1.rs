@@ -7,6 +7,7 @@ use reqwest::{StatusCode,Client};
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::fmt::Write as FmtWrite;
 
 use crate::{common, models::_entities};
 
@@ -70,8 +71,8 @@ pub async fn echo(State(ctx): State<AppContext>,
     crate::workers::log_parser::LogSegmentWorker::perform_later(
         &ctx,
         crate::workers::log_parser::LogSegmentWorkerArgs {
-            internal_file_url: "http://localhost:3000/406f02914de1a867_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
-            dongle_id: "406f02914de1a867".to_string(),
+            internal_file_url: "http://localhost:3000/164080f7933651c4_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
+            dongle_id: "164080f7933651c4".to_string(),
             timestamp: "2024-02-05--16-22-28".to_string(),
             segment: "10".to_string(),
             file: "qlog.bz2".to_string(),
@@ -94,6 +95,31 @@ pub async fn get_route_files(
         Ok((status, body)) => (status, body),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)),
     }
+}
+
+async fn get_qcam_stream(
+    State(ctx): State<AppContext>,
+    Path(canonical_route_name): Path<String>,
+) -> Result<Response> {
+    let segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
+    let dongle_id = canonical_route_name.split("|").nth(0).unwrap();
+    let timestamp = canonical_route_name.split("|").nth(1).unwrap();
+
+    let mut response = String::new();
+    writeln!(response, "#EXTM3U");
+    writeln!(response, "#EXT-X-VERSION:3");
+    writeln!(response, "#EXT-X-TARGETDURATION:61");
+    writeln!(response, "#EXT-X-MEDIA-SEQUENCE:0");
+    writeln!(response, "#EXT-X-PLAYLIST-TYPE:VOD");
+    
+    for segment in segment_models {
+        writeln!(response, "#EXTINF:60.0,"); // Assuming each segment is 60 seconds long
+        writeln!(response, "{}", segment.qcam_url);
+    }
+    
+    writeln!(response, "#EXT-X-ENDLIST");
+    
+    Ok(response.into_response())
 }
 
 async fn get_links_for_route(
@@ -240,28 +266,31 @@ async fn device_users(
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DeviceSegmentQuery {
-    from: i64,
-    to: i64,
+    end: i64,
+    start: i64,
 }
 
 async fn route_segment(
-    _auth: crate::middleware::auth::MyJWT,
+    //_auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(params): Query<DeviceSegmentQuery>,
 ) -> Result<Response> {
-    let segment_models: Vec<_entities::segments::Model> = _entities::segments::Model::find_time_filtered_device_segments(&ctx.db, &dongle_id, params.from, params.to).await?;
-    format::json(segment_models)
+    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    format::json(route_models)
 }
+
 
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v1")
+        .add("/echo", post(echo))
         .add("/route/:route_id/files", get(get_route_files))
+        .add("/route/:route_id/qcamera.m3u8", get(get_qcam_stream))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
         .add(".4/:dongleId/upload_url/", get(get_upload_url))
-        .add("/devices/:dongle_id/route_segments", get(route_segment))
-        .add("/echo", post(echo))
+        .add("/devices/:dongle_id/routes_segments", get(route_segment))
         .add("/devices/:dongle_id/unpair", post(unpair))
         .add("/devices/:dongle_id/location", get(device_location))
         .add("/devices/:dongle_id/stats", get(device_stats))

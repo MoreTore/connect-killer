@@ -4,7 +4,7 @@ import { CssBaseline, MuiThemeProvider } from '@material-ui/core';
 import * as Sentry from '@sentry/react';
 
 import './index.css';
-import App from './App.jsx';
+import App from './App';
 import Theme from './theme';
 
 if (window.SENTRY_ENV) {
@@ -22,14 +22,9 @@ if (import.meta.env.VITE_APP_GIT_COMMIT_TIMESTAMP) {
   console.info('commit date:', import.meta.env.VITE_APP_GIT_COMMIT_TIMESTAMP || 'unknown');
 }
 
-const router = createBrowserRouter([
-  { path: '/', element: <App /> }
-  /* other routes... */
-], { basename: '/connect' });
-
 ReactDOM.createRoot(document.getElementById('root')).render((
   <MuiThemeProvider theme={Theme}>
     <CssBaseline />
-    <RouterProvider router={router} />
+    <App />
   </MuiThemeProvider>
 ));

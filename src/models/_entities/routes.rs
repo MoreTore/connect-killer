@@ -2,12 +2,10 @@
 
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, Default)]
+use serde_json::Value as JsonValue;
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "routes")]
 pub struct Model {
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
     #[sea_orm(primary_key, auto_increment = false)]
     pub canonical_route_name: String,
     pub git_remote: Option<String>,
@@ -26,6 +24,107 @@ pub struct Model {
     pub can: bool,
     pub git_commit: Option<String>,
     pub device_dongle_id: String,
+    pub create_time: i64,
+    #[sea_orm(column_type = "Float")]
+    pub end_lat: f32,
+    #[sea_orm(column_type = "Float")]
+    pub end_lng: f32,
+    pub end_time: String,
+    pub end_time_utc_millis: i64,
+    pub fullname: String,
+    pub hpgps: bool,
+    pub init_logmonotime: i64,
+    pub is_preserved: bool,
+    pub is_public: bool,
+    #[sea_orm(column_type = "Float")]
+    pub length: f32,
+    pub max_camera: i32,
+    pub max_dcamera: i32,
+    pub max_ecamera: i32,
+    pub max_log: i32,
+    pub max_qcamera: i32,
+    pub passive: bool,
+    pub proc_camera: i32,
+    pub proc_log: i32,
+    pub proc_qcamera: i32,
+    pub proc_qlog: i32,
+    pub radar: bool,
+    pub rating: Option<String>,
+    #[sea_orm(column_type = "Json")]
+    pub segment_end_times: JsonValue,
+    #[sea_orm(column_type = "Json")]
+    pub segment_numbers: JsonValue,
+    #[sea_orm(column_type = "Json")]
+    pub segment_start_times: JsonValue,
+    pub share_exp: String,
+    pub share_sig: String,
+    #[sea_orm(column_type = "Float")]
+    pub start_lat: f32,
+    #[sea_orm(column_type = "Float")]
+    pub start_lng: f32,
+    pub start_time_utc_millis: i64,
+    pub user_id: String,
+    pub vin: String,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        Self {
+            canonical_route_name: String::default(),
+            git_remote: None,
+            version: None,
+            git_branch: None,
+            start_time: 0,
+            miles: 0.0,
+            max_qlog: 0,
+            max_qcam: 0,
+            platform: String::default(),
+            public: false,
+            devicetype: None,
+            git_dirty: None,
+            url: String::default(),
+            can: false,
+            git_commit: None,
+            device_dongle_id: String::default(),
+            create_time: 0,
+            end_lat: 0.0,
+            end_lng: 0.0,
+            end_time: String::default(),
+            end_time_utc_millis: 0,
+            fullname: String::default(),
+            hpgps: false,
+            init_logmonotime: 0,
+            is_preserved: false,
+            is_public: false,
+            length: 0.0,
+            max_camera: 0,
+            max_dcamera: 0,
+            max_ecamera: 0,
+            max_log: 0,
+            max_qcamera: 0,
+            passive: false,
+            proc_camera: 0,
+            proc_log: 0,
+            proc_qcamera: 0,
+            proc_qlog: 0,
+            radar: false,
+            rating: None,
+            segment_end_times: JsonValue::Array(vec![]),
+            segment_numbers: JsonValue::Array(vec![]),
+            segment_start_times: JsonValue::Array(vec![]),
+            share_exp: String::default(),
+            share_sig: String::default(),
+            start_lat: 0.0,
+            start_lng: 0.0,
+            start_time_utc_millis: 0,
+            user_id: String::default(),
+            vin: String::default(),
+            created_at: DateTime::from_timestamp(0, 0),
+            updated_at: DateTime::from_timestamp(0, 0),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

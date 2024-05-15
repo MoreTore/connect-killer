@@ -161,6 +161,54 @@ pub async fn bootlog_file_download(
     }
 }
 
+// a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19/12/sprite.jpg
+pub async fn thumbnail_download(
+    Path((dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
+    State(ctx): State<AppContext>,
+    axum::Extension(client): axum::Extension<reqwest::Client>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let lookup_key = format!("{canonical_route_name}--{segment}--sprite.jpg");
+    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key).await;
+
+    // Prepare a request to fetch the file from storage
+    let mut request_builder = client.get(&internal_file_url);
+
+    // Forward the Range header if present
+    if let Some(range) = headers.get(hyper::header::RANGE) {
+        request_builder = request_builder.header(hyper::header::RANGE, range.clone());
+    }
+
+    let res = request_builder.send().await;
+
+    match res {
+        Ok(response) => {
+            if response.status().is_success() {
+                // Create a response builder to form the browser response
+                let mut response_builder = Response::builder()
+                    .status(StatusCode::OK)
+                    .header(hyper::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{lookup_key}\""));
+
+                // Add Content-Length if available
+                if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH)
+                                                            .and_then(|ct_len| ct_len.to_str().ok())
+                                                            .and_then(|ct_len| ct_len.parse::<u64>().ok()) {
+                    response_builder = response_builder.header(hyper::header::CONTENT_LENGTH, content_length);
+                }
+
+                // Add the file content as the response body
+                let body = reqwest::Body::wrap_stream(response.bytes_stream());
+                let proxy_response = response_builder.body(body).unwrap();
+
+                Ok(proxy_response)
+            } else {
+                Err((StatusCode::from(response.status()), "Failed to fetch the file"))
+            }
+        },
+        Err(_) => Err((StatusCode::BAD_GATEWAY, "Internal server error")),
+    }
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
@@ -172,6 +220,7 @@ pub fn routes() -> Routes {
         .add("/fcam/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/dlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/elog/:dongle_id/:timestamp/:segment/:file", get(file_download))
+        .add("/:dongle_id/:route_name/:segment/sprite.jpg", get(thumbnail_download))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
         .add("/", get(hello))
         .add("/echo", post(echo))

@@ -1,18 +1,90 @@
 ---
-- canonical_route_name: 164080f7933651c4|2024-03-03--06-46-42
+- canonical_route_name: 164080f7933651c4|2024-02-05--16-22-28
   start_time: 1648033600000
-  url: localhost:3000/this/is/a/test
+  url: http://localhost:3111/connectdata/164080f7933651c4/164080f7933651c4_2024-02-05--16-22-28
   miles: 69.420
   max_qlog: 1
   max_qcam: 1
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
-  can: True
+  can: true
   device_dongle_id: 164080f7933651c4
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   public: true
+  create_time: 1690488146
+  end_lat: 32.7252
+  end_lng: -117.162
+  end_time: "2023-07-27T20:14:12"
+  end_time_utc_millis: 1690488852000
+  fullname: "164080f7933651c4|2024-02-05--16-22-28"
+  hpgps: true
+  init_logmonotime: 36629898787
+  is_preserved: true
+  is_public: true
+  length: 8.02241
+  max_camera: -1
+  max_dcamera: -1
+  max_ecamera: -1
+  max_log: -1
+  max_qcamera: 12
+  passive: false
+  proc_camera: 12
+  proc_log: 12
+  proc_qcamera: 12
+  proc_qlog: 12
+  radar: true
+  rating: null
+  segment_end_times: !!seq
+    - 1690488142995
+    - 1690488203050
+    - 1690488263032
+    - 1690488322998
+    - 1690488383009
+    - 1690488443000
+    - 1690488503010
+    - 1690488563006
+    - 1690488623013
+    - 1690488683016
+    - 1690488743014
+    - 1690488803019
+    - 1690488851596
+  segment_numbers: !!seq
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+  segment_start_times: !!seq
+    - 1690488081496
+    - 1690488143038
+    - 1690488203035
+    - 1690488263028
+    - 1690488323037
+    - 1690488383025
+    - 1690488443035
+    - 1690488503030
+    - 1690488563038
+    - 1690488623040
+    - 1690488683035
+    - 1690488743039
+    - 1690488803035
+  share_exp: "1715832113"
+  share_sig: "kjEdeBeF1e0JDCiCaWGCfAl1xNVzFsSKC0+/qG2NQiA="
+  start_lat: 32.7363
+  start_lng: -117.176
+  start_time_utc_millis: 1690488081000
+  user_id: "bd3bc34dbea550c8"
+  vin: "5YFT4RCE1LP005733"
 - canonical_route_name: 164080f7933651c4|2024-03-03--06-46-43
   start_time: 1648033600000
   miles: 69.420
@@ -21,9 +93,81 @@
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
-  url: localhost:3000/this/is/a/test
-  can: True
+  url: https://chffrprivate.blob.core.windows.net/chffrprivate3/v2/a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19
+  can: true
   device_dongle_id: 164080f7933651c4
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   public: true
+  create_time: 1690488146
+  end_lat: 32.7252
+  end_lng: -117.162
+  end_time: "2023-07-27T20:14:12"
+  end_time_utc_millis: 1690488852000
+  fullname: "164080f7933651c4|2024-03-03--06-46-43"
+  hpgps: true
+  init_logmonotime: 36629898787
+  is_preserved: true
+  is_public: true
+  length: 8.02241
+  max_camera: -1
+  max_dcamera: -1
+  max_ecamera: -1
+  max_log: -1
+  max_qcamera: 12
+  passive: false
+  proc_camera: 12
+  proc_log: 12
+  proc_qcamera: 12
+  proc_qlog: 12
+  radar: true
+  rating: null
+  segment_end_times: !!seq
+    - 1690488142995
+    - 1690488203050
+    - 1690488263032
+    - 1690488322998
+    - 1690488383009
+    - 1690488443000
+    - 1690488503010
+    - 1690488563006
+    - 1690488623013
+    - 1690488683016
+    - 1690488743014
+    - 1690488803019
+    - 1690488851596
+  segment_numbers: !!seq
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+  segment_start_times: !!seq
+    - 1690488081496
+    - 1690488143038
+    - 1690488203035
+    - 1690488263028
+    - 1690488323037
+    - 1690488383025
+    - 1690488443035
+    - 1690488503030
+    - 1690488563038
+    - 1690488623040
+    - 1690488683035
+    - 1690488743039
+    - 1690488803035
+  share_exp: "1715832113"
+  share_sig: "kjEdeBeF1e0JDCiCaWGCfAl1xNVzFsSKC0+/qG2NQiA="
+  start_lat: 32.7363
+  start_lng: -117.176
+  start_time_utc_millis: 1690488081000
+  user_id: "bd3bc34dbea550c8"
+  vin: "5YFT4RCE1LP005733"

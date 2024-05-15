@@ -1,7 +1,6 @@
 import React, { Component, lazy, Suspense } from 'react';
 import { Provider } from 'react-redux';
 import { Route, Switch, Redirect } from 'react-router';
-import { redirect } from "react-router-dom";
 import { ConnectedRouter } from 'connected-react-router';
 import qs from 'query-string';
 import localforage from 'localforage';
@@ -75,11 +74,10 @@ class App extends Component {
     this.setState({ initialized: true });
 
     // set up analytics, low priority, so we do this last
-    //import('./analytics-v2');
   }
 
   redirectLink() {
-    let url = '/connect';
+    let url = '/';
     if (typeof window.sessionStorage !== 'undefined' && sessionStorage.getItem('redirectURL') !== null) {
       url = sessionStorage.getItem('redirectURL');
       sessionStorage.removeItem('redirectURL');
@@ -87,14 +85,13 @@ class App extends Component {
     return url;
   }
 
-
   authRoutes() {
     return (
       <Switch>
         <Route path="/auth/">
           <Redirect to={this.redirectLink()} />
         </Route>
-        <Route path="/connect" component={Explorer} />
+        <Route path="/" component={Explorer} />
       </Switch>
     );
   }
@@ -103,9 +100,9 @@ class App extends Component {
     return (
       <Switch>
         <Route path="/auth/">
-          <Redirect to="/connect" />
+          <Redirect to="/" />
         </Route>
-        <Route path="/connect" component={AnonymousLanding} />
+        <Route path="/" component={AnonymousLanding} />
       </Switch>
     );
   }
@@ -120,18 +117,15 @@ class App extends Component {
     );
   }
 
-  
   render() {
     if (!this.state.initialized) {
       return this.renderLoading();
     }
 
     const showLogin = !MyCommaAuth.isAuthenticated() && !isDemo() && !getZoom(window.location.pathname);
-
     let content = (
       <Suspense fallback={this.renderLoading()}>
-        { showLogin ? this.anonymousRoutes() : this.navigateToAdmin() }
-        
+        { showLogin ? this.anonymousRoutes() : this.authRoutes() }
       </Suspense>
     );
 
@@ -147,11 +141,11 @@ class App extends Component {
     return (
       <Provider store={store}>
         <ConnectedRouter history={history}>
-            {content}
+          {content}
         </ConnectedRouter>
       </Provider>
     );
-  } 
+  }
 }
 
 export default App;

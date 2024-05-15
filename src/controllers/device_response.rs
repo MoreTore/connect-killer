@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// ## Device Info Response
 /// GET /v1.1/devices/:dongle_id/
@@ -72,4 +72,35 @@ pub struct DeviceUser {
 #[derive(Serialize, Debug, Default)]
 pub struct DeviceUsersResponse {
     pub users: Vec<DeviceUser>
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Segment {
+    pub can: bool,
+    pub devicetype: u8,
+    pub dongle_id: String,
+    pub end_lat: f64,
+    pub end_lng: f64,
+    pub end_time: String,
+    pub end_time_utc_millis: u64,
+    pub fullname: String,
+    pub hpgps: bool,
+    pub init_logmonotime: u64,
+    pub is_preserved: bool,
+    pub is_public: bool,
+    pub length: f64,
+    pub passive: bool,
+    pub platform: String,
+
+    pub segment_end_times: Vec<u64>,
+    pub segment_numbers: Vec<u32>,
+    pub segment_start_times: Vec<u64>,
+
+    pub url: String,
+    pub user_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SegmentResponse {
+    pub segments: Vec<Segment>,
 }
