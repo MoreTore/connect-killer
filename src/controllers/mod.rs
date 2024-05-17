@@ -1,4 +1,4 @@
-pub mod auth;
+//pub mod auth;
 pub mod notes;
 pub mod user;
 
@@ -8,4 +8,4 @@ pub mod connectincomming;
 pub mod useradmin;
 pub mod v2;
 pub mod ws;
-pub mod device_response;
+pub mod v1_responses;

@@ -59,6 +59,7 @@ sha2 = "0.10.8"
 hex = "0.4.3"
 thiserror = "1.0.60"
 image = "0.25.1"
+axum-server = { version = "0.6", features = ["tls-rustls"] }
 
 [[bin]]
 name = "connect-cli"

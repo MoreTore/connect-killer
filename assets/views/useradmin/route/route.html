@@ -45,7 +45,7 @@
           const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkZyb250RW5kIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.QaGCFMY0NNUtAGcUkVrH27wVqGbcawiPHgh5E8Gam-Y';
           document.cookie = `jwt=${jwt}; path=/`;
       
-          const serverUri = '{{ ws_host | safe }}/ws/v2/' + '{{ dongle_id | safe }}';
+          const serverUri = 'wss://connect-ws.duckdns.org/ws/v2/' + '{{ dongle_id | safe }}';
           ws = new WebSocket(serverUri);
           
           ws.addEventListener('open', function(event) {
@@ -110,7 +110,7 @@
               method: "uploadFileToUrl",
               params: {
                   fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
-                  url: "{{ api_host | safe }}/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
+                  url: "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
                   headers: {},
               },
               id: 1
@@ -174,7 +174,7 @@
       </tr>
       {% for device in devices.devices %}
       <tr>
-        <td style="white-space: nowrap"><a href="/useradmin?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+        <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
         <td style="white-space: nowrap">{{ device.serial }}</td>
         <td style="white-space: nowrap">{{ device.device_type }}</td>
         <td style="white-space: nowrap">{{ device.alias }}</td>
@@ -205,7 +205,7 @@
   {% for segment in segments.segments %}
     {% set_global canonical_name = segment.canonical_name %}
   {% endfor %}
-  <b>dongle id:</b> <a href="/useradmin?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
+  <b>dongle id:</b> <a href="/?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
   <hr>
   <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
   <b>segments:</b><br>
@@ -318,7 +318,7 @@
       <tr>
         <td style="white-space: nowrap"><span class="timestamp" data-timestamp="{{ route.start_time }}"></span>
         <td style="white-space: nowrap">
-          <a href="useradmin?onebox={{ route.canonical_route_name }}">
+          <a href="/?onebox={{ route.canonical_route_name }}">
             {{ route.canonical_route_name }}
           </a>
         </td>

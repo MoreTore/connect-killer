@@ -11,7 +11,7 @@ use std::fmt::Write as FmtWrite;
 
 use crate::{common, models::_entities};
 
-use super::device_response::*;
+use super::v1_responses::*;
 
 #[derive(Deserialize)]
 struct UploadUrlQuery {
@@ -237,6 +237,7 @@ async fn device_info(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
+    //_entities::
     format::json(DeviceInfoResponse {..Default::default()})
 }
 
@@ -282,10 +283,46 @@ async fn route_segment(
 }
 
 
+async fn get_my_devices(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+    let device_models = _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
+    // let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    format::json(device_models)
+}
+
+
+// email: String,
+// id: String,
+// points: i64,
+// regdate: i64,
+// sueruser: bool,
+// username: String,
+async fn get_me(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+    format::json(MeResponse { 
+        email: user_model.email,
+        id: String::from(user_model.pid),
+        regdate: user_model.created_at.and_utc().timestamp(),
+        points: user_model.points,
+        superuser: user_model.superuser,
+        username: user_model.name, // TODO change the usermode names to match comma api to simplify this
+    })
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v1")
         .add("/echo", post(echo))
+        .add("/me", get(get_me))
+        .add("/me/devices", get(get_my_devices))
         .add("/route/:route_id/files", get(get_route_files))
         .add("/route/:route_id/qcamera.m3u8", get(get_qcam_stream))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))

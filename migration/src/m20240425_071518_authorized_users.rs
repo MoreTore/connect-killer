@@ -17,6 +17,7 @@ impl MigrationTrait for Migration {
                             .col(AuthorizedUsers::DeviceDongleId)
                             ,
                     )
+                    .col(string(AuthorizedUsers::AccessLevel))
                     .col(integer(AuthorizedUsers::UserId))
                     .col(string(AuthorizedUsers::DeviceDongleId))
                     .foreign_key(
@@ -52,6 +53,7 @@ enum AuthorizedUsers {
     Table,
     UserId,
     DeviceDongleId,
+    AccessLevel,
 }
 
 

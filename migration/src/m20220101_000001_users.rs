@@ -9,15 +9,17 @@ impl MigrationTrait for Migration {
         let table = table_auto(Users::Table)
             .col(pk_auto(Users::Id))
             .col(uuid(Users::Pid))
-            .col(string_uniq(Users::Email))
-            .col(string(Users::Password))
-            .col(string(Users::ApiKey).unique_key())
+            .col(string_null(Users::Email))
+            //.col(string(Users::Password))
+            //.col(string(Users::ApiKey).unique_key())
             .col(string(Users::Name))
-            .col(string_null(Users::ResetToken))
-            .col(timestamp_null(Users::ResetSentAt))
-            .col(string_null(Users::EmailVerificationToken))
-            .col(timestamp_null(Users::EmailVerificationSentAt))
-            .col(timestamp_null(Users::EmailVerifiedAt))
+            .col(big_integer(Users::Points))
+            .col(boolean(Users::Superuser))
+            //.col(string_null(Users::ResetToken))
+            //.col(timestamp_null(Users::ResetSentAt))
+            // .col(string_null(Users::EmailVerificationToken))
+            // .col(timestamp_null(Users::EmailVerificationSentAt))
+            // .col(timestamp_null(Users::EmailVerifiedAt))
             .to_owned();
         manager.create_table(table).await?;
         Ok(())
@@ -37,11 +39,13 @@ pub enum Users {
     Pid,
     Email,
     Name,
-    Password,
-    ApiKey,
-    ResetToken,
-    ResetSentAt,
-    EmailVerificationToken,
-    EmailVerificationSentAt,
-    EmailVerifiedAt,
+    Superuser,
+    Points,
+    // Password,
+    // ApiKey,
+    // ResetToken,
+    // ResetSentAt,
+    // EmailVerificationToken,
+    // EmailVerificationSentAt,
+    // EmailVerifiedAt,
 }

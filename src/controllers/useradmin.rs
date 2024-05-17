@@ -10,15 +10,7 @@ use axum::{
 };
 extern crate url;
 
-#[derive(Deserialize)]
-pub struct UlogQuery {
-    pub url: String
-}
 
-#[derive(Serialize)]
-pub struct UlogText {
-   pub text: String
-}
 
 #[derive(Deserialize)]
 pub struct OneBox {
@@ -47,7 +39,6 @@ pub struct SegmentsTemplate {
     pub segments: Vec<_entities::segments::Model>,
 }
 
-
 #[derive(Serialize, Default)]
 pub struct MasterTemplate {
     pub api_host: String,
@@ -67,29 +58,6 @@ pub async fn echo(req_body: String) -> String {
 pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
     // do something with context (database, etc)
     format::text("hello")
-}
-
-pub async fn render_segment_ulog(
-    auth: crate::middleware::auth::MyJWT,
-    ViewEngine(v): ViewEngine<TeraView>, 
-    State(ctx): State<AppContext>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<UlogQuery>
-) -> Result<impl IntoResponse> {
-    let request = client.get(params.url);
-    // get the data and save it as a string and pass to admin_segment_ulog
-    let res = request.send().await;
-    let data: String;
-    match res {
-        Ok(response) => {
-            let bytes = response.bytes().await.unwrap();
-            let bytes_vec: Vec<u8> = bytes.to_vec(); // Convert &bytes::Bytes to Vec<u8>
-            data = unsafe { String::from_utf8_unchecked(bytes_vec) };
-        }
-        _ => data = "No parsed data for this segment".to_string(),
-    }
-
-    views::route::admin_segment_ulog(v, UlogText { text: data })
 }
 
 pub async fn onebox_handler(
@@ -114,6 +82,8 @@ pub async fn onebox_handler(
             canonical_route_name = Some(format!("{}|{}", dongle_id.as_ref().unwrap(), timestamp.as_ref().unwrap()));
         }
     }
+    let api_host = ctx.config.server.full_url().replace("http", "https");
+    let ws_host = api_host.replace("3112", "3223");
 
     if let Some(canonical_route) = canonical_route_name {
         let mut segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
@@ -129,8 +99,8 @@ pub async fn onebox_handler(
                 segments 
             }), 
             onebox: params.onebox,
-            api_host: ctx.config.server.full_url(),
-            ws_host: ctx.config.server.full_url().replace("http", "ws"),
+            api_host: api_host,
+            ws_host: ws_host,
             ..Default::default()
         };
     
@@ -158,8 +128,8 @@ pub async fn onebox_handler(
                 bootlogs: bootlogs_models
             }),
             onebox: params.onebox,
-            api_host: ctx.config.server.full_url(),
-            ws_host: ctx.config.server.full_url().replace("http", "ws"),
+            api_host: api_host,
+            ws_host: ws_host,
             ..Default::default()
         };
 
@@ -174,8 +144,8 @@ pub async fn onebox_handler(
                 devices: device_models
             }),
             onebox: params.onebox,
-            api_host: ctx.config.server.full_url(),
-            ws_host: ctx.config.server.full_url().replace("http", "ws"),
+            api_host: api_host,
+            ws_host: ws_host,
             ..Default::default() 
         };
         // Fallback response
@@ -197,9 +167,7 @@ pub async fn login(
 
 pub fn routes() -> Routes {
     Routes::new()
-        .prefix("useradmin")
         .add("/", get(onebox_handler))
         .add("/login", get(login))
-        .add("/logs/", get(render_segment_ulog))
         .add("/echo", post(echo))
 }

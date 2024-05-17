@@ -28,96 +28,96 @@ pub struct ResetParams {
 
 /// Register function creates a new user with the given parameters and sends a
 /// welcome email to the user
-async fn register(
-    State(ctx): State<AppContext>,
-    Json(params): Json<RegisterParams>,
-) -> (StatusCode, &'static str) {
-    let res = users::Model::create_with_password(&ctx.db, &params).await;
+// async fn register(
+//     State(ctx): State<AppContext>,
+//     Json(params): Json<RegisterParams>,
+// ) -> (StatusCode, &'static str) {
+//     let res = users::Model::create_with_password(&ctx.db, &params).await;
 
-    let user = match res {
-        Ok(user) => user,
-        Err(err) => {
-            tracing::info!(
-                message = err.to_string(),
-                user_email = &params.email,
-                "could not register user",
-            );
-            return (StatusCode::BAD_REQUEST, "User with the same email already exsists!");
-        }
-    };
+//     let user = match res {
+//         Ok(user) => user,
+//         Err(err) => {
+//             tracing::info!(
+//                 message = err.to_string(),
+//                 user_email = &params.email,
+//                 "could not register user",
+//             );
+//             return (StatusCode::BAD_REQUEST, "User with the same email already exsists!");
+//         }
+//     };
 
-    let user = user
-        .into_active_model()
-        .set_email_verification_sent(&ctx.db)
-        .await
-        .expect("could not set email verification sent");
+//     let user = user
+//         .into_active_model()
+//         .set_email_verification_sent(&ctx.db)
+//         .await
+//         .expect("could not set email verification sent");
 
-    AuthMailer::send_welcome(&ctx, &user).await
-        .expect("could not send welcome email to the user");
+//     AuthMailer::send_welcome(&ctx, &user).await
+//         .expect("could not send welcome email to the user");
 
 
-    // ok response
-    (StatusCode::OK, "Created user successfully!")
-}
+//     // ok response
+//     (StatusCode::OK, "Created user successfully!")
+// }
 
 /// Verify register user. if the user not verified his email, he can't login to
 /// the system.
-async fn verify(
-    State(ctx): State<AppContext>,
-    Json(params): Json<VerifyParams>,
-) -> Result<Response> {
-    let user = users::Model::find_by_verification_token(&ctx.db, &params.token).await?;
+// async fn verify(
+//     State(ctx): State<AppContext>,
+//     Json(params): Json<VerifyParams>,
+// ) -> Result<Response> {
+//     let user = users::Model::find_by_verification_token(&ctx.db, &params.token).await?;
 
-    if user.email_verified_at.is_some() {
-        tracing::info!(pid = user.pid.to_string(), "user already verified");
-    } else {
-        let active_model = user.into_active_model();
-        let user = active_model.verified(&ctx.db).await?;
-        tracing::info!(pid = user.pid.to_string(), "user verified");
-    }
+//     if user.email_verified_at.is_some() {
+//         tracing::info!(pid = user.pid.to_string(), "user already verified");
+//     } else {
+//         let active_model = user.into_active_model();
+//         let user = active_model.verified(&ctx.db).await?;
+//         tracing::info!(pid = user.pid.to_string(), "user verified");
+//     }
 
-    format::json(())
-}
+//     format::json(())
+// }
 
 /// In case the user forgot his password  this endpoints generate a forgot token
 /// and send email to the user. In case the email not found in our DB, we are
 /// returning a valid request for for security reasons (not exposing users DB
 /// list).
-async fn forgot(
-    State(ctx): State<AppContext>,
-    Json(params): Json<ForgotParams>,
-) -> Result<Response> {
-    let Ok(user) = users::Model::find_by_email(&ctx.db, &params.email).await else {
-        // we don't want to expose our users email. if the email is invalid we still
-        // returning success to the caller
-        return format::json(());
-    };
+// async fn forgot(
+//     State(ctx): State<AppContext>,
+//     Json(params): Json<ForgotParams>,
+// ) -> Result<Response> {
+//     let Ok(user) = users::Model::find_by_email(&ctx.db, &params.email).await else {
+//         // we don't want to expose our users email. if the email is invalid we still
+//         // returning success to the caller
+//         return format::json(());
+//     };
 
-    let user = user
-        .into_active_model()
-        .set_forgot_password_sent(&ctx.db)
-        .await?;
+//     let user = user
+//         .into_active_model()
+//         .set_forgot_password_sent(&ctx.db)
+//         .await?;
 
-    AuthMailer::forgot_password(&ctx, &user).await?;
+//     AuthMailer::forgot_password(&ctx, &user).await?;
 
-    format::json(())
-}
+//     format::json(())
+// }
 
 /// reset user password by the given parameters
-async fn reset(State(ctx): State<AppContext>, Json(params): Json<ResetParams>) -> Result<Response> {
-    let Ok(user) = users::Model::find_by_reset_token(&ctx.db, &params.token).await else {
-        // we don't want to expose our users email. if the email is invalid we still
-        // returning success to the caller
-        tracing::info!("reset token not found");
+// async fn reset(State(ctx): State<AppContext>, Json(params): Json<ResetParams>) -> Result<Response> {
+//     let Ok(user) = users::Model::find_by_reset_token(&ctx.db, &params.token).await else {
+//         // we don't want to expose our users email. if the email is invalid we still
+//         // returning success to the caller
+//         tracing::info!("reset token not found");
 
-        return format::json(());
-    };
-    user.into_active_model()
-        .reset_password(&ctx.db, &params.password)
-        .await?;
+//         return format::json(());
+//     };
+//     user.into_active_model()
+//         .reset_password(&ctx.db, &params.password)
+//         .await?;
 
-    format::json(())
-}
+//     format::json(())
+// }
 
 /// Creates a user login and returns a token
 async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {

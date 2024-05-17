@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@moretore/api": "moretore/connect-api#v3.0.1",
-    "@moretore/my-comma-auth": "moretore/my-comma-auth#v1.4.1",
+    "@moretore/my-comma-auth": "moretore/my-comma-auth#v1.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.2.1",

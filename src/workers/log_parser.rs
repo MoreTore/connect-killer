@@ -191,7 +191,7 @@ async fn handle_qlog(
 async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
-            "{}/useradmin/logs?url={}",
+            "{}/connectdata/logs?url={}",
             ctx.config.server.full_url(),
             common::mkv_helpers::get_mkv_file_url(
                 &format!("{}_{}--{}--{}",

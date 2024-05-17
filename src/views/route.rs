@@ -1,8 +1,6 @@
 use loco_rs::prelude::*;
 
-use crate::controllers::useradmin::{MasterTemplate, UlogText};
-
-
+use crate::controllers::{connectdata::UlogText, useradmin::MasterTemplate};
 
 pub fn admin_route(v: impl ViewRenderer, template: MasterTemplate) -> Result<impl IntoResponse> {
     // Render the view with the template

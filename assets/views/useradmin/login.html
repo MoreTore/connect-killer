@@ -4,7 +4,8 @@
     <title>Login</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
-        window.API_HOST = "{{ api_host | safe }}"; // API server URL
+        window.API_HOST = "https://connect-api.duckdns.org"; // API server URL
+        window.USERADMIN_HOST = "https://connect-useradmin.duckdns.org"; // API server URL
     </script>
 </head>
 <body>
@@ -36,7 +37,7 @@
               if (response.token && response.pid) {
                  setCookie('Authorization', `${response.token}`, 7); // Save JWT as a cookie
                  localStorage.setItem('Authorization', `${response.token}`);
-                 window.location.href = `/useradmin?onebox=${response.pid}`; // Redirect to a protected page
+                 window.location.href = `${window.USERADMIN_HOST}/?onebox=${response.pid}`; // Redirect to a protected page
               } else {
                  alert("Login failed");
               }

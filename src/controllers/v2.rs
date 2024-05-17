@@ -1,11 +1,18 @@
 #![allow(clippy::unused_async)]
-use axum::extract::Query;
-use axum::http::StatusCode;
+use axum::{
+    extract::{Form, Query, State},
+    http::{HeaderMap, HeaderValue, StatusCode},
+    response::{Html, IntoResponse}, Extension,
+};
 use loco_rs::prelude::*;
 use serde::{Serialize, Deserialize};
 use jsonwebtoken::{
     decode, Algorithm, DecodingKey, TokenData, Validation,
 };
+
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+
 use sha2::{Sha256, Digest};
 use hex;
 
@@ -177,6 +184,92 @@ async fn pilotpair(
     } 
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct GithubAuthParams {
+    code: String,
+    state: Option<String>,
+    provider: Option<String>,
+}
+
+
+async fn github_redirect_handler(
+    State(ctx): State<AppContext>,
+    Query(params): Query<GithubAuthParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let redirect_url = format!("{}/v2/auth/?provider=h&code={}", "https://connect-portal.duckdns.org", params.code);
+
+    let mut headers = HeaderMap::new();
+    headers.insert("Location", HeaderValue::from_str(&redirect_url).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
+
+    Ok((StatusCode::FOUND, headers))
+}
+
+
+
+#[derive(Deserialize, Serialize)]
+pub struct GithubUser {
+    pub id: u64,
+    pub email: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct GithubTokenResponse {
+    access_token: String,
+}
+
+async fn auth(
+    State(ctx): State<AppContext>,
+    Form(params): Form<GithubAuthParams>,
+) -> Result<Response> {
+    let token_url = "https://github.com/login/oauth/access_token";
+    let client = reqwest::Client::new();
+    let response = client
+        .post(token_url)
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", "Ov23liP7Y8jCaNhQxsjc"),
+            ("client_secret", "95f9a4995f4df69abcf584d03fd50df3c8f87ca7"),
+            ("code", &params.code),
+        ])
+        .send().await;
+
+    let response = match response {
+        Ok(response) => response,
+        Err(e) => {
+            tracing::error!("Github token error: {} ", e);
+            return format::json("Failed");
+        }
+    };
+
+    let token_response: GithubTokenResponse = response.json().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR).unwrap();
+
+    let user_response = client
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {}", token_response.access_token))
+        .header("User-Agent", "YourAppName")
+        .send()
+        .await;
+
+    let user_response = match user_response {
+        Ok(user_response) => user_response,
+        Err(e) => {
+            tracing::error!("Github token error: {} ", e);
+            return format::json("Failed");
+        }
+    };
+
+    let github_user: GithubUser = user_response.json().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR).unwrap();
+    let user = _entities::users::Model::with_oauth(&ctx.db, &github_user).await?;
+    
+    let jwt_secret = ctx.config.get_jwt_config()?;
+
+    let token = user
+        .generate_jwt(&jwt_secret.secret, &jwt_secret.expiration)
+        .or_else(|_| unauthorized("unauthorized!"))?;
+
+    format::json(GithubTokenResponse { access_token: token} )
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v2")
@@ -184,4 +277,6 @@ pub fn routes() -> Routes {
         .add("/echo", post(echo))
         .add("/pilotauth", post(pilotauth))
         .add("/pilotpair", post(pilotpair))
+        .add("/auth", post(auth))
+        .add("/auth/h/redirect", get(github_redirect_handler))
 }
