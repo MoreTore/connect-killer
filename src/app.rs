@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::Path;
 use std::env;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use tokio::time::{self, Duration};
 use async_trait::async_trait;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
@@ -27,10 +30,21 @@ use crate::{
 };
 
 use reqwest::{Client};
-use axum::Extension;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
 use tokio::sync::{mpsc, oneshot, RwLock};
+
+use axum::{
+    extract::Host,
+    handler::HandlerWithoutStateExt,
+    http::{StatusCode, Uri},
+    response::Redirect,
+    routing::get,
+    BoxError, Router, Extension,
+};
+use axum_server::tls_rustls::RustlsConfig;
+use std::{net::SocketAddr, path::PathBuf};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct JsonRpcCommand {
@@ -81,7 +95,10 @@ impl Hooks for App {
         )])
     }
 
-    fn routes(_ctx: &AppContext) -> AppRoutes {
+    fn routes(ctx: &AppContext) -> AppRoutes {
+        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) { 
+            return AppRoutes::with_default_routes();//.add_route(controllers::auth::routes());
+        }
         AppRoutes::with_default_routes()
             .add_route(controllers::ws::routes())
             .add_route(controllers::v2::routes())
@@ -90,11 +107,14 @@ impl Hooks for App {
             .add_route(controllers::connectdata::routes())
             .add_route(controllers::v1::routes())
             .add_route(controllers::notes::routes())
-            .add_route(controllers::auth::routes())
+            //.add_route(controllers::auth::routes())
             .add_route(controllers::user::routes())
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
+        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) {
+            return;
+        }
         p.register(crate::workers::bootlog_parser::BootlogParserWorker::build(ctx));
         p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(ctx));
         p.register(crate::workers::log_parser::LogSegmentWorker::build(ctx));
@@ -122,20 +142,31 @@ impl Hooks for App {
         Ok(())
     }
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {
-        let (command_sender, command_receiver) = mpsc::channel(100);
+        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
+        let router = axum::Router::new().nest_service("", router);
         
+        if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) {
+            return Ok(router);
+        }
+
+        let manager: Arc<ConnectionManager> = ConnectionManager::new();
+        let ping_manager = manager.clone();
+        tokio::spawn(async move {
+            let mut interval = time::interval(time::Duration::from_secs(30)); // Ping every 30 seconds
+            loop {
+                interval.tick().await;
+                crate::controllers::ws::send_ping_to_all_devices(ping_manager.clone()).await; 
+            }
+        });
+        
+
+        let (command_sender, command_receiver) = mpsc::channel(100);
         let shared_state = Arc::new(RwLock::new(App {
             command_sender,
             pending_commands: Arc::new(Mutex::new(HashMap::new())),
             offline_queues: Arc::new(Mutex::new(HashMap::new())),
         }));
-
         let client = Client::new();
-        let manager: Arc<ConnectionManager> = ConnectionManager::new();
-
-        crate::controllers::ws::send_ping_to_all_devices(manager.clone()).await;
-        let router = NormalizePathLayer::trim_trailing_slash().layer(router);
-        let router = axum::Router::new().nest_service("", router);
 
         let router = router
             .layer(Extension(client))
@@ -145,17 +176,75 @@ impl Hooks for App {
         Ok(router)
     }
 
-    async fn storage(
-        _config: &Config,
-        _environment: &Environment,
-    ) -> Result<Option<storage::Storage>> {
-        // get the project root directory
-        //let root = env::current_dir().expect("Failed to get current directory");
-        
-        let local_storage = storage::Storage::single(storage::drivers::local::new_with_prefix("uploads")
-            .expect("Failed to create local storage driver"));
-        return Ok(Some(local_storage));
-    }
-    
+    async fn serve(app: axum::Router, server_config: loco_rs::boot::ServeParams) -> Result<()> {
+        let my_server_config = MyServerConfig {
+            http: server_config.port as u16,
+            https: (server_config.port + 111) as u16,
+            binding: server_config.binding,
+        };
+        //tokio::spawn(redirect_http_to_https(my_server_config.clone()));
+        // configure certificate and private key used by https
+        let config = RustlsConfig::from_pem_file(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("self_signed_certs")
+                .join("cert.pem"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("self_signed_certs")
+                .join("key.pem"),
+        )
+        .await
+        .unwrap();
 
+        let addr = SocketAddr::from((
+            std::net::Ipv6Addr::UNSPECIFIED, 
+            my_server_config.https
+        ));
+        axum_server::bind_rustls(addr, config)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct MyServerConfig {
+    http: u16,
+    https: u16,
+    binding: String
+}
+
+async fn redirect_http_to_https(my_server_config: MyServerConfig) {
+    let config_clone = my_server_config.clone(); // Clone the config for the closure
+
+    fn make_https(host: String, uri: Uri, my_server_config: MyServerConfig) -> Result<Uri, Box<dyn std::error::Error>> {
+        let mut parts = uri.into_parts();
+        parts.scheme = Some(axum::http::uri::Scheme::HTTPS.try_into()?);
+
+        if parts.path_and_query.is_none() {
+            parts.path_and_query = Some("/".parse().unwrap());
+        }
+
+        let https_host = host.replace(&my_server_config.http.to_string(), &my_server_config.https.to_string());
+        parts.authority = Some(https_host.parse()?);
+
+        Ok(Uri::from_parts(parts)?)
+    }
+
+    let redirect = move |Host(host): Host, uri: Uri| async move {
+        match make_https(host, uri, config_clone.clone()) {
+            Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
+            Err(error) => {
+                tracing::warn!(%error, "failed to convert URI to HTTPS");
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
+    };
+
+    
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", my_server_config.binding, my_server_config.http)).await.unwrap();
+    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, redirect.into_make_service())
+        .await
+        .unwrap();
 }

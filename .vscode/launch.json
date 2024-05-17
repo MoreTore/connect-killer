@@ -33,13 +33,13 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "dev env debug",
+      "name": "connect env debug",
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
       "args": [
         "start",
         "-e",
-        "development",
+        "connect",
         "--server-and-worker"
       ],
       "cwd": "${workspaceFolder}",
@@ -47,13 +47,13 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Test env debug",
+      "name": "useradmin env debug",
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
       "args": [
         "start",
         "-e",
-        "test",
+        "useradmin",
         "--server-and-worker"
       ],
       "cwd": "${workspaceFolder}",

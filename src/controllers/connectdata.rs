@@ -1,12 +1,13 @@
 #![allow(clippy::unused_async)]
 use loco_rs::{prelude::*};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::get, Extension,
   
   };
+use serde::{Deserialize, Serialize};
 use crate::common;
 
 pub async fn echo(req_body: String) -> String {
@@ -209,6 +210,38 @@ pub async fn thumbnail_download(
     }
 }
 
+#[derive(Deserialize)]
+pub struct UlogQuery {
+    pub url: String
+}
+
+#[derive(Serialize)]
+pub struct UlogText {
+   pub text: String
+}
+
+pub async fn render_segment_ulog(
+    auth: crate::middleware::auth::MyJWT,
+    ViewEngine(v): ViewEngine<TeraView>, 
+    State(ctx): State<AppContext>,
+    Extension(client): Extension<reqwest::Client>,
+    Query(params): Query<UlogQuery>
+) -> Result<impl IntoResponse> {
+    let request = client.get(params.url);
+    // get the data and save it as a string and pass to admin_segment_ulog
+    let res = request.send().await;
+    let data: String;
+    match res {
+        Ok(response) => {
+            let bytes = response.bytes().await.unwrap();
+            let bytes_vec: Vec<u8> = bytes.to_vec(); // Convert &bytes::Bytes to Vec<u8>
+            data = unsafe { String::from_utf8_unchecked(bytes_vec) };
+        }
+        _ => data = "No parsed data for this segment".to_string(),
+    }
+    crate::views::route::admin_segment_ulog(v, UlogText { text: data })
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
@@ -220,6 +253,7 @@ pub fn routes() -> Routes {
         .add("/fcam/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/dlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/elog/:dongle_id/:timestamp/:segment/:file", get(file_download))
+        .add("/logs/", get(render_segment_ulog))
         .add("/:dongle_id/:route_name/:segment/sprite.jpg", get(thumbnail_download))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
         .add("/", get(hello))

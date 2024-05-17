@@ -166,7 +166,7 @@ async fn handle_socket(
 }
 
 async fn handle_device_ws(
-    auth: crate::middleware::auth::MyJWT,
+    //auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,

@@ -76,7 +76,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
                 self.ctx.config.server.full_url(), 
                 args.internal_file_url.split("/").last()
                     .expect("Failed to access the last segment of the internal file URL")),
-            &format!("{}/useradmin/logs?url={}",
+            &format!("{}/connectdata/logs?url={}",
                 self.ctx.config.server.full_url(),
                 common::mkv_helpers::get_mkv_file_url(
                     &format!("{}_{}",

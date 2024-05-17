@@ -6,7 +6,7 @@ use crate::models::_entities::users;
 pub struct CurrentResponse {
     pub pid: String,
     pub name: String,
-    pub email: String,
+    //pub email: String,
 }
 
 impl CurrentResponse {
@@ -15,7 +15,7 @@ impl CurrentResponse {
         Self {
             pid: user.pid.to_string(),
             name: user.name.clone(),
-            email: user.email.clone(),
+            //email: user.email.clone(),
         }
     }
 }

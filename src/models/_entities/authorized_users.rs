@@ -12,6 +12,7 @@ pub struct Model {
     pub user_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub device_dongle_id: String,
+    pub access_level: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

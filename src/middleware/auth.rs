@@ -7,7 +7,7 @@ use axum::{
 use cookie::Cookie;
 use serde::{Deserialize, Serialize};
 use futures_util::TryFutureExt;
-use loco_rs::{app::AppContext, auth, errors::Error, model::Authenticable};
+use loco_rs::{app::AppContext, auth, errors::Error};
 use thiserror::Error;
 // Define constants for token prefix and authorization header
 const TOKEN_PREFIX: &str = "Bearer ";
@@ -16,11 +16,11 @@ const AUTH_COOKIE_NAME: &str = "jwt";
 
 // Define a struct to represent user authentication information serialized
 // to/from JSON
-#[derive(Debug, Deserialize, Serialize)]
-pub struct JWTWithUser<T: Authenticable> {
-    pub claims: auth::jwt::UserClaims,
-    pub user: T,
-}
+// #[derive(Debug, Deserialize, Serialize)]
+// pub struct JWTWithUser<T: Authenticable> {
+//     pub claims: auth::jwt::UserClaims,
+//     pub user: T,
+// }
 
 // Define a struct to represent user authentication information serialized
 // to/from JSON
@@ -41,7 +41,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
         match self {
             AuthError::Unauthorized => (http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response(),
-            AuthError::RedirectToLogin => Redirect::to("/useradmin/login").into_response(),
+            AuthError::RedirectToLogin => Redirect::to("/login").into_response(),
         }
     }
 }
@@ -66,7 +66,10 @@ where
             Ok(claims) => Ok(Self {
                 claims: claims.claims,
             }),
-            Err(_) => Err(AuthError::RedirectToLogin),
+            Err(_) => {
+                tracing::trace!("Authentication Error. Redirecting to login");
+                return Err(AuthError::RedirectToLogin);
+            }
         }
     }
 }
