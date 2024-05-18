@@ -9,5 +9,11 @@
         "**/.vscode/**",
         "**/node_modules/**",
         "*_capnp.rs"
-    ]
+    ],
+    "rust-analyzer.completion.fullFunctionSignatures.enable": true,
+    "rust-analyzer.completion.limit": null,
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "never",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands"
 }

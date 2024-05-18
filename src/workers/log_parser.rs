@@ -19,6 +19,7 @@ use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
 use tokio_util::io::StreamReader;
 use async_compression::tokio::bufread::BzDecoder;
 use tokio::io::AsyncReadExt; // for read_to_end
+use rayon::prelude::*;
 
 
 pub struct LogSegmentWorker {
@@ -80,7 +81,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 let default_route_model = routes::Model {
                     canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
-                    url: format!("{}/connectdata/{}/{}_{}", self.ctx.config.server.full_url(), args.dongle_id, args.dongle_id, args.timestamp),
+                    url: format!("https://connect-api.duckdns.org/connectdata/{}/{}_{}", args.dongle_id, args.dongle_id, args.timestamp),
                     ..Default::default()
                 };
                 match default_route_model.add_route_self(&self.ctx.db).await {
@@ -113,17 +114,17 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
         let mut seg = segment.into_active_model();
         match args.file.as_str() {
-            "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("{}/connectdata/rlog/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/rlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             "qlog.bz2" =>  {
                     match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
                         Ok(_) => (),
                         Err(e) => return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string())),
                     }
                 }
-            "qcamera.ts" =>     seg.qcam_url = ActiveValue::Set(format!("{}/connectdata/qcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("{}/connectdata/fcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("{}/connectdata/dcam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
-            "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("{}/connectdata/ecam/{}/{}/{}/{}", self.ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file)),
+            "qcamera.ts" =>     seg.qcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             f => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
         }
         //let seg_active_model = seg.into_active_model();
@@ -156,6 +157,17 @@ async fn update_route_info(
     } else {
         tracing::error!("Could not find min_start_time_segment");
     }
+    segment_models.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
+    let mut active_route_model = route_model.into_active_model();
+    let mut segment_start_times = vec![];
+    let mut segment_end_times = vec![];
+    let mut segment_numbers = vec![];
+    for segment_model in segment_models {
+        segment_start_times.push(segment_model.start_time_utc_millis);
+        segment_end_times.push(segment_model.end_time_utc_millis);
+        segment_numbers.push(segment_model.number)
+    }
+
     
     Ok(())
 }
@@ -191,8 +203,7 @@ async fn handle_qlog(
 async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
-            "{}/connectdata/logs?url={}",
-            ctx.config.server.full_url(),
+            "https://connect-api.duckdns.org/connectdata/logs?url={}",
             common::mkv_helpers::get_mkv_file_url(
                 &format!("{}_{}--{}--{}",
                     args.dongle_id,
@@ -202,12 +213,12 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
                 )
             ).await
         ));
-    seg.qlog_url = ActiveValue::Set(format!("{}/connectdata/qlog/{}/{}/{}/{}", ctx.config.server.full_url(), args.dongle_id, args.timestamp, args.segment, args.file));
+    seg.qlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
 
     let mut writer = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);
     let mut gps_seen = false;
-    let mut thumbnails: Vec<DynamicImage> = Vec::new();
+    let mut thumbnails: Vec<Vec<u8>> = Vec::new();
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
@@ -238,56 +249,68 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
                 // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
                 if let Ok(thumbnail) = thumbnail {
                     // Assuming the thumbnail data is a JPEG image
-                    let image_data = thumbnail.get_thumbnail().map_err(Box::from)?;
-                    let img = image::load_from_memory(image_data).map_err(Box::from)?;
-                    thumbnails.push(img);
+                    let image_data = thumbnail.get_thumbnail().map_err(Box::from)?; // len is 9682
+                    //let img = image::load_from_memory(image_data).map_err(Box::from)?; // len is 436692
+                    thumbnails.push(image_data.to_vec());
                 }
             }
             _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
         }
     }
+    let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
-        let thumb_width = thumbnails[0].width();
-        let thumb_height = thumbnails[0].height();
-        let combined_width = thumb_width * thumbnails.len() as u32;
+        // Downscale each thumbnail in parallel
+        let downscaled_thumbnails: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = thumbnails.par_iter()
+            .map(|image_data| {
+                let img = image::load_from_memory(image_data).expect("Failed to load image");
+                img.resize_exact(1536 / 12, 80, image::imageops::FilterType::Lanczos3).to_rgba8()
+            })
+            .collect();
 
-        // Create a new image with the combined width
-        let mut combined_img = ImageBuffer::new(combined_width, thumb_height);
+        // Combine the downscaled images sequentially
+        let combined_width = (1536 / 12) * downscaled_thumbnails.len() as u32;
+        let mut combined_img = ImageBuffer::new(combined_width, 80);
 
-        for (i, thumbnail) in thumbnails.iter().enumerate() {
-            for y in 0..thumb_height {
-                for x in 0..thumb_width {
-                    combined_img.put_pixel(x + i as u32 * thumb_width, y, thumbnail.get_pixel(x, y));
+        for (i, thumbnail) in downscaled_thumbnails.iter().enumerate() {
+            let offset = i as u32 * (1536 / 12);
+            for y in 0..80 {
+                for x in 0..(1536 / 12) {
+                    let pixel = thumbnail.get_pixel(x, y);
+                    combined_img.put_pixel(x + offset, y, *pixel);
                 }
             }
         }
 
-        // Downscale the combined image to 1536x80
-        let downscaled_img = DynamicImage::ImageRgba8(combined_img).resize_exact(1536, 80, image::imageops::FilterType::Lanczos3);
-
-        // Create a new image with a height of 96px
+        // Create the final image with a height of 96px
         let mut final_img = ImageBuffer::new(1536, 96);
-        
-        // Copy the downscaled image into the new image
-        image::imageops::overlay(&mut final_img, &downscaled_img, 0, 0);
+        image::imageops::overlay(&mut final_img, &DynamicImage::ImageRgba8(combined_img), 0, 0);
 
-        // Fill the bottom 16px with black
-        for y in 80..96 {
-            for x in 0..1536 {
-                final_img.put_pixel(x, y, Rgba([0, 0, 0, 255]));
+        // Fill the bottom 16px with black in parallel
+        final_img.par_chunks_mut(1536 * 4).skip(80).for_each(|row| {
+            for chunk in row.chunks_mut(4) {
+                chunk.copy_from_slice(&[0, 0, 0, 255]);
             }
-        }
+        });
 
         // Convert the final image to a byte vector
-        let mut img_bytes: Vec<u8> = Vec::new();
-        let mut encoder = JpegEncoder::new_with_quality(&mut img_bytes, 80);
-        encoder.encode_image(&DynamicImage::ImageRgba8(final_img)).map_err(Box::from)?;
+        let img_bytes = {
+            let mut img_bytes: Vec<u8> = Vec::new();
+            let mut encoder = JpegEncoder::new_with_quality(&mut img_bytes, 80);
+            encoder.encode_image(&DynamicImage::ImageRgba8(final_img)).map_err(Box::from)?;
+            img_bytes
+        };
 
-        let url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--sprite.jpg", args.dongle_id, args.timestamp, args.segment)).await;
-        upload_data(client, &url, img_bytes).await?;
+        let sprite_url = common::mkv_helpers::get_mkv_file_url(
+            &format!("{}_{}--{}--sprite.jpg", args.dongle_id, args.timestamp, args.segment)
+        ).await;
+        tracing::trace!("Image proc took: {:?}", img_proc_start.elapsed());
+        upload_data(client, &sprite_url, img_bytes).await?;
     }
     Ok(writer)
 }
+
+
+
 
 async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> worker::Result<()> {
     let response = client.put(url)

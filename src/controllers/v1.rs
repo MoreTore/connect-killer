@@ -83,7 +83,7 @@ pub async fn echo(State(ctx): State<AppContext>,
 }
 
 pub async fn get_route_files(
-    //_auth: auth::JWT,
+    //_auth: crate::middleware::auth::MyJWT,
     Path(route_id): Path<String>,
     State(ctx): State<AppContext>,
     Extension(client): Extension<Client>
@@ -111,14 +111,14 @@ async fn get_qcam_stream(
     writeln!(response, "#EXT-X-TARGETDURATION:61");
     writeln!(response, "#EXT-X-MEDIA-SEQUENCE:0");
     writeln!(response, "#EXT-X-PLAYLIST-TYPE:VOD");
-    
+
     for segment in segment_models {
         writeln!(response, "#EXTINF:60.0,"); // Assuming each segment is 60 seconds long
         writeln!(response, "{}", segment.qcam_url);
     }
-    
+
     writeln!(response, "#EXT-X-ENDLIST");
-    
+
     Ok(response.into_response())
 }
 
@@ -132,7 +132,7 @@ async fn get_links_for_route(
     let code = response.status();
     let data: Value = response.json().await?;
     let keys = data["keys"].as_array().unwrap_or(&vec![]).iter()
-        .map(|key| format!("{}/connectdata{}", &ctx.config.server.full_url(), key.as_str().unwrap_or_default()))
+        .map(|key| format!("https://connect-api.duckdns.org/connectdata{}", key.as_str().unwrap_or_default()))
         .collect::<Vec<String>>();
     let response_json = sort_keys_to_response(keys).await;
 
@@ -172,7 +172,7 @@ async fn get_upload_url(
     // Assuming default expiry is 1 day if not specified
     params.validate_expiry();
 
-    let url = format!("{}/connectincoming/{dongle_id}/{}", &ctx.config.server.full_url() ,transform_route_string(&params.path));
+    let url = format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}" ,transform_route_string(&params.path));
     Json(json!({
         //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
         "url": url,
@@ -189,7 +189,7 @@ async fn upload_urls_handler(
 
     let urls = data.paths.iter().map(|path| {
         UrlResponse {
-            url: format!("{}/connectincoming/{}/{}", &ctx.config.server.full_url(), dongle_id, transform_route_string(path)),
+            url: format!("https://connect-api.duckdns.org/connectincoming/{}/{}", dongle_id, transform_route_string(path)),
         }
     }).collect::<Vec<_>>();
 
@@ -233,12 +233,38 @@ async fn unpair(
 }
 
 async fn device_info(
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    //_entities::
-    format::json(DeviceInfoResponse {..Default::default()})
+    let device = _entities::devices::Model::find_device(&ctx.db, &auth.claims.identity).await?; // TODO: get the device from the claim
+    format::json(
+        DeviceInfoResponse {
+            dongle_id: device.dongle_id,
+            alias: device.alias,
+            serial: device.serial,
+            //athena_host: device.
+            last_athena_ping: device.last_athena_ping,
+            ignore_uploads: !device.uploads_allowed,
+            is_paired: device.owner_id.is_some(),
+            //is_owner: device.
+            public_key: device.public_key,
+            prime: device.prime,
+            prime_type: device.prime_type,
+            trial_claimed: true,
+            //device_type: device.
+            //last_gps_time: device.
+            //last_gps_lat: device.
+            //last_gps_lng: device.
+            //last_gps_accur: device.
+            //last_gps_speed: device.
+            //last_gps_bearing: device.
+            //openpilot_version: device.
+            sim_id: device.sim_id,
+
+            ..Default::default()
+        }
+    )
 }
 
 async fn device_location(
@@ -279,6 +305,7 @@ async fn route_segment(
 ) -> Result<Response> {
     let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
     let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    
     format::json(route_models)
 }
 
@@ -286,9 +313,8 @@ async fn route_segment(
 async fn get_my_devices(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
     let device_models = _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
     // let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
     format::json(device_models)
@@ -304,17 +330,17 @@ async fn get_my_devices(
 async fn get_me(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
-    format::json(MeResponse { 
-        email: user_model.email,
-        id: String::from(user_model.pid),
-        regdate: user_model.created_at.and_utc().timestamp(),
-        points: user_model.points,
-        superuser: user_model.superuser,
-        username: user_model.name, // TODO change the usermode names to match comma api to simplify this
+    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    format::json(MeResponse {
+       email: user_model.email,
+       id: String::from(user_model.identity),
+       regdate: user_model.created_at.and_utc().timestamp(),
+       points: user_model.points,
+       superuser: user_model.superuser,
+       username: user_model.name, // TODO change the usermode names to match comma api to simplify this
     })
+    //format::json(MeResponse { ..Default::default()})
 }
 
 pub fn routes() -> Routes {
@@ -330,7 +356,7 @@ pub fn routes() -> Routes {
         .add("/devices/:dongle_id/routes_segments", get(route_segment))
         .add("/devices/:dongle_id/unpair", post(unpair))
         .add("/devices/:dongle_id/location", get(device_location))
-        .add("/devices/:dongle_id/stats", get(device_stats))
+        .add(".1/devices/:dongle_id/stats", get(device_stats))
         .add("/devices/:dongle_id/users", get(device_users))
         .add(".1/devices/:dongle_id", get(device_info))
     }

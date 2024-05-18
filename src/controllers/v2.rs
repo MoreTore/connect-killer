@@ -9,6 +9,8 @@ use serde::{Serialize, Deserialize};
 use jsonwebtoken::{
     decode, Algorithm, DecodingKey, TokenData, Validation,
 };
+use dotenv::dotenv;
+use std::env;
 
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -158,7 +160,7 @@ async fn decode_pair_token(ctx: &AppContext, jwt: &str) -> Result<DevicePairClai
 async fn pilotpair(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
-    Query(params): Query<DevicePairParams>
+    Form(params): Form<DevicePairParams>
 ) -> Result<Response> {
     let claims = match decode_pair_token(&ctx, &params.pair_token).await {
         Ok(claims) => claims,
@@ -169,14 +171,16 @@ async fn pilotpair(
     };
 
     if claims.pair {
-        let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
         let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
         let first_pair = device_model.owner_id.is_none();
+        
         if first_pair { // only pair if it wasn't already
-            device_model.owner_id = Some(user_model.id);
-            let txn = ctx.db.begin().await?;
-            device_model.into_active_model().insert(&txn).await?;
-            txn.commit().await?;
+            let mut active_device_model = device_model.into_active_model();
+            active_device_model.owner_id = ActiveValue::Set(Some(user_model.id));
+            //let txn = ctx.db.begin().await?;
+            active_device_model.update(&ctx.db).await?;
+            //txn.commit().await?;
         }
         format::json(DevicePairResponse { first_pair: first_pair})
     } else {
@@ -227,9 +231,9 @@ async fn auth(
         .post(token_url)
         .header("Accept", "application/json")
         .form(&[
-            ("client_id", "Ov23liP7Y8jCaNhQxsjc"),
-            ("client_secret", "95f9a4995f4df69abcf584d03fd50df3c8f87ca7"),
-            ("code", &params.code),
+            ("client_id", env::var("GITHUB_CLIENT").expect("GITHUB_CLIENT must be set")),
+            ("client_secret", env::var("GITHUB_SECRET").expect("GITHUB_SECRET must be set")),
+            ("code", params.code),
         ])
         .send().await;
 
@@ -246,7 +250,7 @@ async fn auth(
     let user_response = client
         .get("https://api.github.com/user")
         .header("Authorization", format!("Bearer {}", token_response.access_token))
-        .header("User-Agent", "YourAppName")
+        .header("User-Agent", "Connect")
         .send()
         .await;
 

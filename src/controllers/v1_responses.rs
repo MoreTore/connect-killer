@@ -25,7 +25,7 @@ pub struct DeviceInfoResponse {
     pub last_gps_speed: f64,          // Speed (m/s) at last location
     pub last_gps_bearing: f64,        // Direction of last location in degrees from north
     pub openpilot_version: String,    // Last known openpilot version on device
-    pub sim_id: String,               // Last known sim_id of SIM in device
+    pub sim_id: Option<String>,               // Last known sim_id of SIM in device
 }
 
 /// ## Device location
@@ -75,7 +75,7 @@ pub struct DeviceUsersResponse {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct Segment {
+pub struct RouteSegment {
     pub can: bool,
     pub devicetype: u8,
     pub dongle_id: String,
@@ -101,8 +101,8 @@ pub struct Segment {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SegmentResponse {
-    pub segments: Vec<Segment>,
+pub struct RouteSegmentResponse {
+    pub segments: Vec<RouteSegment>,
 }
 
 ///{

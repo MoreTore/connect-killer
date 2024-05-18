@@ -101,8 +101,8 @@ impl Task for CollectData {
     }
     async fn run(&self, _app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
         println!("Task CollectData generated");
-        let server_url = "ws://154.38.175.6:3111/ws/v2"; // WebSocket server URL
-        let dongle_id = "6ca77c6e02e1f86d"; // Dongle ID to interact with
+        let server_url = "ws://localhost:3111/ws/v2"; // WebSocket server URL
+        let dongle_id = "3b58edf884ab4eaf"; // Dongle ID to interact with
         websocket_client_task(server_url, dongle_id, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkludGVybmFsIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.OM86mRxXCGFbHGMtmGIiYzWqd61nug4g-HH2ax8RiG8").await;
         Ok(())
     }

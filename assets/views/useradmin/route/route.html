@@ -169,7 +169,7 @@
         <td style="white-space: nowrap">sim_id</td>
         <td style="white-space: nowrap">prime</td>
         <td style="white-space: nowrap">prime_type</td>
-        <td style="white-space: nowrap">last_ping</td>
+        <td style="white-space: nowrap">last_athena_ping</td>
         <td style="white-space: nowrap"></td>
       </tr>
       {% for device in devices.devices %}
@@ -182,9 +182,9 @@
         <td style="white-space: nowrap">{{ device.prime }}</td>
         <td style="white-space: nowrap">{{ device.prime_type }}</td>
         {% if device.online %}
-        <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_ping }}"></span></td>
+        <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
         {% else %}
-        <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_ping }}"></span></td>
+        <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
         {% endif %}
         {% if device.uploads_allowed %}
         <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>

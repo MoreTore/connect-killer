@@ -8,7 +8,7 @@ impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let table = table_auto(Users::Table)
             .col(pk_auto(Users::Id))
-            .col(uuid(Users::Pid))
+            .col(uuid(Users::Identity))
             .col(string_null(Users::Email))
             //.col(string(Users::Password))
             //.col(string(Users::ApiKey).unique_key())
@@ -36,7 +36,7 @@ impl MigrationTrait for Migration {
 pub enum Users {
     Table,
     Id,
-    Pid,
+    Identity,
     Email,
     Name,
     Superuser,

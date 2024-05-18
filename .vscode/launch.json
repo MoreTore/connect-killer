@@ -50,6 +50,7 @@
       "name": "useradmin env debug",
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
+      "envFile": ".env",
       "args": [
         "start",
         "-e",

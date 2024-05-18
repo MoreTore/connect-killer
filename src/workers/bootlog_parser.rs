@@ -6,6 +6,8 @@ use loco_rs::prelude::*;
 use tokio::io::AsyncReadExt;
 use std::time::Instant;
 use std::io::Write;
+use dotenv::dotenv;
+use std::env;
 use crate::{cereal::log_capnp, common, models::_entities::{self}};
 
 pub struct BootlogParserWorker {
@@ -72,12 +74,10 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
         match _entities::bootlogs::Model::add_bootlog(
             &self.ctx.db,
             &args.dongle_id,
-            &format!("{}/connectdata/bootlog/{}",
-                self.ctx.config.server.full_url(), 
+            &format!("https://connect-api.duckdns.org/connectdata/bootlog/{}", 
                 args.internal_file_url.split("/").last()
                     .expect("Failed to access the last segment of the internal file URL")),
-            &format!("{}/connectdata/logs?url={}",
-                self.ctx.config.server.full_url(),
+            &format!("https://connect-api.duckdns.org/connectdata/logs?url={}",
                 common::mkv_helpers::get_mkv_file_url(
                     &format!("{}_{}",
                         &args.dongle_id,
