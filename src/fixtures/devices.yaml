@@ -14,7 +14,7 @@
   device_type: three
   alias: ryleymcc C3
   online: true
-  last_ping: 0
+  last_athena_ping: 0
 - dongle_id: 6ca77c6e02e1f86d
   public_key: 111f1111-1111-1111-1111-111111111111
   owner_id: 2
@@ -30,4 +30,4 @@
   device_type: three
   alias: idk C3
   online: false
-  last_ping: 0
+  last_athena_ping: 0

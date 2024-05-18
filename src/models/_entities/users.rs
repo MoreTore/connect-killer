@@ -10,7 +10,7 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub pid: Uuid,
+    pub identity: Uuid,
     pub email: Option<String>,
     //pub password: String,
     #[sea_orm(unique)]

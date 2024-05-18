@@ -18,7 +18,7 @@ impl MigrationTrait for Migration {
                     .col(boolean(Devices::Prime))
                     .col(tiny_integer(Devices::PrimeType))
                     .col(boolean(Devices::Online))
-                    .col(big_integer(Devices::LastPing))
+                    .col(big_integer(Devices::LastAthenaPing))
                     .col(boolean_null(Devices::UploadsAllowed))
                     .col(integer_null(Devices::OwnerId))
                     .col(string(Devices::DeviceType))
@@ -55,7 +55,7 @@ enum Devices {
     Prime,
     PrimeType,
     Online,
-    LastPing,
+    LastAthenaPing,
     UploadsAllowed,
     OwnerId,
     DeviceType,

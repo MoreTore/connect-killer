@@ -18,8 +18,8 @@ pub struct Model {
     pub prime: bool,
     pub prime_type: i16,
     pub online: bool,
-    pub last_ping: i64,
-    pub uploads_allowed: bool,
+    pub last_athena_ping: i64,
+    pub uploads_allowed: bool, // TODO should be ignore_uploads
     pub owner_id: Option<i32>,
     pub device_type: String,
     pub alias: String,

@@ -107,10 +107,10 @@ pub async fn onebox_handler(
         views::route::admin_route(v, master_template)
     } else if let Some(d_id) = dongle_id {
         let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?;
-        //let user = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+        //let user = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
         //let device_models = _entities::devices::Model::find_all_devices(&ctx.db).await;
         //let device_model: Option<_entities::devices::Model> = _entities::devices::Model::find_device(&ctx.db, &d_id).await;
-        let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
         let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
         let bootlogs_models: Vec<_entities::bootlogs::Model> = _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?;
 
@@ -136,7 +136,7 @@ pub async fn onebox_handler(
         views::route::admin_route(v, master_template)
 
     } else {
-        let user_model = _entities::users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?; // should only get here if user is allowed
+        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?; // should only get here if user is allowed
         let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
         let master_template = MasterTemplate { 
             devices: Some(DevicesTemplate {

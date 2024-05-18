@@ -46,7 +46,7 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
         self.validate()?;
         if insert {
             let mut this = self;
-            this.pid = ActiveValue::Set(Uuid::new_v4());
+            this.identity = ActiveValue::Set(Uuid::new_v4());
             //this.api_key = ActiveValue::Set(format!("lo-{}", Uuid::new_v4()));
             Ok(this)
         } else {
@@ -118,10 +118,10 @@ impl super::_entities::users::Model {
     /// # Errors
     ///
     /// When could not find user  or DB query error
-    pub async fn find_by_pid(db: &DatabaseConnection, pid: &str) -> ModelResult<Self> {
-        let parse_uuid = Uuid::parse_str(pid).map_err(|e| ModelError::Any(e.into()))?;
+    pub async fn find_by_identity(db: &DatabaseConnection, identity: &str) -> ModelResult<Self> {
+        let parse_uuid = Uuid::parse_str(identity).map_err(|e| ModelError::Any(e.into()))?;
         let user = users::Entity::find()
-            .filter(users::Column::Pid.eq(parse_uuid))
+            .filter(users::Column::Identity.eq(parse_uuid))
             .one(db)
             .await?;
         user.ok_or_else(|| ModelError::EntityNotFound)
@@ -233,7 +233,7 @@ impl super::_entities::users::Model {
     ///
     /// when could not convert user claims to jwt token
     pub fn generate_jwt(&self, secret: &str, expiration: &u64) -> ModelResult<String> {
-        Ok(jwt::JWT::new(secret).generate_token(expiration, self.pid.to_string())?)
+        Ok(jwt::JWT::new(secret).generate_token(expiration, self.identity.to_string())?)
     }
 }
 

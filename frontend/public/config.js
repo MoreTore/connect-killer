@@ -1,4 +1,4 @@
-window.COMMA_URL_ROOT = 'http://localhost:3111/';
-window.ATHENA_URL_ROOT = 'http://localhost:3111/ws/';
+window.COMMA_URL_ROOT = 'https://connect-api.duckdns.org/';
+window.ATHENA_URL_ROOT = 'https://connect-api.duckdns.org/ws/';
 window.BILLING_URL_ROOT = 'https://billing.comma.ai/';
-window.USERADMIN_URL_ROOT = 'http://localhost:3112/useradmin';
+window.USERADMIN_URL_ROOT = 'https://connect-useradmin.duckdns.org/';

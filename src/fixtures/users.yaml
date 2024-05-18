@@ -1,6 +1,6 @@
 ---
 - id: 1
-  pid: 11111111-1111-1111-1111-111111111111
+  identity: 11111111-1111-1111-1111-111111111111
   email: user1@example.com
   points: 420
   superuser: true
@@ -8,7 +8,7 @@
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
 - id: 2
-  pid: 22222222-2222-2222-2222-222222222222
+  identity: 22222222-2222-2222-2222-222222222222
   email: user2@example.com
   points: 69
   superuser: false

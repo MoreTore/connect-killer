@@ -13,7 +13,7 @@ impl CurrentResponse {
     #[must_use]
     pub fn new(user: &users::Model) -> Self {
         Self {
-            pid: user.pid.to_string(),
+            pid: user.identity.to_string(),
             name: user.name.clone(),
             //email: user.email.clone(),
         }

@@ -93,14 +93,14 @@ async fn can_find_by_email() {
 
 #[tokio::test]
 #[serial]
-async fn can_find_by_pid() {
+async fn can_find_by_identity() {
     configure_insta!();
 
     let boot = testing::boot_test::<App>().await.unwrap();
     testing::seed::<App>(&boot.app_context.db).await.unwrap();
 
     let existing_user =
-        Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111").await;
+        Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111").await;
     let non_existing_user_results =
         Model::find_by_email(&boot.app_context.db, "23232323-2323-2323-2323-232323232323").await;
 
@@ -116,7 +116,7 @@ async fn can_verification_token() {
     let boot = testing::boot_test::<App>().await.unwrap();
     testing::seed::<App>(&boot.app_context.db).await.unwrap();
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -129,7 +129,7 @@ async fn can_verification_token() {
         .await
         .is_ok());
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -145,7 +145,7 @@ async fn can_set_forgot_password_sent() {
     let boot = testing::boot_test::<App>().await.unwrap();
     testing::seed::<App>(&boot.app_context.db).await.unwrap();
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -158,7 +158,7 @@ async fn can_set_forgot_password_sent() {
         .await
         .is_ok());
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -174,7 +174,7 @@ async fn can_verified() {
     let boot = testing::boot_test::<App>().await.unwrap();
     testing::seed::<App>(&boot.app_context.db).await.unwrap();
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -186,7 +186,7 @@ async fn can_verified() {
         .await
         .is_ok());
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -201,7 +201,7 @@ async fn can_reset_password() {
     let boot = testing::boot_test::<App>().await.unwrap();
     testing::seed::<App>(&boot.app_context.db).await.unwrap();
 
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+    let user = Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
         .await
         .unwrap();
 
@@ -215,7 +215,7 @@ async fn can_reset_password() {
         .is_ok());
 
     assert!(
-        Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
+        Model::find_by_identity(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
             .await
             .unwrap()
             .verify_password("new-password")
