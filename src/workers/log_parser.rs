@@ -79,7 +79,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             Err(_) => { 
                 tracing::info!("Recieved file for a new route. Adding to DB: {}", &canonical_route_name);
                 let default_route_model = routes::Model {
-                    canonical_route_name: format!("{}|{}", args.dongle_id, args.timestamp),
+                    fullname: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
                     url: format!("https://connect-api.duckdns.org/connectdata/{}/{}_{}", args.dongle_id, args.dongle_id, args.timestamp),
                     ..Default::default()
@@ -100,7 +100,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             Err(_) => {  // Need to add the segment now.
                 tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
                 let default_segment_model = segments::Model { canonical_name: canonical_name.clone(), 
-                                                                                canonical_route_name: route.canonical_route_name.clone(), 
+                                                                                canonical_route_name: route.fullname.clone(), 
                                                                                 number: args.segment.parse::<i16>().unwrap_or(0), 
                                                                                 ..Default::default() };
                 match default_segment_model.add_segment_self(&self.ctx.db).await {
@@ -140,36 +140,86 @@ async fn update_route_info(
     ctx: &AppContext,
     route_model: routes::Model
 ) -> worker::Result<()> {
-    
-    let segment_models = match segments::Model::find_segments_by_route(&ctx.db, &route_model.canonical_route_name).await {
+    // Get segments
+    let mut segment_models: Vec<segments::Model> = match segments::Model::find_segments_by_route(&ctx.db, &route_model.fullname).await {
         Ok(segments) => segments,
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
-    
-    let min_start_time_segment = segment_models.iter().min_by_key(|s| &s.start_time_utc_millis);
-    if let Some(segment) = min_start_time_segment {
-        let mut active_route = route_model.into_active_model();
-        active_route.start_time = ActiveValue::Set(segment.start_time_utc_millis);
-        match active_route.update(&ctx.db).await {
-            Ok(_) => return Ok(()),
-            Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
-        }
-    } else {
-        tracing::error!("Could not find min_start_time_segment");
-    }
+    // sort by start time
     segment_models.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
+    // convert to active model for updating
     let mut active_route_model = route_model.into_active_model();
+    // First segment in route
+    if let Some(first_seg) = segment_models.first() {
+        active_route_model.start_time = ActiveValue::Set(DateTime::from_timestamp_millis(first_seg.start_time_utc_millis));
+        active_route_model.start_time_utc_millis = ActiveValue::Set(first_seg.start_time_utc_millis);
+        active_route_model.start_lat = ActiveValue::Set(first_seg.start_lat);
+        active_route_model.start_lng = ActiveValue::Set(first_seg.start_lng);
+    } else {
+        tracing::error!("segment_models is empty!");
+        return Err(sidekiq::Error::Message("segment_models is empty!".to_string()))
+    }
+    // last segment in route
+    if let Some(last_seg) = segment_models.last() {
+        active_route_model.end_time = ActiveValue::Set(DateTime::from_timestamp_millis(last_seg.end_time_utc_millis));
+        active_route_model.end_lat = ActiveValue::Set(last_seg.end_lat);
+        active_route_model.end_lng = ActiveValue::Set(last_seg.end_lng);
+    } else {
+        tracing::error!("segment_models is empty!");
+        return Err(sidekiq::Error::Message("segment_models is empty!".to_string()))
+    }
+    // all segments in route
     let mut segment_start_times = vec![];
     let mut segment_end_times = vec![];
     let mut segment_numbers = vec![];
-    for segment_model in segment_models {
+    let mut maxcamera = 0;
+    let mut maxdcamera = 0;
+    let mut maxecamera = 0;
+    let mut maxlog = 0;
+    let mut maxqlog = 0;
+    let mut proclog = 0;
+    let mut procqcamera = 0;
+    let mut procqlog = 0;
+    let mut maxqcamera = 0;
+
+    for segment_model in &segment_models {
         segment_start_times.push(segment_model.start_time_utc_millis);
         segment_end_times.push(segment_model.end_time_utc_millis);
-        segment_numbers.push(segment_model.number)
+        segment_numbers.push(segment_model.number);
+        if segment_model.qlog_url != "" {
+            maxqlog+= 1;
+            active_route_model.maxqlog = ActiveValue::Set(maxqlog);
+        }
+        if segment_model.rlog_url != "" {
+            maxlog+= 1;
+            active_route_model.maxlog = ActiveValue::Set(maxlog);
+        }
+        if segment_model.qcam_url != "" {
+            maxqcamera+= 1;
+            active_route_model.maxqcamera = ActiveValue::Set(maxqcamera);
+        }
+        if segment_model.fcam_url != "" {
+            maxcamera+= 1;
+            active_route_model.maxcamera = ActiveValue::Set(maxcamera);
+        }
+        if segment_model.dcam_url != "" {
+            maxdcamera+= 1;
+            active_route_model.maxdcamera = ActiveValue::Set(maxdcamera);
+        }
+        if segment_model.ecam_url != "" {
+            maxecamera+= 1;
+            active_route_model.maxecamera = ActiveValue::Set(maxecamera);
+        }
     }
+    active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
+    active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
+    active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
 
-    
-    Ok(())
+    // Update the route in the db
+    match active_route_model.update(&ctx.db).await {
+        Ok(_) => return Ok(()),
+        Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
+    }
 }
 
 async fn handle_qlog(

@@ -30,7 +30,7 @@ impl super::_entities::routes::Model {
     ) -> ModelResult<Self> {
         let txn = db.begin().await?;
         if routes::Entity::find()
-            .filter(routes::Column::CanonicalRouteName.eq(&self.canonical_route_name))
+            .filter(routes::Column::Fullname.eq(&self.fullname))
             .one(&txn)
             .await?
             .is_some()
@@ -56,10 +56,10 @@ impl super::_entities::routes::Model {
     /// Returns a `ModelResult` containing the found route on success, or an error on failure.
     pub async fn find_route(
         db: &DatabaseConnection,
-        canonical_route_name: &String,
+        fullname: &String,
     ) -> ModelResult<Model> {
         let route = Entity::find()
-            .filter(routes::Column::CanonicalRouteName.eq(canonical_route_name))
+            .filter(routes::Column::Fullname.eq(fullname))
             .one(db)
             .await;
         match route {

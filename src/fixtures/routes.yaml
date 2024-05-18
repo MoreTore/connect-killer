@@ -1,10 +1,8 @@
 ---
-- canonical_route_name: 164080f7933651c4|2024-02-05--16-22-28
-  start_time: 1648033600000
+- fullname: 164080f7933651c4|2024-02-05--16-22-28
+  start_time: "2023-11-12T12:34:56.789"
   url: http://localhost:3111/connectdata/164080f7933651c4/164080f7933651c4_2024-02-05--16-22-28
   miles: 69.420
-  max_qlog: 1
-  max_qcam: 1
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
@@ -18,22 +16,22 @@
   end_lng: -117.162
   end_time: "2023-07-27T20:14:12"
   end_time_utc_millis: 1690488852000
-  fullname: "164080f7933651c4|2024-02-05--16-22-28"
   hpgps: true
   init_logmonotime: 36629898787
   is_preserved: true
   is_public: true
   length: 8.02241
-  max_camera: -1
-  max_dcamera: -1
-  max_ecamera: -1
-  max_log: -1
-  max_qcamera: 12
+  maxcamera: -1
+  maxdcamera: -1
+  maxecamera: -1
+  maxlog: -1
+  maxqlog: 12
+  maxqcamera: 12
   passive: false
-  proc_camera: 12
-  proc_log: 12
-  proc_qcamera: 12
-  proc_qlog: 12
+  proccamera: 12
+  proclog: 12
+  procqcamera: 12
+  procqlog: 12
   radar: true
   rating: null
   segment_end_times: !!seq
@@ -85,11 +83,9 @@
   start_time_utc_millis: 1690488081000
   user_id: "bd3bc34dbea550c8"
   vin: "5YFT4RCE1LP005733"
-- canonical_route_name: 164080f7933651c4|2024-03-03--06-46-43
-  start_time: 1648033600000
+- fullname: 164080f7933651c4|2024-03-03--06-46-43
+  start_time: "2023-11-12T12:34:56.789"
   miles: 69.420
-  max_qlog: 1
-  max_qcam: 1
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
@@ -104,22 +100,22 @@
   end_lng: -117.162
   end_time: "2023-07-27T20:14:12"
   end_time_utc_millis: 1690488852000
-  fullname: "164080f7933651c4|2024-03-03--06-46-43"
   hpgps: true
   init_logmonotime: 36629898787
   is_preserved: true
   is_public: true
   length: 8.02241
-  max_camera: -1
-  max_dcamera: -1
-  max_ecamera: -1
-  max_log: -1
-  max_qcamera: 12
+  maxcamera: -1
+  maxdcamera: -1
+  maxecamera: -1
+  maxlog: -1
+  maxqlog: 12
+  maxqcamera: 12
   passive: false
-  proc_camera: 12
-  proc_log: 12
-  proc_qcamera: 12
-  proc_qlog: 12
+  proccamera: 12
+  proclog: 12
+  procqcamera: 12
+  procqlog: 12
   radar: true
   rating: null
   segment_end_times: !!seq

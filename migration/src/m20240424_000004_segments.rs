@@ -21,8 +21,8 @@ impl MigrationTrait for Migration {
                     .col(string(Segments::FcamUrl))
                     .col(string(Segments::DcamUrl))
                     .col(string(Segments::EcamUrl))
-                    .col(integer(Segments::ProcCamera).default(0))
-                    .col(integer(Segments::ProcLog).default(0))
+                    .col(integer(Segments::Proccamera).default(0))
+                    .col(integer(Segments::Proclog).default(0))
                     .col(boolean(Segments::Can).default(false))
                     .col(boolean(Segments::Hpgps).default(false))
                     .col(double(Segments::StartLng).default(0.0))
@@ -40,7 +40,7 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .name("fk-segments-routes")
                             .from(Segments::Table, Segments::CanonicalRouteName)
-                            .to(Routes::Table, Routes::CanonicalRouteName)
+                            .to(Routes::Table, Routes::Fullname)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
@@ -80,10 +80,10 @@ pub enum Segments {
     StartLat,
     EndLat,
     Passive,
-    ProcLog,
+    Proclog,
     //Version,
     GitBranch,
-    ProcCamera,
+    Proccamera,
     //Devicetype,
     //GitDirty,
     Can,
@@ -94,5 +94,5 @@ pub enum Segments {
 #[derive(DeriveIden)]
 enum Routes {
     Table,
-    CanonicalRouteName,
+    Fullname,
 }
