@@ -91,7 +91,7 @@ pub struct RouteSegment {
     pub length: f64,
     pub passive: bool,
     pub platform: String,
-
+    pub maxcamera: i32,
     pub segment_end_times: Vec<u64>,
     pub segment_numbers: Vec<u32>,
     pub segment_start_times: Vec<u64>,

@@ -1,5 +1,4 @@
 use connect::app::App;
-use loco_rs::testing;
 use serial_test::serial;
 
 macro_rules! configure_insta {

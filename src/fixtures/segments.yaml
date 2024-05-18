@@ -12,8 +12,8 @@
   dcam_url: String
   ecam_url: String
   url: localhost:3000/this/is/a/test
-  proc_log: 40
-  proc_camera: 40
+  proclog: 40
+  proccamera: 40
   can: True
   hpgps: True
   start_time_utc_millis: 1648033600000
@@ -38,8 +38,8 @@
   dcam_url: String
   ecam_url: String
   url: localhost:3000/this/is/a/test
-  proc_log: 40
-  proc_camera: 40
+  proclog: 40
+  proccamera: 40
   can: True
   hpgps: True
   start_time_utc_millis: 1648033600000
@@ -64,8 +64,8 @@
   dcam_url: String
   ecam_url: String
   url: localhost:3000/this/is/a/test
-  proc_log: 40
-  proc_camera: 40
+  proclog: 40
+  proccamera: 40
   can: True
   hpgps: True
   start_time_utc_millis: 1648033600000
@@ -90,8 +90,8 @@
   dcam_url: String
   ecam_url: String
   url: localhost:3000/this/is/a/test
-  proc_log: 40
-  proc_camera: 40
+  proclog: 40
+  proccamera: 40
   can: True
   hpgps: True
   start_time_utc_millis: 1648033600000

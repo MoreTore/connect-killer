@@ -20,8 +20,8 @@ pub struct Model {
     pub fcam_url: String,
     pub dcam_url: String,
     pub ecam_url: String,
-    pub proc_camera: i32,
-    pub proc_log: i32,
+    pub proccamera: i32,
+    pub proclog: i32,
     pub can: bool,
     pub hpgps: bool,
     #[sea_orm(column_type = "Double")]
@@ -44,7 +44,7 @@ pub enum Relation {
     #[sea_orm(
         belongs_to = "super::routes::Entity",
         from = "Column::CanonicalRouteName",
-        to = "super::routes::Column::CanonicalRouteName",
+        to = "super::routes::Column::Fullname",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]

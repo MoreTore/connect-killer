@@ -9,14 +9,12 @@ impl MigrationTrait for Migration {
         manager
             .create_table(
                 table_auto(Routes::Table)
-                    .col(string_uniq(Routes::CanonicalRouteName).unique_key().primary_key())
+                    .col(string_uniq(Routes::Fullname).unique_key().primary_key())
                     .col(string_null(Routes::GitRemote))
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))
-                    .col(big_integer(Routes::StartTime))
+                    .col(timestamp(Routes::StartTime))
                     .col(float(Routes::Miles))
-                    .col(small_integer(Routes::MaxQlog))
-                    .col(small_integer(Routes::MaxQcam))
                     .col(string(Routes::Platform))
                     .col(boolean(Routes::Public).default(false))
                     .col(tiny_integer_null(Routes::Devicetype))
@@ -28,24 +26,24 @@ impl MigrationTrait for Migration {
                     .col(big_integer(Routes::CreateTime))
                     .col(float(Routes::EndLat))
                     .col(float(Routes::EndLng))
-                    .col(string(Routes::EndTime))
+                    .col(timestamp(Routes::EndTime))
                     .col(big_integer(Routes::EndTimeUtcMillis))
-                    .col(string(Routes::Fullname))
                     .col(boolean(Routes::Hpgps))
                     .col(big_integer(Routes::InitLogmonotime))
                     .col(boolean(Routes::IsPreserved))
                     .col(boolean(Routes::IsPublic))
                     .col(float(Routes::Length))
-                    .col(integer(Routes::MaxCamera))
-                    .col(integer(Routes::MaxDcamera))
-                    .col(integer(Routes::MaxEcamera))
-                    .col(integer(Routes::MaxLog))
-                    .col(integer(Routes::MaxQcamera))
+                    .col(integer(Routes::Maxcamera))
+                    .col(integer(Routes::Maxdcamera))
+                    .col(integer(Routes::Maxecamera))
+                    .col(integer(Routes::Maxlog))
+                    .col(integer(Routes::Maxqlog))
+                    .col(integer(Routes::Maxqcamera))
                     .col(boolean(Routes::Passive))
-                    .col(integer(Routes::ProcCamera))
-                    .col(integer(Routes::ProcLog))
-                    .col(integer(Routes::ProcQcamera))
-                    .col(integer(Routes::ProcQlog))
+                    .col(integer(Routes::Proccamera))
+                    .col(integer(Routes::Proclog))
+                    .col(integer(Routes::Procqcamera))
+                    .col(integer(Routes::Procqlog))
                     .col(boolean(Routes::Radar))
                     .col(string_null(Routes::Rating))
                     .col(json(Routes::SegmentEndTimes))
@@ -81,12 +79,9 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 pub enum Routes {
     Table,
-    CanonicalRouteName,
     StartTime,
     Platform,
     Miles,
-    MaxQcam,
-    MaxQlog,
     Public,
     GitRemote,
     Version,
@@ -108,16 +103,17 @@ pub enum Routes {
     IsPreserved,
     IsPublic,
     Length,
-    MaxCamera,
-    MaxDcamera,
-    MaxEcamera,
-    MaxLog,
-    MaxQcamera,
+    Maxcamera,
+    Maxdcamera,
+    Maxecamera,
+    Maxlog,
+    Maxqlog,
+    Maxqcamera,
     Passive,
-    ProcCamera,
-    ProcLog,
-    ProcQcamera,
-    ProcQlog,
+    Proccamera,
+    Proclog,
+    Procqcamera,
+    Procqlog,
     Radar,
     Rating,
     SegmentEndTimes,

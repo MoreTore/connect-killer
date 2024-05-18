@@ -27,8 +27,8 @@ pub struct SegmentParams {
     pub start_lng: Option<f64>,
     pub end_lat: Option<f64>,
     pub start_lat: Option<f64>,
-    pub proc_log: i32,
-    pub proc_camera: i32,
+    pub proclog: i32,
+    pub proccamera: i32,
     pub hpgps: bool,
     pub can: bool,
 }
@@ -81,8 +81,8 @@ impl super::_entities::segments::Model {
     //         start_lng: ActiveValue::Set(params.start_lng),
     //         end_lat: ActiveValue::Set(params.end_lat),
     //         start_lat: ActiveValue::Set(params.start_lat),
-    //         proc_log: ActiveValue::Set(params.proc_log),
-    //         proc_camera: ActiveValue::Set(params.proc_camera),
+    //         proclog: ActiveValue::Set(params.proclog),
+    //         proccamera: ActiveValue::Set(params.proccamera),
     //         can: ActiveValue::Set(params.can),
     //         ..Default::default()
     //     }
@@ -197,58 +197,5 @@ impl super::_entities::segments::Model {
 }
 
 impl super::_entities::segments::ActiveModel {
-    pub async fn update_field(
-        mut self,
-        db: &DatabaseConnection,
-        field: &SegmentFields,
-        value: String,
-    ) -> ModelResult<Model> {
-        macro_rules! parse_value {
-            ($value:expr, $type:ty) => {
-                $value.parse::<$type>().map_err(|e| {
-                    tracing::error!("Failed to parse value: '{}', error: {}", $value, e);
-                    ModelError::EntityNotFound
-                })?
-            };
-        }
-
-        match field {                
-            SegmentFields::Url => self.url = ActiveValue::Set(value),
-            SegmentFields::UlogUrl => self.ulog_url = ActiveValue::Set(value),
-            SegmentFields::QlogUrl => self.qlog_url = ActiveValue::Set(value),
-            SegmentFields::QcamUrl => self.qcam_url = ActiveValue::Set(value),
-            SegmentFields::RlogUrl => self.rlog_url = ActiveValue::Set(value),
-            SegmentFields::FcamUrl => self.fcam_url = ActiveValue::Set(value),
-            SegmentFields::DcamUrl => self.dcam_url = ActiveValue::Set(value),
-            SegmentFields::EcamUrl => self.ecam_url = ActiveValue::Set(value),
-            SegmentFields::GitBranch => self.git_branch = ActiveValue::Set(Some(value)),
-
-            SegmentFields::StartTimeUtcMillis => self.start_time_utc_millis = ActiveValue::Set(parse_value!(value, i64)),
-            SegmentFields::EndTimeUtcMillis => self.end_time_utc_millis = ActiveValue::Set(parse_value!(value, i64)),
-
-            SegmentFields::StartLng => self.start_lng = ActiveValue::Set(parse_value!(value, f64)),
-            SegmentFields::EndLng => self.end_lng = ActiveValue::Set(parse_value!(value, f64)),
-            SegmentFields::StartLat => self.start_lat = ActiveValue::Set(parse_value!(value, f64)),
-            SegmentFields::EndLat => self.end_lat = ActiveValue::Set(parse_value!(value, f64)),
-
-            SegmentFields::CreateTime => self.create_time = ActiveValue::Set(parse_value!(value, i64)),
-
-            SegmentFields::ProcLog => self.proc_log = ActiveValue::Set(parse_value!(value, i32)),
-            SegmentFields::ProcCamera => self.proc_camera = ActiveValue::Set(parse_value!(value, i32)),
-
-
-
-            SegmentFields::Number => self.number = ActiveValue::Set(parse_value!(value, i16)),
-
-            SegmentFields::Hpgps => self.hpgps = ActiveValue::Set(parse_value!(value, bool)),
-            SegmentFields::Can => self.can = ActiveValue::Set(parse_value!(value, bool)),
-            SegmentFields::Passive => self.passive = ActiveValue::Set(Some(parse_value!(value, bool))),
-            
-            SegmentFields::CanonicalRouteName => (),
-            SegmentFields::CanonicalName => (),
-
-            SegmentFields::Table => return Err(ModelError::EntityNotFound),
-        }
-        Ok(self.update(db).await?)
-    }
+    
 }
