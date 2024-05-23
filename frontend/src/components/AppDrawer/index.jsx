@@ -44,7 +44,7 @@ const AppDrawer = ({
         {!isPermanent
           && (
             <Link to="/" className="flex items-center min-h-[64px] mx-2">
-              <img alt="comma" src="/images/comma-white.png" className="w-[18.9px] mx-6" />
+              <img alt="comma" src="/images/comma-white.png" className="w-[64px] mx-6" />
               <span className="text-xl font-extrabold">connect</span>
             </Link>
           )}

@@ -137,18 +137,10 @@ class AnonymousLanding extends Component {
             <img alt="comma" src="/images/comma-white.png" className={classes.logoImg} />
           </div>
           <div className={classes.logoSpacer}>&nbsp;</div>
-          <Typography className={classes.logoText}>comma connect</Typography>
+          <Typography className={classes.logoText}>connect portal</Typography>
           <Typography className={classes.tagline}>
-            Manage your comma device, view your drives, and use comma prime features
+            Manage your devices and view your drives
           </Typography>
-          <a href={AuthConfig.GOOGLE_REDIRECT_LINK} className={classes.logInButton}>
-            <img className={classes.buttonImage} src={AuthGoogleIcon} alt="" />
-            <Typography className={classes.buttonText}>Sign in with Google</Typography>
-          </a>
-          <a onClick={() => AppleID.auth.signIn()} className={classes.logInButton}>
-            <img className={classes.buttonImage} src={AuthAppleIcon} alt="" />
-            <Typography className={classes.buttonText}>Sign in with Apple</Typography>
-          </a>
           <a href={AuthConfig.GITHUB_REDIRECT_LINK} className={`${classes.logInButton} githubAuth`}>
             <img className={classes.buttonImage} src={AuthGithubIcon} alt="" />
             <Typography className={classes.buttonText}>Sign in with GitHub</Typography>
@@ -156,7 +148,7 @@ class AnonymousLanding extends Component {
 
           <span className="max-w-sm text-center mt-2 mb-8 text-sm">
             Make sure to sign in with the same account if you have previously
-            paired your comma device.
+            paired your device.
           </span>
 
           <a
