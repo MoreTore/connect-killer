@@ -8,7 +8,7 @@ import reducers from './reducers';
 import composeEnhancers from './devtools';
 import initialState from './initialState';
 import { onHistoryMiddleware } from './actions/history';
-//import { analyticsMiddleware } from './analytics';
+import { analyticsMiddleware } from './analytics';
 
 export const history = createBrowserHistory();
 
@@ -18,7 +18,7 @@ const store = Redux.createStore(
     thunk,
     onHistoryMiddleware,
     routerMiddleware(history),
-    //analyticsMiddleware,
+    analyticsMiddleware,
   )),
 );
 

@@ -14,7 +14,7 @@ import { filterRegularClick } from '../../utils';
 
 import AccountMenu from './AccountMenu';
 import TimeFilter from './TimeFilter';
-import PWAIcon from '../PWAIcon.jsx';
+import PWAIcon from '../PWAIcon';
 
 const styles = () => ({
   header: {
@@ -43,7 +43,7 @@ const styles = () => ({
   },
   logoImg: {
     height: 34,
-    width: 18.9,
+    width: 34,
     margin: '0px 28px',
   },
   logoText: {

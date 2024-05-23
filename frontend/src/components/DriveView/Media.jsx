@@ -23,7 +23,7 @@ import { InfoOutline } from '../../icons';
 import { deviceIsOnline, deviceOnCellular, getSegmentNumber } from '../../utils';
 import { analyticsEvent, updateRoute } from '../../actions';
 import { fetchEvents } from '../../actions/cached';
-//import { attachRelTime } from '../../analytics';
+import { attachRelTime } from '../../analytics';
 import { setRouteViewed, fetchFiles, doUpload, fetchUploadUrls, fetchAthenaQueue, updateFiles } from '../../actions/files';
 
 const publicTooltip = 'Making a route public allows anyone with the route name or link to access it.';
@@ -310,7 +310,7 @@ class Media extends Component {
     const event_parameters = {
       route_start_time: currentRoute.start_time_utc_millis,
     };
-    //attachRelTime(event_parameters, 'route_start_time', true, 'h');
+    attachRelTime(event_parameters, 'route_start_time', true, 'h');
     this.props.dispatch(analyticsEvent('open_in_useradmin', event_parameters));
 
     const params = { onebox: currentRoute.fullname };
@@ -445,7 +445,7 @@ class Media extends Component {
       type,
       route_start_time: currentRoute.start_time_utc_millis,
     };
-    //attachRelTime(eventParameters, 'route_start_time', true, 'h');
+    attachRelTime(eventParameters, 'route_start_time', true, 'h');
     this.props.dispatch(analyticsEvent('download_file', eventParameters));
 
     window.location.href = file.url;

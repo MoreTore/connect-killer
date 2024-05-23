@@ -49,28 +49,19 @@ class App extends Component {
   }
 
   async componentDidMount() {
-    if (typeof window !== 'undefined') {
-      console.log('window is defined');
-      if (window.location) {
-        console.log('window.location is defined');
-        if (window.location.pathname === "/v2/auth/") {
-          console.log('Pathname matches');
-          try {
-            const { code, provider } = qs.parse(window.location.search);
-            const token = await Auth.refreshAccessToken(code, provider);
-            if (token) {
-              AuthStorage.setCommaAccessToken(token);
-            }
-          } catch (err) {
-            console.error(err);
-            Sentry.captureException(err, { fingerprint: 'app_auth_refresh_token' });
+    if (window.location) {
+      if (window.location.pathname === AuthConfig.AUTH_PATH) {
+        try {
+          const { code, provider } = qs.parse(window.location.search);
+          const token = await Auth.refreshAccessToken(code, provider);
+          if (token) {
+            AuthStorage.setCommaAccessToken(token);
           }
+        } catch (err) {
+          console.error(err);
+          Sentry.captureException(err, { fingerprint: 'app_auth_refresh_token' });
         }
-      } else {
-        console.log('window.location is undefined');
       }
-    } else {
-      console.log('window is undefined');
     }
 
 
@@ -84,6 +75,7 @@ class App extends Component {
     this.setState({ initialized: true });
 
     // set up analytics, low priority, so we do this last
+    //import('./analytics-v2');
   }
 
   redirectLink() {
