@@ -85,6 +85,8 @@ server {
     ssl_certificate /etc/letsencrypt/live/connect-api.duckdns.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/connect-api.duckdns.org/privkey.pem;
 
+    client_max_body_size 100M;
+
     location / {
         proxy_pass https://localhost:3223;  # Forward HTTPS requests to the HTTPS port
         proxy_set_header Host $host;
@@ -110,6 +112,8 @@ server {
 
     ssl_certificate /etc/letsencrypt/live/connect-api.duckdns.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/connect-api.duckdns.org/privkey.pem;
+
+    client_max_body_size 100M;
 
     location /ws/ {
         proxy_pass https://localhost:3223;  # Forward HTTPS requests to the HTTPS port

@@ -79,8 +79,7 @@ impl super::_entities::devices::Model {
             .one(db)
             .await?;
         device.ok_or_else(|| ModelError::EntityNotFound)
-    }
-    
+    }    
 
     // pub async fn add_own_device(
     //     &self, 

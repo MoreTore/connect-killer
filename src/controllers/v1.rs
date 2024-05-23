@@ -1,5 +1,5 @@
 #![allow(clippy::unused_async)]
-use loco_rs::prelude::*;
+use loco_rs::{auth::jwt, hash, prelude::*};
 use axum::{
     extract::{Path, Query, State}, Extension
 };
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Write as FmtWrite;
 
-use crate::{common, models::_entities};
+use crate::{common, models::_entities, enforce_ownership_rule};
 
 use super::v1_responses::*;
 
@@ -83,41 +83,52 @@ pub async fn echo(State(ctx): State<AppContext>,
 }
 
 pub async fn get_route_files(
-    //_auth: crate::middleware::auth::MyJWT,
-    Path(route_id): Path<String>,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
+    Path(route_id): Path<String>,
     Extension(client): Extension<Client>
 ) -> impl IntoResponse {
 
     println!("Fetching files for Route ID: {}", route_id);
     let response = get_links_for_route(ctx, &route_id, &client).await;
     match response {
-        Ok((status, body)) => (status, body),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)),
+        Ok((status, body)) => Ok(format::json(body)),
+        Err(e) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-async fn get_qcam_stream(
+async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for security
+    //_auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(canonical_route_name): Path<String>,
 ) -> Result<Response> {
-    let segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
-    let dongle_id = canonical_route_name.split("|").nth(0).unwrap();
-    let timestamp = canonical_route_name.split("|").nth(1).unwrap();
+
+    let mut segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
+    segment_models.sort_by(|a, b| a.number.cmp(&b.number));
 
     let mut response = String::new();
-    writeln!(response, "#EXTM3U");
-    writeln!(response, "#EXT-X-VERSION:3");
-    writeln!(response, "#EXT-X-TARGETDURATION:61");
-    writeln!(response, "#EXT-X-MEDIA-SEQUENCE:0");
-    writeln!(response, "#EXT-X-PLAYLIST-TYPE:VOD");
-
+    response.push_str("#EXTM3U\n");
+    response.push_str("#EXT-X-VERSION:3\n");
+    response.push_str("#EXT-X-TARGETDURATION:61\n");
+    response.push_str("#EXT-X-MEDIA-SEQUENCE:0\n");
+    response.push_str("#EXT-X-PLAYLIST-TYPE:VOD\n");
+    
+    let mut prev_seg_number = match segment_models.first() {
+        Some(first_seg) => first_seg.number - 1,
+        None => -1, // should we throw an error instead?
+    };
     for segment in segment_models {
-        writeln!(response, "#EXTINF:60.0,"); // Assuming each segment is 60 seconds long
-        writeln!(response, "{}", segment.qcam_url);
+        prev_seg_number += 1;
+        if segment.number != prev_seg_number {  // Only in sequence
+            break;
+        }
+        if segment.qcam_url != "" {
+            response.push_str(&format!("#EXTINF:{},{}\n", segment.qcam_duration, segment.number));
+            response.push_str(&format!("{}\n", segment.qcam_url));
+        }
     }
 
-    writeln!(response, "#EXT-X-ENDLIST");
+    response.push_str("#EXT-X-ENDLIST\n");
 
     Ok(response.into_response())
 }
@@ -126,80 +137,149 @@ async fn get_links_for_route(
     ctx: AppContext,
     route_id: &str,
     client: &Client
-) -> Result<(StatusCode, String), Box<dyn Error>> {
-    let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "/")).await;
+) -> Result<(StatusCode, FilesResponse), Box<dyn Error>> {
+    // Assuming common::mkv_helpers::list_keys_starting_with is an async function
+    let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "_"));
+    
+    // Fetch data from the URL
     let response = client.get(&key).send().await?;
     let code = response.status();
+    
+    // Parse the JSON response
     let data: Value = response.json().await?;
-    let keys = data["keys"].as_array().unwrap_or(&vec![]).iter()
-        .map(|key| format!("https://connect-api.duckdns.org/connectdata{}", key.as_str().unwrap_or_default()))
-        .collect::<Vec<String>>();
-    let response_json = sort_keys_to_response(keys).await;
-
-    Ok((code, response_json.to_string()))
-}
-
-async fn sort_keys_to_response(keys: Vec<String>) -> Value {
-    let mut response_json = json!({
-        "cameras": [],
-        "dcameras": [],
-        "logs": [],
-        "qlogs": [],
-        "qcameras": []
-    });
+    
+    // Ensure "keys" is an array and handle potential errors
+    //let keys = data.get("keys").and_then(Value::as_array).ok_or("Missing or invalid 'keys' field");
+    let keys = data["keys"].as_array().unwrap();
+    // Process keys to construct URLs
+    let mut urls = Vec::new();
     for key in keys {
-        if key.contains("rlog") && !key.contains("qlog") {
-            response_json["logs"].as_array_mut().unwrap().push(key.into());
-        } else if key.contains("fcamera.hevc") {
-            response_json["cameras"].as_array_mut().unwrap().push(key.into());
-        } else if key.contains("dcamera.hevc") {
-            response_json["dcameras"].as_array_mut().unwrap().push(key.into());
-        } else if key.contains("qcamera.hvec") {
-            response_json["qcameras"].as_array_mut().unwrap().push(key.into());
-        } else if key.contains("qlogs") && key.contains("rlog") {
-            response_json["qlogs"].as_array_mut().unwrap().push(key.into());
+        if let Some(key_str) = key.as_str() {
+            let parts: Vec<&str> = key_str.split('_').collect();
+            if parts.len() == 2 {
+                urls.push(format!(
+                    "https://connect-api.duckdns.org/connectdata{}/{}",
+                    parts[0],
+                    transform_route_string(parts[1])
+                ));
+            }
         }
     }
-    response_json
+    
+    // Assuming sort_keys_to_response is an async function that takes a Vec<String> and returns a FilesResponse
+    let response_json = sort_keys_to_response(urls).await;
+    
+    Ok((code, response_json))
+}
+
+
+async fn sort_keys_to_response(keys: Vec<String>) -> FilesResponse {
+    let mut cameras = vec![];
+    let mut dcameras = vec![];
+    let mut logs = vec![];
+    let mut qlogs = vec![];
+    let mut qcameras = vec![];
+    let mut ecameras = vec![];
+
+    for key in keys {
+        if key.contains("fcamera.hevc") {
+            cameras.push(key.into());
+            continue;
+        } else if key.contains("dcamera.hevc") {
+            dcameras.push(key);
+            continue;
+        } else if key.contains("qcamera.ts") {
+            qcameras.push(key.into());
+            continue;
+        } else if key.contains("ecameras.hevc") {
+            ecameras.push(key.into());
+            continue;
+        } else if key.contains("qlog") {
+            qlogs.push(key.into());
+            continue;
+        } else if key.contains("rlog") {
+            logs.push(key.into());
+            continue;
+        }
+
+    }
+    FilesResponse {
+        cameras: cameras,
+        dcameras: dcameras,
+        logs: logs,
+        qlogs: qlogs,
+        qcameras: qcameras,
+        ecameras: ecameras,
+    }
 }
 
 async fn get_upload_url(
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(mut params): Query<UploadUrlQuery>
 ) -> impl IntoResponse {
+    if auth.device_model.is_none() {
+        return unauthorized("Only registered devices can upload");
+    }
+    if !auth.device_model.unwrap().uploads_allowed {
+        return unauthorized("Uploads ignored");
+    }
     // curl http://host/v1.4/ccfab3437bea5257/upload_url/?path=2019-06-06--11-30-31--9/fcamera.hevc&expiry_days=1
     // Assuming default expiry is 1 day if not specified
     params.validate_expiry();
-
-    let url = format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}" ,transform_route_string(&params.path));
-    Json(json!({
-        //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
-        "url": url,
-        "headers": {"Content-Type": "application/octet-stream"},
-    }))
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(
+            &(3600 * 24 as u64), 
+            auth.claims.identity.to_string()) {
+        Ok(Json(json!({
+            //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
+            "url": format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}",
+                            transform_route_string(&params.path)),
+            "headers": {"Content-Type": "application/octet-stream",
+                        "Authorization": format!("JWT {}", token)},
+        })))
+    } else {
+        return loco_rs::controller::bad_request("failed to generate token")
+    }
 }
 
 async fn upload_urls_handler(
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
 ) -> Result<Response> {
+    if auth.device_model.is_none() {
+        return unauthorized("Only registered devices can upload");
+    }
+    if !auth.device_model.unwrap().uploads_allowed {
+        return unauthorized("Uploads ignored");
+    }
     data.validate_expiry();
-
-    let urls = data.paths.iter().map(|path| {
-        UrlResponse {
-            url: format!("https://connect-api.duckdns.org/connectincoming/{}/{}", dongle_id, transform_route_string(path)),
-        }
-    }).collect::<Vec<_>>();
-
-    format::json(urls)
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
+    .generate_token(
+        &(3600 * 24 as u64), 
+        auth.claims.identity.to_string()) {
+        let urls = data.paths.iter().map(|path| {
+            UrlResponse {
+                url: format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}?sig={token}",
+                transform_route_string(path),
+                ),
+            }
+        }).collect::<Vec<_>>();
+        return format::json(urls)
+    } else {
+        return loco_rs::controller::bad_request("failed to generate token")
+    }
 }
 
 fn transform_route_string(input_string: &str) -> String {
-    // example input_string = 2024-03-02--19-02-46--0--rlog.bz2
+    // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 or 2024-03-02--19-02-46--0/rlog
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)/(.+)$").unwrap();
+    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)(?:--|/)(.+)$").unwrap();
 
     if let Some(caps) = re_drive_log.captures(input_string) {
         format!("{}--{}/{}/{}",
@@ -220,15 +300,22 @@ fn transform_route_string(input_string: &str) -> String {
 }
 
 async fn unpair(
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
+    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
     let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
-    device_model.owner_id = None;
-    let txn = ctx.db.begin().await?;
-    device_model.into_active_model().insert(&txn).await?;
-    txn.commit().await?;
+    if !user_model.superuser {
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id, 
+            "Can only unpair your own device!"
+        );
+    }
+    let mut active_device_model = device_model.into_active_model();
+    active_device_model.owner_id = ActiveValue::Set(None);
+    active_device_model.update(&ctx.db).await?;
     format::json(r#"{"success": 1}"#)
 }
 
@@ -237,7 +324,10 @@ async fn device_info(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let device = _entities::devices::Model::find_device(&ctx.db, &auth.claims.identity).await?; // TODO: get the device from the claim
+    let device = match auth.device_model {
+        Some(device) => device,
+        None => _entities::devices::Model::find_device(&ctx.db, &auth.claims.identity).await?,
+    };
     format::json(
         DeviceInfoResponse {
             dongle_id: device.dongle_id,
@@ -280,6 +370,8 @@ async fn device_stats(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
+    //let utc_time_now_millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64;
+    //let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
     format::json(DeviceStatsResponse {..Default::default()})
 }
 
@@ -298,14 +390,25 @@ struct DeviceSegmentQuery {
 }
 
 async fn route_segment(
-    //_auth: crate::middleware::auth::MyJWT,
+    _auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(params): Query<DeviceSegmentQuery>,
 ) -> Result<Response> {
     let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    format::json(route_models)
+}
+
+
+async fn preserved_routes( // TODO
+    _auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> Result<Response> {
+    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
     let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
-    
+
     format::json(route_models)
 }
 
@@ -314,10 +417,44 @@ async fn get_my_devices(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
+    // TODO: implement authorized devices!
     let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_models = _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
-    // let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
-    format::json(device_models)
+    let device_models = if user_model.superuser {
+        _entities::devices::Model::find_all_devices(&ctx.db).await
+    } else {
+        _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await
+    };
+    let mut devices = vec![];
+    for device_model in device_models {
+        let device = DeviceResponse {
+            alias: device_model.alias,
+            //athena_host: String,
+            device_type: device_model.device_type,
+            dongle_id: device_model.dongle_id,
+            ignore_uploads: !device_model.uploads_allowed, // flip this
+            is_owner: (device_model.owner_id == Some(user_model.id)),
+            is_paired: device_model.owner_id.is_some(),
+            last_athena_ping: device_model.last_athena_ping,
+            //last_gps_accuracy: device.
+            //last_gps_bearing: device.
+            //last_gps_lat: 0.0
+            //last_gps_lng: 0.0, //todo
+            //last_gps_speed: 0, // todo
+            //last_gps_time: device.last_athena_ping, //  Todo
+            //openpilot_version: device_model.openpilot_version,
+            prime: true,
+            prime_type: 4,
+            public_key: device_model.public_key,
+            serial: device_model.serial,
+            sim_id: device_model.sim_id,
+            trial_claimed: true,
+            ..Default::default()
+
+        };
+        devices.push(device);
+    }
+
+    format::json(devices)
 }
 
 
@@ -354,6 +491,7 @@ pub fn routes() -> Routes {
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
         .add(".4/:dongleId/upload_url/", get(get_upload_url))
         .add("/devices/:dongle_id/routes_segments", get(route_segment))
+        .add("/devices/:dongle_id/routes/preserved", get(preserved_routes))
         .add("/devices/:dongle_id/unpair", post(unpair))
         .add("/devices/:dongle_id/location", get(device_location))
         .add(".1/devices/:dongle_id/stats", get(device_stats))

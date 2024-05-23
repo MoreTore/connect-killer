@@ -119,13 +119,13 @@ database:
   # When enabled, the sql query will be logged.
   enable_logging: false
   # Set the timeout duration when acquiring a connection.
-  connect_timeout: 500
+  connect_timeout: 30000
   # Set the idle duration before closing a connection.
   idle_timeout: 500
   # Minimum number of connections for a pool.
   min_connections: 1
   # Maximum number of connections for a pool.
-  max_connections: 1
+  max_connections: 20
   # Run migration up when application loaded
   auto_migrate: true
   # Truncate database when application loaded. This is a dangerous operation, make sure that you using this flag only on dev environments or test mode

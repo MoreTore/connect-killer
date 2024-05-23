@@ -167,6 +167,7 @@ impl super::_entities::segments::Model {
         Ok(segments)
     }
 
+    /// This probably should never be used at scale
     pub async fn find_all_segments(
         db: &DatabaseConnection,
     ) -> ModelResult<Vec<Model>> {

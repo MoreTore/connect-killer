@@ -83,7 +83,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
                         &args.dongle_id,
                         &args.file_name.replace(".bz2", ".unlog")
                     )
-                ).await
+                )
             ),
             &parsed_log.date_time).await 
         {

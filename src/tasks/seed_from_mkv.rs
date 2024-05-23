@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::thread;
+use std::time::Duration;
 use regex::Regex;
 use reqwest::Client;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,7 +25,7 @@ impl Task for SeedFromMkv {
         let client = Client::new();
 
         // Get all keys from the MKV server
-        let query = common::mkv_helpers::list_keys_starting_with("").await;
+        let query = common::mkv_helpers::list_keys_starting_with("");
         let response = client.get(&query).send().await.unwrap();
 
         if !response.status().is_success() {
@@ -52,20 +54,26 @@ impl Task for SeedFromMkv {
                     let timestamp = &caps[2];
                     let segment = &caps[3];
                     let file_type = &caps[4];
+                    if dongle_id != "3b58edf884ab4eaf" {
+                        continue;
+                    }
 
-                    if file_type.to_string().ends_with(".unlog") {
+                    if file_type.to_string().ends_with(".unlog") || file_type.to_string().ends_with("sprite.jpg") {
                         // skip this file 
                         continue
-
                     } else if file_type.to_string().ends_with("qlog.bz2") {
                         // delete the unlog file from mkv
                         let unlog_file_name = file_name.replace(".bz2", ".unlog");
-                        let internal_unlog_url = common::mkv_helpers::get_mkv_file_url(&unlog_file_name).await;
+                        let internal_unlog_url = common::mkv_helpers::get_mkv_file_url(&unlog_file_name);
                         tracing::trace!("Deleting: {internal_unlog_url}");
                         let response = client.delete(&internal_unlog_url).send().await.unwrap();
+                        let sprite_file_name = file_name.replace("qlog.bz2", "sprite.jpg");
+                        let internal_sprite_url = common::mkv_helpers::get_mkv_file_url(&sprite_file_name);
+                        tracing::trace!("Deleting: {internal_sprite_url}");
+                        let response = client.delete(&internal_sprite_url).send().await.unwrap();
                     }
     
-                    let internal_url = common::mkv_helpers::get_mkv_file_url(&file_name).await;
+                    let internal_url = common::mkv_helpers::get_mkv_file_url(&file_name);
     
                     let result = LogSegmentWorker::perform_later(
                         &app_context,
@@ -88,6 +96,7 @@ impl Task for SeedFromMkv {
                     }
                 },
                 None => {
+                    continue;
                     
                     
                     let re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
@@ -95,7 +104,7 @@ impl Task for SeedFromMkv {
                         Some(caps) => {
                             let dongle_id = &caps[1];
                             let file = &caps[2];
-                            let internal_file_url = common::mkv_helpers::get_mkv_file_url(&file_name).await;
+                            let internal_file_url = common::mkv_helpers::get_mkv_file_url(&file_name);
                             let unlog_internal_file_url = internal_file_url.replace(".bz2", ".unlog");
                             let _response = client.delete(&unlog_internal_file_url).send().await.unwrap();
                             let _result = BootlogParserWorker::perform_later(&app_context, 
@@ -117,8 +126,10 @@ impl Task for SeedFromMkv {
                 }
             }
         }
-    
-        Ok(())
+        loop {
+            println!("Sleeping...");
+            thread::sleep(Duration::from_secs(1)); // Sleep for 1 second
+        }
     }
 }
 

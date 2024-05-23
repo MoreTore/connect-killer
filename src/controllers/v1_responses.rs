@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// ## Device Info Response
 /// GET /v1.1/devices/:dongle_id/
-/// 
+///
 #[derive(Serialize, Debug, Default)]
 pub struct DeviceInfoResponse {
     pub dongle_id: String,            // see Dongle ID
@@ -30,7 +30,7 @@ pub struct DeviceInfoResponse {
 
 /// ## Device location
 /// GET /v1/devices/:dongle_id/location
-/// 
+///
 #[derive(Serialize, Debug, Default)]
 pub struct DeviceLocationResponse {
     pub dongle_id: String,  // see Dongle ID
@@ -67,7 +67,7 @@ pub struct DeviceUser {
 
 /// ## Device users
 /// GET /v1/devices/:dongle_id/users
-/// 
+///
 /// List users with access to a device
 #[derive(Serialize, Debug, Default)]
 pub struct DeviceUsersResponse {
@@ -122,4 +122,74 @@ pub struct MeResponse {
     pub regdate: i64,
     pub superuser: bool,
     pub username: String,
+}
+
+// "alias": "Comma EON",
+// "athena_host": "prod-comma-public-athena-0.prod-comma-public-athena.production.svc.cluster.local",
+// "device_type": "neo",
+// "dongle_id": "4bba516fb4439b31",
+// "ignore_uploads": null,
+// "is_owner": true,
+// "is_paired": true,
+// "last_athena_ping": 1644418781,
+// "last_gps_accuracy": 12,
+// "last_gps_bearing": 0,
+// "last_gps_lat": 32.0,
+// "last_gps_lng": -117.0,
+// "last_gps_speed": 0,
+// "last_gps_time": 1558583671000,
+// "openpilot_version": "0.8.13",
+// "prime": true,
+// "prime_type": 1,
+// "public_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDLI++RMXz29fBPNdECbCL8SGQ1+O/y1xhLsm/XsApxlghsKiWFSXiLJbHkHFOhQb6F421pVMZI0NtVXK5hUmwaAYLVg644/sLv/J32iW2vvdntT6GRTJxJr4LvbuXuBggW2sIYINFOOKng71CO5BxUNn+WNmeYFSqblFi4HjIuGbUZABuF9t0nkjMMVDZm9pTeeWqJtC4BxlACmJPA/88bdsiq4VDZ51yWqXxKJAq1HpG8RXpBs2leNQfnqF/mwtAkSeatqJYTjNAv77lFVg0rOQ6XjDLGdtRiloD+mNnJa1CJF4NiUG7hY/mdmolE4ML9W8YYX1aHNROmZApAt+Bn root@localhost\n",
+// "serial": "fa9bfe8a",
+// "sim_id": "890000000000000000",
+// "trial_claimed": false
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct DeviceResponse {
+    pub alias: String,
+    pub athena_host: String,
+    pub device_type: String,
+    pub dongle_id: String,
+    pub ignore_uploads: bool,
+    pub is_owner: bool,
+    pub is_paired: bool,
+    pub last_athena_ping: i64,
+    pub last_gps_accuracy: f64,
+    pub last_gps_bearing: f64,
+    pub last_gps_lat: f64,
+    pub last_gps_lng: f64,
+    pub last_gps_speed: f64,
+    pub last_gps_time: i64,
+    pub openpilot_version: String,
+    pub prime: bool,
+    pub prime_type: i16,
+    pub public_key: String,
+    pub serial: String,
+    pub sim_id: Option<String>,
+    pub trial_claimed: bool,
+
+}
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct MyDevicesResponse {
+    devices: Vec<DeviceResponse>
+}
+// {
+//     "cameras": [],
+//     "dcameras": [],
+//     "ecameras": [],
+//     "logs": [ ],
+//     "qcameras": [],
+//     "qlogs": []
+// }
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct FilesResponse {
+    pub cameras: Vec<String>,
+    pub dcameras: Vec<String>,
+    pub ecameras: Vec<String>,
+    pub logs: Vec<String>,
+    pub qcameras: Vec<String>,
+    pub qlogs: Vec<String>,
 }

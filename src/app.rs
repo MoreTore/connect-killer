@@ -122,6 +122,7 @@ impl Hooks for App {
     }
 
     fn register_tasks(tasks: &mut Tasks) {
+        //tasks.register(tasks::deleter::Deleter);
         tasks.register(tasks::collect_data::CollectData);
         tasks.register(tasks::seed_from_mkv::SeedFromMkv);
         tasks.register(tasks::seed::SeedData);
@@ -137,8 +138,8 @@ impl Hooks for App {
         db::seed::<users::ActiveModel>(db, &base.join("users.yaml").display().to_string()).await?;
         //db::seed::<notes::ActiveModel>(db, &base.join("notes.yaml").display().to_string()).await?;
         db::seed::<devices::ActiveModel>(db, &base.join("devices.yaml").display().to_string()).await?;
-        db::seed::<routes::ActiveModel>(db, &base.join("routes.yaml").display().to_string()).await?;
-        db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
+        //db::seed::<routes::ActiveModel>(db, &base.join("routes.yaml").display().to_string()).await?;
+        //db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
         Ok(())
     }
     async fn after_routes(router: axum::Router, ctx: &AppContext) -> Result<axum::Router> {

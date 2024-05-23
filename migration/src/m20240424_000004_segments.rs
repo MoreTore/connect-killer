@@ -21,6 +21,7 @@ impl MigrationTrait for Migration {
                     .col(string(Segments::FcamUrl))
                     .col(string(Segments::DcamUrl))
                     .col(string(Segments::EcamUrl))
+                    .col(float(Segments::QcamDuration))
                     .col(integer(Segments::Proccamera).default(0))
                     .col(integer(Segments::Proclog).default(0))
                     .col(boolean(Segments::Can).default(false))
@@ -29,6 +30,7 @@ impl MigrationTrait for Migration {
                     .col(double(Segments::EndLng).default(0.0))
                     .col(double(Segments::StartLat).default(0.0))
                     .col(double(Segments::EndLat).default(0.0))
+                    .col(float(Segments::Miles).default(0.0))
                     //.col(string_null(Segments::GitRemote))
                     .col(big_integer(Segments::StartTimeUtcMillis))
                     .col(big_integer(Segments::CreateTime))
@@ -70,6 +72,7 @@ pub enum Segments {
     FcamUrl,
     DcamUrl,
     EcamUrl,
+    QcamDuration,
     //GitRemote,
     StartTimeUtcMillis,
     CreateTime,
@@ -79,6 +82,7 @@ pub enum Segments {
     StartLng,
     StartLat,
     EndLat,
+    Miles,
     Passive,
     Proclog,
     //Version,
