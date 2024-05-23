@@ -20,6 +20,7 @@ pub struct Model {
     pub fcam_url: String,
     pub dcam_url: String,
     pub ecam_url: String,
+    pub qcam_duration: f32,
     pub proccamera: i32,
     pub proclog: i32,
     pub can: bool,
@@ -32,6 +33,7 @@ pub struct Model {
     pub start_lat: f64,
     #[sea_orm(column_type = "Double")]
     pub end_lat: f64,
+    pub miles: f32,
     pub start_time_utc_millis: i64,
     pub create_time: i64,
     pub end_time_utc_millis: i64,

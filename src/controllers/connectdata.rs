@@ -28,7 +28,7 @@ pub async fn file_stream(
     headers: HeaderMap, // Include headers from the incoming request
   ) -> impl IntoResponse {
     let lookup_key = format!("{dongle_id}_{timestamp}--{segment}--{file}");
-    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key).await;
+    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
     let mut request_builder = client.get(&internal_file_url);
   
     // Check for range header and forward it if present
@@ -75,7 +75,7 @@ pub async fn file_stream(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let lookup_key = format!("{dongle_id}_{timestamp}--{segment}--{file}");
-    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key).await;
+    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
 
     // Prepare a request to fetch the file from storage
     let mut request_builder = client.get(&internal_file_url);
@@ -122,7 +122,7 @@ pub async fn bootlog_file_download(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&bootlog_file).await;
+    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&bootlog_file);
 
     // Prepare a request to fetch the file from storage
     let mut request_builder = client.get(&internal_file_url);
@@ -170,7 +170,7 @@ pub async fn thumbnail_download(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let lookup_key = format!("{canonical_route_name}--{segment}--sprite.jpg");
-    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key).await;
+    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
 
     // Prepare a request to fetch the file from storage
     let mut request_builder = client.get(&internal_file_url);

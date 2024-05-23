@@ -66,8 +66,23 @@
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
       "args": [
+        
         "task",
         "seed_from_mkv",
+
+      ],
+      "cwd": "${workspaceFolder}",
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "deleter",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        
+        "task",
+        "deleter",
 
       ],
       "cwd": "${workspaceFolder}",

@@ -20,6 +20,10 @@ use tokio_util::io::StreamReader;
 use async_compression::tokio::bufread::BzDecoder;
 use tokio::io::AsyncReadExt; // for read_to_end
 use rayon::prelude::*;
+use ffmpeg::{format as ffmpeg_format, Error as FfmpegError};
+use tempfile::NamedTempFile;
+use futures_util::StreamExt;
+use tokio::io::AsyncWriteExt;
 
 
 pub struct LogSegmentWorker {
@@ -48,7 +52,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         tracing::trace!("Starting QlogParser for URL: {}", args.internal_file_url);
         let client = Client::new();
         
-        // Make sure we have the data in the key value store
+        // Make sure we have the data in the key value store. Maybe not needed later
         let response = match client.get(&args.internal_file_url).send().await {
             Ok(response) => {
                 let status = response.status();
@@ -65,19 +69,19 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
 
         // check if the device is in the database
-        let _device = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+        let device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
             Err(e) => {
-                tracing::info!("Recieved file from an unregistered device. {}", &args.dongle_id);
+                tracing::info!("Recieved file from an unregistered device. {} or DB Error: {}", &args.dongle_id, e.to_string());
                 return Ok(())
             }
         };
         
         let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
-        let route = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
+        let route_model = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
             Ok(route) => route,
-            Err(_) => { 
-                tracing::info!("Recieved file for a new route. Adding to DB: {}", &canonical_route_name);
+            Err(e) => { 
+                tracing::info!("Recieved file for a new route. Adding to DB: {} or Db Error: {}", &canonical_route_name, e);
                 let default_route_model = routes::Model {
                     fullname: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
@@ -87,8 +91,14 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 match default_route_model.add_route_self(&self.ctx.db).await {
                     Ok(route) => route,
                     Err(e) => {
-                        tracing::error!("Failed to add the default route: {}", &canonical_route_name);
-                        return Err(sidekiq::Error::Message(e.to_string()));
+                        tracing::error!("Failed to add the default route: {} with Error: {}", &canonical_route_name, e.to_string());
+                        match routes::Model::find_route(&self.ctx.db, &canonical_route_name).await {
+                            Ok(route) => {
+                                tracing::error!("But it was added in a separate thread!");
+                                route
+                            }
+                            Err(_) => return Err(sidekiq::Error::Message("Failed to add the default route: ".to_string() + &e.to_string())),
+                        }
                     }
                 }
             }
@@ -97,22 +107,31 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
         let segment = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
-            Err(_) => {  // Need to add the segment now.
-                tracing::info!("Recieved file for a new segment. Adding to DB: {}", &canonical_name);
-                let default_segment_model = segments::Model { canonical_name: canonical_name.clone(), 
-                                                                                canonical_route_name: route.fullname.clone(), 
-                                                                                number: args.segment.parse::<i16>().unwrap_or(0), 
-                                                                                ..Default::default() };
+            Err(e) => {  // Need to add the segment now.
+                tracing::info!("Received file for a new segment. Adding to DB: {} or DB Error: {}", &canonical_name, e);
+                let default_segment_model = segments::Model {
+                    canonical_name: canonical_name.clone(),
+                    canonical_route_name: route_model.fullname.clone(),
+                    number: args.segment.parse::<i16>().unwrap_or(0),
+                    ..Default::default()
+                };
                 match default_segment_model.add_segment_self(&self.ctx.db).await {
                     Ok(segment) => segment, // The segment was added and here is the row.
                     Err(e) => {
                         tracing::error!("Failed to add the default segment {}: {}", &canonical_name, e);
-                        return Err(sidekiq::Error::Message("Failed to add the default segment: ".to_string() + &e.to_string()))
+                        match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
+                            Ok(segment) => {
+                                tracing::error!("But it was added in a separate thread!");
+                                segment
+                            }
+                            Err(_) => return Err(sidekiq::Error::Message("Failed to add the default segment: ".to_string() + &e.to_string())),
+                        }
                     }
                 }
             }
         };
         let mut seg = segment.into_active_model();
+        let mut ignore_uploads = None;
         match args.file.as_str() {
             "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/rlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             "qlog.bz2" =>  {
@@ -121,34 +140,74 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                         Err(e) => return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string())),
                     }
                 }
-            "qcamera.ts" =>     seg.qcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "fcamera.hvec" =>   seg.fcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "dcamera.hvec" =>   seg.dcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "ecamera.hvec" =>   seg.ecam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            f => { tracing::info!("Got invalid file type: {}", f); return Ok(())} // TODO: Mark for immediate deletion and block this user
+            "qcamera.ts" => {
+                match get_qcam_duration(response).await {
+                    Ok(duration) => seg.qcam_duration = ActiveValue::Set(duration),
+                    Err(e) => tracing::error!("failed to get duration"),
+                }
+                seg.qcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
+            }
+            "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            f => { 
+                tracing::error!("Got invalid file type: {}", f);
+                ignore_uploads = Some(true);
+                return Ok(())
+            } // TODO: Mark for immediate deletion and block this user
         }
         //let seg_active_model = seg.into_active_model();
         match seg.update(&self.ctx.db).await {
-            Ok(_) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());},
-            Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!("Failed to update segment: {}. DB Error: {}", &args.internal_file_url, e.to_string());
+                return Err(sidekiq::Error::Message(e.to_string()));
+            }
         }
-        update_route_info(&self.ctx, route).await
+        let segment_models = match segments::Model::find_segments_by_route(&self.ctx.db, &route_model.fullname).await {
+            Ok(mut segments) => {
+                segments.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
+                segments
+            }
+            Err(e) => {
+                tracing::error!("Failed to get segment models for route: {}. DB Error {}", &route_model.fullname, e.to_string());
+                return Err(sidekiq::Error::Message(e.to_string()));
+            }
+        };
+        let mut active_route_model = route_model.into_active_model();
+        //let mut active_device_model = device_model.into_active_model();
+        update_route_info(&self.ctx, &mut active_route_model, &segment_models).await?;
+        //update_device_info(&self.ctx, &mut active_device_model, &active_route_model, &ignore_uploads).await?;
+
+        match active_route_model.update(&self.ctx.db).await {
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
+                return Err(sidekiq::Error::Message(e.to_string()));
+            }
+        }
+
+        //active_device_model.update(&self.ctx.db).await.map_err(|e| sidekiq::Error::Message(e.to_string()))?;
+        tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());
+        return Ok(())
     }
 }
 
+// async fn update_device_info(
+//     ctx: &AppContext,
+//     active_device_model: &mut devices::ActiveModel,
+//     active_route_model: &routes::ActiveModel,
+//     ignore_uploads: &Option<bool>,
+// ) -> worker::Result<()> {
+    
+//     return Ok(());
+//}
+
 async fn update_route_info(
     ctx: &AppContext,
-    route_model: routes::Model
+    active_route_model: &mut routes::ActiveModel,
+    segment_models: &Vec<segments::Model>,
 ) -> worker::Result<()> {
-    // Get segments
-    let mut segment_models: Vec<segments::Model> = match segments::Model::find_segments_by_route(&ctx.db, &route_model.fullname).await {
-        Ok(segments) => segments,
-        Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
-    };
-    // sort by start time
-    segment_models.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
-    // convert to active model for updating
-    let mut active_route_model = route_model.into_active_model();
     // First segment in route
     if let Some(first_seg) = segment_models.first() {
         active_route_model.start_time = ActiveValue::Set(DateTime::from_timestamp_millis(first_seg.start_time_utc_millis));
@@ -162,6 +221,7 @@ async fn update_route_info(
     // last segment in route
     if let Some(last_seg) = segment_models.last() {
         active_route_model.end_time = ActiveValue::Set(DateTime::from_timestamp_millis(last_seg.end_time_utc_millis));
+        active_route_model.end_time_utc_millis = ActiveValue::Set(last_seg.end_time_utc_millis);
         active_route_model.end_lat = ActiveValue::Set(last_seg.end_lat);
         active_route_model.end_lng = ActiveValue::Set(last_seg.end_lng);
     } else {
@@ -181,8 +241,10 @@ async fn update_route_info(
     let mut procqcamera = 0;
     let mut procqlog = 0;
     let mut maxqcamera = 0;
+    let mut miles = 0.0;
 
-    for segment_model in &segment_models {
+    for segment_model in segment_models {
+        miles += segment_model.miles;
         segment_start_times.push(segment_model.start_time_utc_millis);
         segment_end_times.push(segment_model.end_time_utc_millis);
         segment_numbers.push(segment_model.number);
@@ -211,15 +273,17 @@ async fn update_route_info(
             active_route_model.maxecamera = ActiveValue::Set(maxecamera);
         }
     }
+    active_route_model.miles = ActiveValue::Set(miles);
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
-
-    // Update the route in the db
-    match active_route_model.update(&ctx.db).await {
-        Ok(_) => return Ok(()),
-        Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
-    }
+    return Ok(());
+    // return Ok(active_route_model);
+    // // Update the route in the db
+    // match active_route_model.update(&ctx.db).await {
+    //     Ok(_) => return Ok(()),
+    //     Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
+    // }
 }
 
 async fn handle_qlog(
@@ -250,7 +314,13 @@ async fn handle_qlog(
     };
 }
 
-async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompressed_data: Vec<u8>, args: &LogSegmentWorkerArgs, ctx: &AppContext) -> worker::Result<Vec<u8>> {
+async fn parse_qlog(
+    client: &Client, 
+    seg: &mut segments::ActiveModel, 
+    decompressed_data: Vec<u8>, 
+    args: &LogSegmentWorkerArgs, 
+    ctx: &AppContext
+) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
             "https://connect-api.duckdns.org/connectdata/logs?url={}",
@@ -261,7 +331,7 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
                     args.segment,
                     args.file.replace("bz2", "unlog")
                 )
-            ).await
+            )
         ));
     seg.qlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
 
@@ -269,10 +339,12 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
     let mut cursor = Cursor::new(decompressed_data);
     let mut gps_seen = false;
     let mut thumbnails: Vec<Vec<u8>> = Vec::new();
+    let mut total_meters_traveled = 0.0; // gets converted to miles
+    let mut last_lat = None;
+    let mut last_lng = None;
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
-        
 
         match event.which().map_err(Box::from)? {
             log_capnp::event::InitData(init_data) => {
@@ -281,16 +353,29 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
             }
             log_capnp::event::GpsLocationExternal(gps) => {
                 if let Ok(gps) = gps {
-                    if !gps_seen { // gps is false the first time
-                        gps_seen = true;
-                        seg.hpgps = ActiveValue::Set(true);
-                        seg.start_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
-                        seg.start_lat = ActiveValue::Set(gps.get_latitude());
-                        seg.start_lng = ActiveValue::Set(gps.get_longitude());
+                    if ((gps.get_flags() % 2) == 1) { // has fix
+                        let lat = gps.get_latitude();
+                        let lng = gps.get_longitude();
+                        if !gps_seen { // gps_seen is false the first time
+                            gps_seen = true;
+                            seg.hpgps = ActiveValue::Set(true);
+                            seg.start_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
+                            seg.start_lat = ActiveValue::Set(lat);
+                            seg.start_lng = ActiveValue::Set(lng);
+                        }
+        
+                        // Calculate distance if we have previous coordinates
+                        if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
+                            total_meters_traveled += super::log_helpers::haversine_distance(
+                                last_lat, last_lng, lat, lng
+                            );
+                        }
+        
+                        // Update last coordinates
+                        last_lat = Some(lat);
+                        last_lng = Some(lng);
+                        seg.end_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
                     }
-                    seg.end_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
-                    seg.end_lat = ActiveValue::Set(gps.get_latitude());
-                    seg.end_lng = ActiveValue::Set(gps.get_longitude());
                 }
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
             }
@@ -307,6 +392,12 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
             _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
         }
     }
+    if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
+        seg.end_lat = ActiveValue::Set(last_lat);
+        seg.end_lng = ActiveValue::Set(last_lng);
+        seg.miles = ActiveValue::Set((total_meters_traveled*0.000621371) as f32);
+    }
+
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
         // Downscale each thumbnail in parallel
@@ -352,7 +443,7 @@ async fn parse_qlog(client: &Client, seg: &mut segments::ActiveModel, decompress
 
         let sprite_url = common::mkv_helpers::get_mkv_file_url(
             &format!("{}_{}--{}--sprite.jpg", args.dongle_id, args.timestamp, args.segment)
-        ).await;
+        );
         tracing::trace!("Image proc took: {:?}", img_proc_start.elapsed());
         upload_data(client, &sprite_url, img_bytes).await?;
     }
@@ -370,8 +461,29 @@ async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> worker::Re
 
     if !response.status().is_success() {
         tracing::info!("Response status: {}", response.status());
-        return Err(sidekiq::Error::Message("Failed to upload data".to_string()));
+        return Err(sidekiq::Error::Message(format!("Failed to upload data to {}", url)));
     }
 
     Ok(())
+}
+
+async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
+    // Create a temporary file to store the video data
+    let temp_file = NamedTempFile::new().unwrap();
+    let mut temp_file_async = tokio::fs::File::from_std(temp_file.reopen().unwrap());
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.unwrap();
+        temp_file_async.write_all(&chunk).await.unwrap();
+    }
+
+    // Close the file to ensure all data is written
+    temp_file_async.sync_all().await.unwrap();
+
+    // Use FFmpeg to open the file and get the duration
+    ffmpeg::init()?;
+    let context = ffmpeg_format::input(&temp_file.path())?;
+    let duration = context.duration() as f32 / 1_000_000.0;
+    Ok(duration)
 }

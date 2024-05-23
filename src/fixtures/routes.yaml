@@ -1,5 +1,5 @@
 ---
-- fullname: 164080f7933651c4|2024-02-05--16-22-28
+- fullname: 3b58edf884ab4eaf|2024-02-05--16-22-28
   start_time: "2023-11-12T12:34:56.789"
   url: http://localhost:3111/connectdata/164080f7933651c4/164080f7933651c4_2024-02-05--16-22-28
   miles: 69.420
@@ -7,7 +7,7 @@
   git_remote: Unknown
   git_branch: Unknown
   can: true
-  device_dongle_id: 164080f7933651c4
+  device_dongle_id: 3b58edf884ab4eaf
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   public: true
@@ -83,7 +83,8 @@
   start_time_utc_millis: 1690488081000
   user_id: "bd3bc34dbea550c8"
   vin: "5YFT4RCE1LP005733"
-- fullname: 164080f7933651c4|2024-03-03--06-46-43
+  miles: 0.0
+- fullname: 3b58edf884ab4eaf|2024-03-03--06-46-43
   start_time: "2023-11-12T12:34:56.789"
   miles: 69.420
   platform: Test
@@ -91,7 +92,7 @@
   git_branch: Unknown
   url: https://chffrprivate.blob.core.windows.net/chffrprivate3/v2/a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19
   can: true
-  device_dongle_id: 164080f7933651c4
+  device_dongle_id: 3b58edf884ab4eaf
   created_at: "2023-11-12T12:34:56.789"
   updated_at: "2023-11-12T12:34:56.789"
   public: true
@@ -167,3 +168,4 @@
   start_time_utc_millis: 1690488081000
   user_id: "bd3bc34dbea550c8"
   vin: "5YFT4RCE1LP005733"
+  miles: 0.0

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use super::_entities::users::{self, ActiveModel, Entity, Model};
-use crate::controllers::v2::GithubUser;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginParams {
@@ -18,6 +17,12 @@ pub struct RegisterParams {
     pub email: String,
     pub password: String,
     pub name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct OAuthUserParams {
+    pub name: String,
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Validate, Deserialize)]
@@ -196,12 +201,12 @@ impl super::_entities::users::Model {
     // }
     pub async fn with_oauth(
         db: &DatabaseConnection,
-        params: &GithubUser,
+        params: &OAuthUserParams,
     ) -> ModelResult<Self> {
         let txn = db.begin().await?;
 
         match users::Entity::find()
-            .filter(users::Column::Name.eq(format!("github_{}", &params.id)))
+            .filter(users::Column::Name.eq(&params.name))
             .one(&txn)
             .await?
         {
@@ -210,12 +215,13 @@ impl super::_entities::users::Model {
                 return Ok(user);
             }
             None => {
-                let user = users::Model {
-                    email: params.email.clone(),
-                    name: format!("github_{}", &params.id),
+                let user = users::ActiveModel {
+                    email: ActiveValue::Set(params.email.clone()),
+                    name: ActiveValue::Set(params.name.clone()),
+                    points: ActiveValue::Set(0),
+                    superuser: ActiveValue::Set(false),
                     ..Default::default()
                 }
-                .into_active_model()
                 .insert(&txn)
                 .await?;
         

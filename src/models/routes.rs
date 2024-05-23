@@ -73,6 +73,15 @@ impl super::_entities::routes::Model {
             }
         }
     }
+
+    // pub async fn find_all_routes(
+    //     db: &DatabaseConnection,
+    // ) -> ModelResult<Vec<Model>> {
+    //     let routes = routes::Entity::find()
+    //         .all(db)
+    //         .await?;
+    //     Ok(routes)
+    // }
         //route.ok_or_else(|| ModelError::EntityNotFound)
 
     /// Finds all routes associated with a device.

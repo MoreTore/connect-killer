@@ -19,6 +19,7 @@ use sha2::{Sha256, Digest};
 use hex;
 
 use crate::models::_entities;
+use crate::models::users::OAuthUserParams;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeviceClaims {
@@ -166,7 +167,7 @@ async fn pilotpair(
         Ok(claims) => claims,
         Err(e) => {
             tracing::error!("Got and invalid pair token: {}", e);
-            return format::json("Got and invalid pair token");//(StatusCode::BAD_REQUEST, format::json("Bad Token"));
+            return format::json("Got an invalid pair token");//(StatusCode::BAD_REQUEST, format::json("Bad Token"));
         }
     };
 
@@ -257,19 +258,31 @@ async fn auth(
     let user_response = match user_response {
         Ok(user_response) => user_response,
         Err(e) => {
-            tracing::error!("Github token error: {} ", e);
-            return format::json("Failed");
+            tracing::error!("Failed to get github user response: {} ", e);
+            return unauthorized("Failed to get github user response");
         }
     };
 
-    let github_user: GithubUser = user_response.json().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR).unwrap();
-    let user = _entities::users::Model::with_oauth(&ctx.db, &github_user).await?;
+    let github_user: GithubUser = match user_response.json().await {
+        Ok(user) => user,
+        Err(e) => {
+            tracing::error!("Failed to parse github user response: {} ", e);
+            return unauthorized("Failed to parse github user response");
+        }
+    };
+        
+    let user = _entities::users::Model::with_oauth(
+        &ctx.db, 
+        &OAuthUserParams {
+            name: format!("github_{}", github_user.id),
+            email: github_user.email,
+    }).await?;
     
     let jwt_secret = ctx.config.get_jwt_config()?;
 
     let token = user
         .generate_jwt(&jwt_secret.secret, &jwt_secret.expiration)
-        .or_else(|_| unauthorized("unauthorized!"))?;
+        .or_else(|_| unauthorized("Failed to generate token!"))?;
 
     format::json(GithubTokenResponse { access_token: token} )
 }

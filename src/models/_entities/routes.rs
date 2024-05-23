@@ -24,6 +24,10 @@ pub struct Model {
     pub device_dongle_id: String,
     pub create_time: i64,
     #[sea_orm(column_type = "Double")]
+    pub start_lat: f64,
+    #[sea_orm(column_type = "Double")]
+    pub start_lng: f64,
+    #[sea_orm(column_type = "Double")]
     pub end_lat: f64,
     #[sea_orm(column_type = "Double")]
     pub end_lng: f64,
@@ -56,10 +60,6 @@ pub struct Model {
     pub segment_start_times: JsonValue,
     pub share_exp: String,
     pub share_sig: String,
-    #[sea_orm(column_type = "Double")]
-    pub start_lat: f64,
-    #[sea_orm(column_type = "Double")]
-    pub start_lng: f64,
     pub start_time_utc_millis: i64,
     pub user_id: String,
     pub vin: String,
@@ -75,6 +75,7 @@ impl Default for Model {
             version: None,
             git_branch: None,
             start_time: None,
+            end_time: None,
             miles: 0.0,
             platform: String::default(),
             public: false,
@@ -87,7 +88,6 @@ impl Default for Model {
             create_time: 0,
             end_lat: 0.0,
             end_lng: 0.0,
-            end_time: None,
             end_time_utc_millis: 0,
             hpgps: false,
             init_logmonotime: 0,

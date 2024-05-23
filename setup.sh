@@ -7,6 +7,8 @@ git submodule update --init
 sudo apt-get update -y
 sudo apt upgrade -y
 sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+sudo apt-get install pkg-config libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev -y # for ffmpeg
+sudo apt-get install libclang-dev clang -y # for ffmpeg
 # Install Rust, pnpm, nvm, node, docker
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 wget -qO- https://get.pnpm.io/install.sh | sh -
