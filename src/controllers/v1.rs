@@ -104,6 +104,7 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
 ) -> Result<Response> {
 
     let mut segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
+    segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
 
     let mut response = String::new();
@@ -397,6 +398,7 @@ async fn route_segment(
 ) -> Result<Response> {
     let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
     let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
     format::json(route_models)
 }
 

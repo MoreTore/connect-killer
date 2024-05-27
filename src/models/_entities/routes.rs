@@ -12,8 +12,6 @@ pub struct Model {
     pub version: Option<String>,
     pub git_branch: Option<String>,
     pub start_time: Option<DateTime>,
-    #[sea_orm(column_type = "Float")]
-    pub miles: f32,
     pub platform: String,
     pub public: bool,
     pub devicetype: Option<i16>,
@@ -76,7 +74,6 @@ impl Default for Model {
             git_branch: None,
             start_time: None,
             end_time: None,
-            miles: 0.0,
             platform: String::default(),
             public: false,
             devicetype: None,

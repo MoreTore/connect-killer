@@ -1,3 +1,23 @@
+// Apology for the Messy Code
+/* 
+I apologize for the messiness and potential lack of clarity in this code. 
+It evolved organically over time with various additions and modifications to handle multiple aspects 
+of the log processing. This includes handling database interactions, HTTP requests, image processing, 
+and video duration extraction, among other tasks. As a result, the code may appear disjointed and less organized than ideal.
+
+I recognize that there are areas that could benefit from refactoring and clearer documentation to improve 
+readability and maintainability. Specifically, there are opportunities to modularize the code further, improve 
+error handling consistency, and enhance the overall structure.
+
+Your understanding and patience are greatly appreciated. I am committed to improving this codebase and 
+welcome any suggestions you may have for making it cleaner and more efficient.
+
+Sincerely,
+Ryleymcc
+*/
+
+
+
 use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
@@ -24,10 +44,17 @@ use ffmpeg::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
-
+use tokio::time::{sleep, Duration};
+use std::collections::HashMap;
+use tokio::sync::{Mutex, Notify};
+use std::thread;
+use std::sync::Arc;
+use once_cell::sync::Lazy;
 
 pub struct LogSegmentWorker {
     pub ctx: AppContext,
+    pub lock_manager: Arc<LockManager>,
+    pub client: Arc<Client>,
 }
 #[derive(Deserialize, Debug, Serialize)]
 pub struct LogSegmentWorkerArgs {
@@ -39,34 +66,74 @@ pub struct LogSegmentWorkerArgs {
     pub create_time      : i64, // This is the time the call was made to the worker.
 }
 
+use sea_orm::{DatabaseConnection, DbErr, Statement, FromQueryResult};
+use async_trait::async_trait;
+
+pub struct LockManager {
+    keys: Mutex<HashMap<i64, bool>>,
+    notify: Notify,
+}
+
+impl LockManager {
+    fn new() -> Self {
+        LockManager {
+            keys: Mutex::new(HashMap::new()),
+            notify: Notify::new(),
+        }
+    }
+
+    pub async fn acquire_advisory_lock(&self, db: &DatabaseConnection, key: i64) -> Result<(), DbErr> {
+        // This is the local server lock
+        let mut keys = self.keys.lock().await;
+        while keys.contains_key(&key) {
+            // Drop the lock before awaiting and re-acquire it after being notified
+            drop(keys);
+            self.notify.notified().await;
+            keys = self.keys.lock().await;
+        }
+
+        // Insert the key to indicate it is locked
+        keys.insert(key, true);
+        // This is the global lock (literally for servers around the globe accessing the same db)
+        tracing::trace!("Attempting to acquire advisory lock with key: {}", key);
+        let sql = format!("SELECT pg_advisory_lock({})", key);
+        db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
+        tracing::trace!("Successfully acquired advisory lock with key: {}", key);
+
+        Ok(())
+    }
+
+    pub async fn release_advisory_lock(&self, db: &DatabaseConnection, key: i64) -> Result<(), DbErr> {
+        let mut keys = self.keys.lock().await;
+        if keys.remove(&key).is_some() {
+            // Notify all waiting threads that a key has been removed
+            self.notify.notify_waiters();
+        }
+        tracing::trace!("Releasing advisory lock with key: {}", key);
+        let sql = format!("SELECT pg_advisory_unlock({})", key);
+        db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
+        tracing::trace!("Successfully released advisory lock with key: {}", key);
+
+        Ok(())
+    }
+}
+
+
 impl worker::AppWorker<LogSegmentWorkerArgs> for LogSegmentWorker {
     fn build(ctx: &AppContext) -> Self {
-        Self { ctx: ctx.clone() }
+        static LOCK_MANAGER: Lazy<Arc<LockManager>> = Lazy::new(|| Arc::new(LockManager::new()));
+        pub static CLIENT: Lazy<Arc<Client>> = Lazy::new(|| Arc::new(Client::new()));
+        Self { ctx: ctx.clone(), lock_manager: Arc::clone(&LOCK_MANAGER) , client: Arc::clone(&CLIENT)}
     }
 }
 
 #[async_trait]
 impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
     async fn perform(&self, args: LogSegmentWorkerArgs) -> worker::Result<()> {
+        let lock_manager = self.lock_manager.clone();
         let start = Instant::now();
         tracing::trace!("Starting QlogParser for URL: {}", args.internal_file_url);
-        let client = Client::new();
-        
-        // Make sure we have the data in the key value store. Maybe not needed later
-        let response = match client.get(&args.internal_file_url).send().await {
-            Ok(response) => {
-                let status = response.status();
-                tracing::trace!("Got Ok response with status {status}");
-                if !status.is_success() {
-                    return Ok(());
-                }
-                response
-            }
-            Err(e) => {
-                tracing::error!("GET request failed: {}", format!("{}", e));
-                return Err(sidekiq::Error::Message(e.to_string()));
-            }
-        };
+        let client = self.client.clone();
 
         // check if the device is in the database
         let device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
@@ -76,12 +143,15 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 return Ok(())
             }
         };
-        
+
         let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
+        let key = super::log_helpers::calculate_advisory_lock_key(&canonical_route_name);
+        lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
+        
         let route_model = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
             Ok(route) => route,
             Err(e) => { 
-                tracing::info!("Recieved file for a new route. Adding to DB: {} or Db Error: {}", &canonical_route_name, e);
+                tracing::trace!("Recieved file for a new route. Adding to DB: {} or Db Error: {}", &canonical_route_name, e);
                 let default_route_model = routes::Model {
                     fullname: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
@@ -103,25 +173,29 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 }
             }
         };
+        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
 
+        
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
+        let key = super::log_helpers::calculate_advisory_lock_key(&canonical_name);
+        self.lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
         let segment = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
-                tracing::info!("Received file for a new segment. Adding to DB: {} or DB Error: {}", &canonical_name, e);
+                tracing::trace!("Received file for a new segment. Adding to DB: {} or DB Error: {}", &canonical_name, e);
                 let default_segment_model = segments::Model {
                     canonical_name: canonical_name.clone(),
-                    canonical_route_name: route_model.fullname.clone(),
+                    canonical_route_name: canonical_route_name.clone(),
                     number: args.segment.parse::<i16>().unwrap_or(0),
                     ..Default::default()
                 };
                 match default_segment_model.add_segment_self(&self.ctx.db).await {
                     Ok(segment) => segment, // The segment was added and here is the row.
                     Err(e) => {
-                        tracing::error!("Failed to add the default segment {}: {}", &canonical_name, e);
+                        tracing::trace!("Failed to add the default segment {}: {}", &canonical_name, e);
                         match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
                             Ok(segment) => {
-                                tracing::error!("But it was added in a separate thread!");
+                                tracing::trace!("But it was added in a separate thread!");
                                 segment
                             }
                             Err(_) => return Err(sidekiq::Error::Message("Failed to add the default segment: ".to_string() + &e.to_string())),
@@ -130,6 +204,24 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 }
             }
         };
+
+        // Make sure we have the data in the key value store. Maybe not needed later
+        let response = match client.get(&args.internal_file_url).send().await {
+            Ok(response) => {
+                let status = response.status();
+                tracing::trace!("Got Ok response with status {status}");
+                if !status.is_success() {
+                    return Ok(());
+                }
+                response
+            }
+            Err(e) => {
+                tracing::error!("GET request failed: {}", format!("{}", e));
+                return Err(sidekiq::Error::Message(e.to_string()));
+            }
+        };
+        
+
         let mut seg = segment.into_active_model();
         let mut ignore_uploads = None;
         match args.file.as_str() {
@@ -166,6 +258,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         }
         let segment_models = match segments::Model::find_segments_by_route(&self.ctx.db, &route_model.fullname).await {
             Ok(mut segments) => {
+                segments.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
                 segments.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
                 segments
             }
@@ -186,6 +279,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 return Err(sidekiq::Error::Message(e.to_string()));
             }
         }
+        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
 
         //active_device_model.update(&self.ctx.db).await.map_err(|e| sidekiq::Error::Message(e.to_string()))?;
         tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());
@@ -273,7 +367,7 @@ async fn update_route_info(
             active_route_model.maxecamera = ActiveValue::Set(maxecamera);
         }
     }
-    active_route_model.miles = ActiveValue::Set(miles);
+    active_route_model.length = ActiveValue::Set(miles);
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
@@ -460,7 +554,7 @@ async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> worker::Re
         .map_err(Box::from)?;
 
     if !response.status().is_success() {
-        tracing::info!("Response status: {}", response.status());
+        tracing::debug!("Response status: {}", response.status());
         return Err(sidekiq::Error::Message(format!("Failed to upload data to {}", url)));
     }
 
@@ -474,8 +568,12 @@ async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.unwrap();
-        temp_file_async.write_all(&chunk).await.unwrap();
+        match chunk {
+            Ok(chunk) => temp_file_async.write_all(&chunk).await.unwrap(),
+            Err(e) => {
+                tracing::error!("streaming error: {}", e.to_string());
+            }
+        }
     }
 
     // Close the file to ensure all data is written

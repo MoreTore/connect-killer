@@ -14,7 +14,6 @@ impl MigrationTrait for Migration {
                     .col(string_null(Routes::Version))
                     .col(string_null(Routes::GitBranch))
                     .col(timestamp_null(Routes::StartTime))
-                    .col(float(Routes::Miles))
                     .col(string(Routes::Platform))
                     .col(boolean(Routes::Public).default(false))
                     .col(tiny_integer_null(Routes::Devicetype))
@@ -81,7 +80,6 @@ pub enum Routes {
     Table,
     StartTime,
     Platform,
-    Miles,
     Public,
     GitRemote,
     Version,
