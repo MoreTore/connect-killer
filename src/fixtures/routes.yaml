@@ -2,7 +2,6 @@
 - fullname: 3b58edf884ab4eaf|2024-02-05--16-22-28
   start_time: "2023-11-12T12:34:56.789"
   url: http://localhost:3111/connectdata/164080f7933651c4/164080f7933651c4_2024-02-05--16-22-28
-  miles: 69.420
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
@@ -83,10 +82,8 @@
   start_time_utc_millis: 1690488081000
   user_id: "bd3bc34dbea550c8"
   vin: "5YFT4RCE1LP005733"
-  miles: 0.0
 - fullname: 3b58edf884ab4eaf|2024-03-03--06-46-43
   start_time: "2023-11-12T12:34:56.789"
-  miles: 69.420
   platform: Test
   git_remote: Unknown
   git_branch: Unknown
@@ -168,4 +165,3 @@
   start_time_utc_millis: 1690488081000
   user_id: "bd3bc34dbea550c8"
   vin: "5YFT4RCE1LP005733"
-  miles: 0.0

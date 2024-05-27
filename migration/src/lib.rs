@@ -25,8 +25,8 @@ impl MigratorTrait for Migrator {
             
             Box::new(m20240425_071518_authorized_users::Migration),
             Box::new(m20240504_174513_bootlogs::Migration),
-            Box::new(m20240522_001958_add_route_miles::Migration),
-            Box::new(m20240522_001958_add_segment_miles::Migration),
+            //Box::new(m20240522_001958_add_route_miles::Migration),
+            //Box::new(m20240522_001958_add_segment_miles::Migration),
         ]
     }
 }
