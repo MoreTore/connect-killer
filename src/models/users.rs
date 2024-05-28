@@ -41,7 +41,7 @@ impl Validatable for super::_entities::users::ActiveModel {
         })
     }
 }
-
+use chrono::prelude::{Utc,DateTime};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for super::_entities::users::ActiveModel {
     async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
@@ -49,16 +49,21 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
         C: ConnectionTrait,
     {
         self.validate()?;
+        let mut this = self;
         if insert {
-            let mut this = self;
+            
             this.identity = ActiveValue::Set(Uuid::new_v4());
+            this.created_at = ActiveValue::Set(Utc::now().naive_utc());
+            this.updated_at = ActiveValue::Set(Utc::now().naive_utc());
             //this.api_key = ActiveValue::Set(format!("lo-{}", Uuid::new_v4()));
             Ok(this)
         } else {
-            Ok(self)
+            this.updated_at = ActiveValue::Set(Utc::now().naive_utc());
+            Ok(this)
         }
     }
 }
+
 
 // #[async_trait]
 // impl Authenticable for super::_entities::users::Model {

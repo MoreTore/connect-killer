@@ -1,13 +1,26 @@
 use std::collections::BTreeMap;
-
+use reqwest::Client;
+use regex::Regex;
+use serde_json::from_str;
+use serde_json::Value;
 use loco_rs::prelude::*;
+use chrono::{DateTime, Utc, Duration, NaiveDateTime, ParseError};
 
-use crate::models::_entities::devices;
-use crate::models::_entities::users;
-use crate::models::_entities::segments;
-use crate::models::_entities::routes;
-use crate::models::_entities::bootlogs;
+use crate::{models::_entities::{
+    devices,
+    users,
+    segments,
+    routes,
+    bootlogs,
+    },
+    common::mkv_helpers,
+};
 
+fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, ParseError> {
+    // Define the format that matches the input timestamp
+    let format = "%Y-%m-%d--%H-%M-%S";
+    NaiveDateTime::parse_from_str(timestamp, format)
+}
 
 pub struct Deleter;
 #[async_trait]
@@ -25,7 +38,7 @@ impl Task for Deleter {
 
         let client = Client::new();
         // Get all keys from the MKV server
-        let query = common::mkv_helpers::list_keys_starting_with("");
+        let query = mkv_helpers::list_keys_starting_with("");
         let response = client.get(&query).send().await.unwrap();
 
         if !response.status().is_success() {
@@ -38,11 +51,12 @@ impl Task for Deleter {
 
         // Extract keys from the JSON object
         let keys = json["keys"].as_array().unwrap(); // Safely extract as an array
-
-        
-
+        // TODO: Refactor to not load the whole response in ram at once as it could get large.
+        let now: NaiveDateTime = Utc::now().naive_utc();
+        let older_than = now - Duration::days(14);
+        tracing::info!("now: {now}, deleting files older than: {older_than}");
         for key in keys {
-            let mut file_name = key_value.as_str().unwrap().to_string(); // Convert to string for independent ownership
+            let mut file_name = key.as_str().unwrap().to_string(); // Convert to string for independent ownership
             file_name = file_name.strip_prefix("/").unwrap().to_string(); // Strip prefix and convert back to string
             match re.captures(&file_name) {
                 Some(caps) => {
@@ -50,34 +64,41 @@ impl Task for Deleter {
                     let timestamp = &caps[2];
                     let segment = &caps[3];
                     let file_type = &caps[4];
-                    match devices::Model::find_device(&ctx.db, &dongle_id) {
-                        Ok(_) => (),
-                        Err(model_error) => match model_error {
-                            ModelError::EntityNotFound => {
-
+                    match segments::Model::find_by_segment(&ctx.db, &format!("{dongle_id}|{timestamp}--{segment}")).await {
+                        Ok(segment) => {
+                            let mut deleted = false;
+                            if let Ok(derived_dt) = parse_timestamp(timestamp) { // Try using file name timestamp first
+                                if derived_dt <= older_than {
+                                    tracing::info!("Deleting file: {file_name}");
+                                    client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
+                                    deleted = true;
+                                }
+                            };
+                            if segment.created_at <= older_than && !deleted { // Fallback to created_at
+                                tracing::info!("Deleting file: {file_name}");
+                                client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
                             }
-                            _ => {
-                                tracing::error(model_error.to_string()),
-                            }
-                        }
+                        },
+                        Err(e) => {
+                            tracing::error!("No segment found for file: {file_name}. ");
+                            if let Ok(derived_dt) = parse_timestamp(timestamp) {
+                                if derived_dt <= older_than {
+                                    tracing::info!("Deleting file: {file_name}");
+                                    client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
+                                }
+                            };
+                        }   
                     }
                 }
                 None => {
-                    tracing::error("Unkown file or bootlog in kv store. Deleting it!");
-                    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&file_name);
-                    //let response = client.delete(&internal_file_url).send().await.unwrap();
+                    tracing::error!("Unkown file or bootlog in kv store. Deleting it!");
+                    let internal_file_url = mkv_helpers::get_mkv_file_url(&file_name);
+                    tracing::info!("Deleting file: {internal_file_url}");
+                    client.delete(&internal_file_url).send().await.unwrap();
                 }
             }
 
         }
-
-        segment_models = segments::Model::find_all_segments(&ctx.db).await?;
-        route_models = routes::Model::find_all_routes(&ctx.db).await?;
         Ok(())
     }
-}
-
-
-async fn delete_device_routes(ctx: &AppContext, dongle_id: &str) {
-    
 }
