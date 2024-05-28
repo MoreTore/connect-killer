@@ -10,8 +10,25 @@ pub struct AuthorizeParams {
     pub device_dongle_id: String,
 }
 
+use chrono::prelude::{Utc,DateTime};
+#[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
+    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    where
+        C: ConnectionTrait,
+    {
+        let mut this = self;
+        if insert {
+            this.created_at = ActiveValue::Set(Utc::now().naive_utc());
+            this.updated_at = ActiveValue::Set(Utc::now().naive_utc());
+            Ok(this)
+        } else {
+            // update time
+            this.updated_at = ActiveValue::Set(Utc::now().naive_utc());
+            Ok(this)
+        }
+    }
 }
 
 
