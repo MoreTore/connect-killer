@@ -68,7 +68,7 @@ pub async fn file_stream(
   }
 
 // used for useradmin browser download
-  pub async fn file_download(
+pub async fn file_download(
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
     State(ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
@@ -221,7 +221,7 @@ pub struct UlogText {
 }
 
 pub async fn render_segment_ulog(
-    auth: crate::middleware::auth::MyJWT,
+    //auth: crate::middleware::auth::MyJWT,
     ViewEngine(v): ViewEngine<TeraView>, 
     State(ctx): State<AppContext>,
     Extension(client): Extension<reqwest::Client>,

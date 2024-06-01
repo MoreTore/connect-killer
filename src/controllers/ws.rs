@@ -21,8 +21,7 @@ use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    enforce_ownership_rule,
-    middleware::identity, 
+    enforce_ownership_rule, 
     models::_entities::{
         devices, 
         users
@@ -249,7 +248,6 @@ async fn handle_socket(
     exit_handler(ctx,endpoint_dongle_id, jwt_identity, manager).await;
 }
 
-
 async fn handle_device_ws(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
@@ -292,10 +290,28 @@ pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
         tracing::trace!("Sending ping to {}", &id);
         if let Err(e) = sender.send(Message::Ping(Vec::new())).await {
             tracing::trace!("Failed to send ping to device {}: {}", id, e);
-
         }
     }
 }
+
+pub async fn send_reset( // called from crate::middleware::auth
+    ctx: &AppContext,
+    socket: WebSocket
+) {
+    let (mut sender, mut receiver) = socket.split();
+        let reset_dongle_rpc = JsonRpcRequest {
+            method: "resetDongle".to_string(),
+            params: Some(serde_json::json!({})),
+            jsonrpc: "2.0".to_string(),
+            id: 1,
+        };
+        let msg = serde_json::to_string(&reset_dongle_rpc).unwrap();
+        match sender.send(Message::Text(msg)).await {
+            Ok(_) => tracing::info!("Sent resetDongle"),
+            Err(_) => tracing::error!("Failed to send resetDongle"),
+        }
+}
+
 
 pub fn routes() -> Routes {
     Routes::new()

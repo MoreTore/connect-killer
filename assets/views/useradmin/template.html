@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+      <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+    
+        input {
+            width: 500px;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+    
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+    
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+    
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+    
+        a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+    
+        a:hover {
+            text-decoration: underline;
+        }
+    
+        .signout {
+            text-align: center;
+            margin-top: 20px;
+        }
+    
+        .device-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    
+        .device-status div {
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+    
+        .uploads-allowed {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+    
+        .uploads-blocked {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+    
+        .green-text {
+            color: #4CAF50;
+        }
+    
+        th[title]::after, td[title]::after {
+            content: '[i]';
+            color: blue;
+            font-size: 0.5rem;
+            font-weight: bold;
+            vertical-align: super;
+        }
+    
+        th[warn]::after, td[warn]::after {
+            content: '[!]';
+            color: red;
+            font-size: 0.5rem;
+            font-weight: bold;
+            vertical-align: super;
+        }
+    
+        #lines_to_deactivate {
+            color: red;
+            font-weight: bold;
+        }
+    
+        td[right] {
+            text-align: right;
+        }
+    </style>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        var timestamps = document.querySelectorAll('.timestamp');
+        timestamps.forEach(function(el) {
+            var unixTimestamp = el.getAttribute('data-timestamp');
+            var date = new Date(Number(unixTimestamp*1000));
+            el.textContent = date.toUTCString();  // Set the formatted UTC date-time string
+        });
+      });
+      function api_post(endpoint, data, callback) {
+        return api_request('POST', endpoint, callback, {
+            data: JSON.stringify(data),
+            contentType: 'application/json'
+        });
+      }
+      function unpair(dongle_id) {
+        if (confirm("Unpair " + dongle_id + "?")) {
+            api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) {
+                alert('Unpaired ' + dongle_id);
+            });
+        }
+        window.location.reload();
+      }
+    </script>
+    <script>
+      // Global WebSocket connection
+      // let ws;
+      
+      // Function to open a WebSocket connection
+      // function openWebSocket() {
+      //   const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkZyb250RW5kIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.QaGCFMY0NNUtAGcUkVrH27wVqGbcawiPHgh5E8Gam-Y';
+      //   document.cookie = `jwt=${jwt}; path=/`;
+    
+      //   const serverUri = 'wss://connect-ws.duckdns.org/' + '{{ dongle_id | safe }}';
+      //   ws = new WebSocket(serverUri);
+        
+      //   ws.addEventListener('open', function(event) {
+      //     console.log('WebSocket connection opened');
+      //     const progressCommand = {
+      //       jsonrpc: "2.0",
+      //       method: "listUploadQueue",
+      //       params: {},
+      //       id: 1
+      //     };
+      //     setInterval(() => {
+      //       ws.send(JSON.stringify(progressCommand));
+      //     }, 1000);  // Adjust polling interval as needed
+      //   });
+    
+      //   ws.addEventListener('message', function(event) {
+      //     console.log('Received:', event.data);
+      //     handleWebSocketMessage(event.data);
+      //   });
+    
+      //   ws.addEventListener('close', function(event) {
+      //     console.log('WebSocket connection closed');
+      //     setTimeout(openWebSocket, 5000);
+      //   });
+    
+      //   ws.addEventListener('error', function(event) {
+      //     console.error('WebSocket error:', event);
+      //     // Optionally, handle errors, such as attempting to reconnect
+      //   });
+      // }
+      // Function to handle incoming WebSocket messages
+      // function handleWebSocketMessage(data) {
+      //   const response = JSON.parse(data);
+      //   if (response && response.result && Array.isArray(response.result)) {
+      //     response.result.forEach(upload => {
+      //       const pathSegments = upload.path.split("--");
+      //       const segmentNumber = pathSegments[pathSegments.length - 1].split("/")[0];
+      //       const fileType = pathSegments[pathSegments.length - 1].split("/")[1];
+
+      //       const progressId = `uploadProgress_${segmentNumber}_${fileType}`;
+      //       const progressContainerId = `progressContainer_${segmentNumber}_${fileType}`;
+      //       const buttonId = `uploadButton_${segmentNumber}_${fileType}`;
+
+      //       const progressBar = document.getElementById(progressId);
+      //       const progressContainer = document.getElementById(progressContainerId);
+      //       const uploadButton = document.getElementById(buttonId);
+
+      //       if (progressBar && progressContainer && uploadButton) {
+      //         progressBar.value = upload.progress * 100;  // Update the progress bar value
+      //         progressContainer.style.display = 'block'; // Always show the progress bar container
+      //         uploadButton.style.display = 'none';
+      //       }
+      //     });
+      //   }
+      // }
+      
+      // Function to send an upload command via WebSocket
+      // function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
+      //   const route_name = canonical_route_name.split("|")[1];
+
+      //   const uploadCommand = {
+      //     jsonrpc: "2.0",
+      //     method: "uploadFileToUrl",
+      //     params: {
+      //       fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
+      //       url: "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
+      //       headers: {},
+      //     },
+      //     id: 1
+      //   };
+    
+      //   // Send the command via the open WebSocket connection
+      //   ws.send(JSON.stringify(uploadCommand));
+    
+      //   // Display the progress bar and hide the button
+      //   document.getElementById('progressContainer_' + segment_num + '_' + file_type).style.display = 'block';
+      //   document.getElementById('uploadButton_' + segment_num + '_' + file_type).style.display = 'none';
+      // }
+
+      // function uploadAllFiles() {
+      //   // Assuming each row in your table has a class 'segment-row' and the button for uploading has an 'upload-button' class
+      //   const rows = document.querySelectorAll('.segment-row');
+    
+      //   rows.forEach(row => {
+      //     const dongleId = '{{ dongle_id }}';  // Assuming dongleId is constant or retrieved in another way
+      //     const segmentNumber = row.getAttribute('data-segment-number');
+      //     const canonicalRouteName = row.getAttribute('data-canonical-route-name');
+      //     const fileTypes = ['rlog.bz2', 'fcam.hevc', 'dcam.hevc', 'ecam.hevc'];  // List all types of files you need to upload
+  
+      //     fileTypes.forEach(fileType => {
+      //       const button = row.querySelector(`button[data-file-type="${fileType}"]`);
+      //       if (button && button.style.display !== 'none') {  // Check if the button is visible, indicating file needs to be uploaded
+      //         uploadFile(dongleId, segmentNumber, canonicalRouteName, fileType, segmentNumber, fileType.replace('.bz2', '').replace('.hevc', ''));
+      //       }
+      //     });
+      //   });
+      //   }      
+      // Open the WebSocket connection when the page loads
+      // window.onload = openWebSocket;
+            // Function to send an upload command via HTTP POST
+          function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+          }
+          async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
+          const route_name = canonical_route_name.split("|")[1];
+          const api_url = "https://connect-useradmin.duckdns.org/ws/" + dongle_id;
+          const uploadUrl = "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file;
+
+          const uploadCommand = {
+            jsonrpc: "2.0",
+            method: "uploadFileToUrl",
+            params: {
+              fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
+              url: uploadUrl,
+              headers: {},
+            },
+            id: 1
+          };
+
+          try {
+            // Send the command via HTTP POST request with credentials included
+            const jwtToken = getCookie('jwt');
+            const response = await fetch(api_url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `JWT ${jwtToken}` // Include the JWT token in the Authorization header
+              },
+              body: JSON.stringify(uploadCommand)
+            });
+
+            if (!response.ok) {
+              throw new Error('Network response was not ok');
+            }
+
+            const jsonResponse = await response.json();
+            console.log('Success:', jsonResponse);
+
+            // Display the progress bar and hide the button
+            document.getElementById('progressContainer_' + segment_num + '_' + file_type).style.display = 'block';
+            document.getElementById('uploadButton_' + segment_num + '_' + file_type).style.display = 'none';
+          } catch (error) {
+            console.error('Error:', error);
+          }
+        }
+      </script>
+        <title>{{ onebox }} - comma useradmin</title>
+      </head>
+<body>
+  <form>
+      <input name="onebox" placeholder="type a username, route, dongle id" value="{{ onebox }}">
+  </form>
+
+  <hr>results: {{ onebox }}
+  <script>var ROUTE_NAME = '{{ onebox | replace(from="/", to="|")}}';</script>
+
+  {% if users.defined is defined %}
+  <hr>
+  <b>registered users:</b><br>
+  <table id="table_users">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">name</td>
+        <td style="white-space: nowrap">created at</td>
+        <td style="white-space: nowrap">updated at</td>
+        <td style="white-space: nowrap">id</td>
+        <td style="white-space: nowrap">identity</td>
+        <td style="white-space: nowrap">email</td>
+        <td style="white-space: nowrap">points</td>
+        <td style="white-space: nowrap">superuser</td>
+      </tr>
+      {% for user in users.users %}
+      <tr>
+        <td style="white-space: nowrap"><a href="/?onebox={{ user.name }}">{{ user.name }}</a></td>
+        <td style="white-space: nowrap">{{ user.created_at }}</td>
+        <td style="white-space: nowrap">{{ user.updated_at }}</td>
+        <td style="white-space: nowrap">{{ user.id }}</td>
+        <td style="white-space: nowrap">{{ user.identity }}</td>
+        <td style="white-space: nowrap">{{ user.email }}</td>
+        <td style="white-space: nowrap">{{ user.points }}</td>
+        <td style="white-space: nowrap">{{ user.superuser }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if devices.defined is defined %}
+  <hr>
+  <b>devices:</b><br>
+  <table id="table_devices">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">dongle_id</td>
+        <td style="white-space: nowrap">serial</td>
+        <td style="white-space: nowrap">device_type</td>
+        <td style="white-space: nowrap">alias</td>
+        <td style="white-space: nowrap">sim_id</td>
+        <td style="white-space: nowrap">prime</td>
+        <td style="white-space: nowrap">prime_type</td>
+        <td style="white-space: nowrap">last_athena_ping</td>
+        <td style="white-space: nowrap"></td>
+      </tr>
+      {% for device in devices.devices %}
+      <tr>
+        <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+        <td style="white-space: nowrap">{{ device.serial }}</td>
+        <td style="white-space: nowrap">{{ device.device_type }}</td>
+        <td style="white-space: nowrap">{{ device.alias }}</td>
+        <td style="white-space: nowrap">{{ device.sim_id }}</td>
+        <td style="white-space: nowrap">{{ device.prime }}</td>
+        <td style="white-space: nowrap">{{ device.prime_type }}</td>
+        {% if device.online %}
+        <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+        {% else %}
+        <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+        {% endif %}
+        {% if device.uploads_allowed %}
+        <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
+        {% else %}
+        <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
+        {% endif%}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if segments.defined is defined %}
+  <hr>
+  <a href="link" style="color: green">connect</a>
+  <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|")}}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
+  <hr>
+  {% for segment in segments.segments %}
+    {% set_global canonical_name = segment.canonical_name %}
+  {% endfor %}
+  <b>dongle id:</b> <a href="/?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
+  <hr>
+  <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
+  <b>segments:</b><br>
+  <table id="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Parsed Data</th>
+        <th>qlog</th>
+        <th>qcam</th>
+        <th>rlog</th>
+        <th>fcam</th>
+        <th>dcam</th>
+        <th>ecam</th>
+      </tr>
+    </thead>
+    {% for segment in segments.segments %}
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">{{ segment.number }}</td>
+        <td style="white-space: nowrap">
+          {% if segment.ulog_url != "" %}
+          <a href="{{ segment.ulog_url }}">
+            {{ segment.canonical_name }}
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.qlog_url != "" %}
+          <a href="{{ segment.qlog_url }}">qlog.bz2</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_qlog" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qlog.bz2', '{{ segment.number }}', 'qlog')">Upload</button>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if segment.qcam_url != "" %}
+          <a href="{{ segment.qcam_url }}">camera.ts</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_qcam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_qcam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_qcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qcamera.ts', '{{ segment.number }}', 'qcam')">Upload</button>
+          {% endif %}
+        </td>
+        <!-- rlog -->
+        <td>
+          {% if segment.rlog_url != "" %}
+          <a href="{{ segment.rlog_url }}">rlog.bz2</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog.bz2', '{{ segment.number }}', 'rlog')">Upload</button>
+          {% endif %}
+        </td>
+        <!-- fcam -->
+        <td>
+          {% if segment.fcam_url != "" %}
+          <a href="{{ segment.fcam_url }}">fcamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_fcam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcam.hevc', '{{ segment.number }}', 'fcam')">Upload</button>
+          {% endif %}
+        </td>
+        <!-- dcam -->
+        <td>
+          {% if segment.dcam_url != "" %}
+          <a href="{{ segment.dcam_url }}">dcamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_dcam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcam.hevc', '{{ segment.number }}', 'dcam')">Upload</button>
+          {% endif %}
+        </td>
+        <!-- ecam -->
+        <td>
+          {% if segment.ecam_url != "" %}
+          <a href="{{ segment.ecam_url }}">ecamera.hevc</a>
+          {% else %}
+          <div id="progressContainer_{{ segment.number }}_ecam" style="display:none;">
+            <progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress>
+          </div>
+          <button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecam.hevc', '{{ segment.number }}', 'ecam')">Upload</button>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if routes.defined is defined %}
+  <hr>
+  <b>routes:</b><br>
+  <table id="table_routes">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">start_time</td>
+        <td style="white-space: nowrap">route_name</td>
+        <td style="white-space: nowrap">connect</td>
+        <td style="white-space: nowrap">preserve</td>
+        <td style="white-space: nowrap">miles</td>
+        <td style="white-space: nowrap">maxqlog</td>
+        <td style="white-space: nowrap">maxqcamera</td>
+        <td style="white-space: nowrap">platform</td>
+        <td style="white-space: nowrap">git_remote</td>
+        <td style="white-space: nowrap">git_branch</td>
+      </tr>
+      {% for route in routes.routes %}
+      <tr>
+        <td style="white-space: nowrap">{{ route.start_time }}</td>
+        <td style="white-space: nowrap">
+          <a href="/?onebox={{ route.fullname }}">
+            {{ route.fullname }}
+          </a>
+        </td>
+        <td style="white-space: nowrap">
+          {% if route.connect_url is defined %}
+          <a href="{{ route.connect_url }}">
+            connect
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">
+          {% if route.preserve_url is defined %}
+          <a href="{{ route.preserve_url }}">
+            preserve
+          </a>
+          {% endif %}
+        </td>
+        <td style="white-space: nowrap">{{ route.length }}</td>
+        <td style="white-space: nowrap">{{ route.maxqlog }}</td>
+        <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
+        <td style="white-space: nowrap">{{ route.platform }}</td>
+        <td style="white-space: nowrap">{{ route.git_remote }}</td>
+        <td style="white-space: nowrap">{{ route.git_branch }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if device_users.defined is defined %}
+  <hr>
+  <b>authorized users:</b><br>
+  <table id="table_device_users">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">email</td>
+        <td style="white-space: nowrap"></td>
+        <td style="white-space: nowrap">access_level</td>
+        <td style="white-space: nowrap"></td>
+      </tr>
+      {% for device_user in device_users %}
+      <tr>
+        <td style="white-space: nowrap"><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
+        <td style="white-space: nowrap"></td>
+        <td style="white-space: nowrap">{{ device_user.access_level }}</td>
+        <td style="white-space: nowrap">
+          <a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">
+            remove
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if bootlogs.defined is defined %}
+  <hr>
+  <b>boot logs:</b><br>
+  <table id="table_bootlogs">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">Parsed Boot log</td>
+        <td style="white-space: nowrap">download</td>
+      </tr>
+      {% for bootlog in bootlogs.bootlogs %}
+      <tr>
+        <td style="white-space: nowrap">
+          <a href="{{ bootlog.unlog_url }}">
+            {{ bootlog.date_time }}
+          </a>
+        </td>
+        <td style="white-space: nowrap">
+          <a href="{{ bootlog.bootlog_url }}">
+            download
+          </a>
+        </td>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  
+
+  <hr>
+  <a href="/auth/logout">Sign out</a>
+</body>
+</html>

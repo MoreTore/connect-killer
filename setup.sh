@@ -37,7 +37,7 @@ fi
 
 cd $BASEDIR/frontend
 pnpm install
-pnpm build
+pnpm build:production
 cd $BASEDIR
 
 # Install Docker if we are not in wsl

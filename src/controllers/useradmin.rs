@@ -14,9 +14,14 @@ extern crate url;
 
 #[derive(Deserialize)]
 pub struct OneBox {
-    onebox: String
+    onebox: Option<String>
 }
 
+#[derive(Serialize)]
+pub struct UsersTemplate {
+    pub defined: bool,
+    pub users: Vec<_entities::users::Model>
+}
 #[derive(Serialize)]
 pub struct RoutesTemplate {
     pub defined: bool,
@@ -45,6 +50,7 @@ pub struct MasterTemplate {
     pub ws_host: String,
     pub onebox: String,
     pub dongle_id: String,
+    pub users: Option<UsersTemplate>,
     pub segments: Option<SegmentsTemplate>,
     pub devices: Option<DevicesTemplate>,
     pub routes: Option<RoutesTemplate>,
@@ -67,6 +73,15 @@ pub async fn onebox_handler(
     Extension(client): Extension<Client>,
     Query(params): Query<OneBox>,
 ) -> Result<impl IntoResponse> {
+    
+    let user_model = match auth.user_model {
+        Some(user_model) => user_model,
+        None => return unauthorized("Couldn't find user"), // Error handling for when auth.user_model is None. Should never get here
+    };
+    let onebox = match params.onebox {
+        Some(onebox) => onebox,
+        None => user_model.name.clone(),
+    };
     // Regex to match a complete canonical route name
     let re = regex::Regex::new(r"^([0-9a-z]{16})([_|/|]?([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}))?$").unwrap();
 
@@ -74,8 +89,9 @@ pub async fn onebox_handler(
     let mut dongle_id: Option<String> = None;
     let mut timestamp: Option<String> = None;
 
+
     // Check for route or dongle ID
-    if let Some(caps) = re.captures(&params.onebox) {
+    if let Some(caps) = re.captures(&onebox) {
         dongle_id = Some(caps[1].to_string());
         if let Some(ts) = caps.get(3) {
             timestamp = Some(ts.as_str().to_string());
@@ -85,68 +101,67 @@ pub async fn onebox_handler(
     let api_host = ctx.config.server.full_url().replace("http", "https");
     let ws_host = api_host.replace("3112", "3223");
 
+    let mut master_template = MasterTemplate {
+        dongle_id: dongle_id.clone().unwrap_or_default(),
+        onebox: onebox,
+        api_host: api_host,
+        ws_host: ws_host,
+        ..Default::default()
+    };
+    if user_model.superuser {
+        master_template.users = Some(UsersTemplate {
+            defined: true,
+            users: _entities::users::Model::find_all_users(&ctx.db).await
+        });
+    } else {
+        master_template.users = Some(UsersTemplate {
+            defined: true,
+            users: vec![user_model.clone()],
+        });
+    }
+
     if let Some(canonical_route) = canonical_route_name {
         let mut segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
         if let Some(segment_models) = segment_models.as_mut() {
             segment_models.sort_by(|a, b| a.number.cmp(&b.number));
         }
-    
-        // Create and render master template
-        let master_template = MasterTemplate { 
-            dongle_id: dongle_id.unwrap_or_default(),
-            segments: segment_models.map(|segments| SegmentsTemplate { 
-                defined: true, 
-                segments 
-            }), 
-            onebox: params.onebox,
-            api_host: api_host,
-            ws_host: ws_host,
-            ..Default::default()
-        };
+
+        master_template.segments = segment_models.map(|segments| SegmentsTemplate { 
+            defined: true, 
+            segments 
+        });
     
         views::route::admin_route(v, master_template)
     } else if let Some(d_id) = dongle_id {
-        let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?;
-        //let user = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-        //let device_models = _entities::devices::Model::find_all_devices(&ctx.db).await;
-        //let device_model: Option<_entities::devices::Model> = _entities::devices::Model::find_device(&ctx.db, &d_id).await;
-        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-        let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
-        let bootlogs_models: Vec<_entities::bootlogs::Model> = _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?;
-
-        let master_template: MasterTemplate = MasterTemplate { 
-            routes: Some(RoutesTemplate { 
-                defined: true, 
-                routes: route_models 
-            }), 
-            devices: Some(DevicesTemplate {
-                defined: true,
-                devices: device_models,
-            }),
-            bootlogs: Some(BootlogsTemplate {
-                defined: true,
-                bootlogs: bootlogs_models
-            }),
-            onebox: params.onebox,
-            api_host: api_host,
-            ws_host: ws_host,
-            ..Default::default()
-        };
-
+        //let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?;
+        //let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
+        //let bootlogs_models: Vec<_entities::bootlogs::Model> = _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?;
+        master_template.routes = Some(RoutesTemplate { 
+            defined: true, 
+            routes: _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?, 
+        });
+        master_template.devices = Some(DevicesTemplate {
+            defined: true,
+            devices: _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await,
+        });
+        master_template.bootlogs = Some(BootlogsTemplate {
+            defined: true,
+            bootlogs: _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?,
+        });
         views::route::admin_route(v, master_template)
 
     } else {
-        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?; // should only get here if user is allowed
-        let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
-        let master_template = MasterTemplate { 
-            devices: Some(DevicesTemplate {
+        if user_model.superuser {
+            master_template.devices = Some(DevicesTemplate {
                 defined: true,
-                devices: device_models
-            }),
-            onebox: params.onebox,
-            api_host: api_host,
-            ws_host: ws_host,
-            ..Default::default() 
+                devices: _entities::devices::Model::find_all_devices(&ctx.db).await
+            });
+        } else {
+            master_template.devices = Some(DevicesTemplate {
+                defined: true,
+                devices: _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await
+            });
+
         };
         // Fallback response
         views::route::admin_route(v, master_template)

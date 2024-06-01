@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(primary_key, auto_increment = false)] //TODO fix this table
     pub dongle_id: String,
     pub bootlog_url: String,
     pub unlog_url: String,

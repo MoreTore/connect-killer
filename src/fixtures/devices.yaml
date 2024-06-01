@@ -1,5 +1,5 @@
 ---
-- dongle_id: 3b58edf884ab4eaf
+- dongle_id: aaaaaaaaaaaaaaaa
   public_key: 1111ss11-1111-1111-1111-111111111111
   owner_id: 1
   created_at: "2023-11-12T12:34:56.789"
@@ -12,6 +12,6 @@
   prime_type: 1
   uploads_allowed: true
   device_type: three
-  alias: ryleymcc C3
+  alias: test C3
   online: true
   last_athena_ping: 0

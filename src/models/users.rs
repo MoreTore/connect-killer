@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use chrono::offset::Local;
-use loco_rs::{auth::jwt, hash, prelude::*};
+use loco_rs::{hash, prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
+use crate::middleware::jwt;
 pub use super::_entities::users::{self, ActiveModel, Entity, Model};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -122,7 +122,14 @@ impl super::_entities::users::Model {
     //         .await?;
     //     user.ok_or_else(|| ModelError::EntityNotFound)
     // }
-
+    pub async fn find_all_users(
+        db: &DatabaseConnection,
+    ) -> Vec<Model> {
+        Entity::find()
+            .all(db)
+            .await
+            .expect("Database query failed")
+    }
     /// finds a user by the provided pid
     ///
     /// # Errors
