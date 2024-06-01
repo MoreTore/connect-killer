@@ -1,5 +1,5 @@
 #![allow(clippy::unused_async)]
-use loco_rs::{auth::jwt, hash, prelude::*};
+use loco_rs::{ hash, prelude::*};
 use axum::{
     extract::{Path, Query, State}, Extension
 };
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Write as FmtWrite;
 
-use crate::{common, models::_entities, enforce_ownership_rule};
+use crate::{common, models::_entities, enforce_ownership_rule, middleware::jwt};
 
 use super::v1_responses::*;
 
@@ -252,12 +252,12 @@ async fn upload_urls_handler(
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
 ) -> Result<Response> {
-    if auth.device_model.is_none() {
-        return unauthorized("Only registered devices can upload");
-    }
-    if !auth.device_model.unwrap().uploads_allowed {
-        return unauthorized("Uploads ignored");
-    }
+    // if auth.device_model.is_none() {
+    //     return unauthorized("Only registered devices can upload");
+    // }
+    // if !auth.device_model.unwrap().uploads_allowed {
+    //     return unauthorized("Uploads ignored");
+    // }
     data.validate_expiry();
     let jwt_secret = ctx.config.get_jwt_config()?;
     if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)

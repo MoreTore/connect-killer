@@ -26,7 +26,6 @@ use crate::{
     controllers, initializers,
     models::_entities::{devices, notes, routes, segments, users},
     tasks,
-    workers::downloader::DownloadWorker,
 };
 
 use reqwest::{Client};
@@ -97,7 +96,7 @@ impl Hooks for App {
 
     fn routes(ctx: &AppContext) -> AppRoutes {
         if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) { 
-            return AppRoutes::with_default_routes();//.add_route(controllers::auth::routes());
+            return AppRoutes::with_default_routes();
         }
         AppRoutes::with_default_routes()
             .add_route(controllers::ws::routes())
@@ -106,9 +105,6 @@ impl Hooks for App {
             .add_route(controllers::connectincomming::routes())
             .add_route(controllers::connectdata::routes())
             .add_route(controllers::v1::routes())
-            .add_route(controllers::notes::routes())
-            //.add_route(controllers::auth::routes())
-            .add_route(controllers::user::routes())
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
@@ -118,7 +114,6 @@ impl Hooks for App {
         p.register(crate::workers::bootlog_parser::BootlogParserWorker::build(ctx));
         p.register(crate::workers::jpg_extractor::JpgExtractorWorker::build(ctx));
         p.register(crate::workers::log_parser::LogSegmentWorker::build(ctx));
-        p.register(DownloadWorker::build(ctx));
     }
 
     fn register_tasks(tasks: &mut Tasks) {

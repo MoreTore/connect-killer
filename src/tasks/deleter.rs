@@ -17,9 +17,7 @@ use crate::{models::_entities::{
 };
 
 fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, ParseError> {
-    // Define the format that matches the input timestamp
-    let format = "%Y-%m-%d--%H-%M-%S";
-    NaiveDateTime::parse_from_str(timestamp, format)
+    NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d--%H-%M-%S")
 }
 
 pub struct Deleter;
@@ -69,22 +67,19 @@ impl Task for Deleter {
                             let mut deleted = false;
                             if let Ok(derived_dt) = parse_timestamp(timestamp) { // Try using file name timestamp first
                                 if derived_dt <= older_than {
-                                    tracing::info!("Deleting file: {file_name}");
-                                    client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
+                                    delete_file(&client, &file_name).await;
                                     deleted = true;
                                 }
                             };
                             if segment.created_at <= older_than && !deleted { // Fallback to created_at
-                                tracing::info!("Deleting file: {file_name}");
-                                client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
+                                delete_file(&client, &file_name).await;
                             }
                         },
                         Err(e) => {
                             tracing::error!("No segment found for file: {file_name}. ");
                             if let Ok(derived_dt) = parse_timestamp(timestamp) {
                                 if derived_dt <= older_than {
-                                    tracing::info!("Deleting file: {file_name}");
-                                    client.delete(mkv_helpers::get_mkv_file_url(&file_name)).send().await.unwrap();
+                                    delete_file(&client, &file_name).await;
                                 }
                             };
                         }   
@@ -92,13 +87,16 @@ impl Task for Deleter {
                 }
                 None => {
                     tracing::error!("Unkown file or bootlog in kv store. Deleting it!");
-                    let internal_file_url = mkv_helpers::get_mkv_file_url(&file_name);
-                    tracing::info!("Deleting file: {internal_file_url}");
-                    client.delete(&internal_file_url).send().await.unwrap();
+                    delete_file(&client, &file_name).await;
                 }
             }
 
         }
         Ok(())
     }
+}
+
+async fn delete_file(client: &Client, file_name: &str) {
+    tracing::info!("Deleting file: {file_name}");
+    client.delete(&mkv_helpers::get_mkv_file_url(file_name)).send().await.unwrap();
 }

@@ -18,7 +18,7 @@ Ryleymcc
 
 
 
-use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
@@ -441,11 +441,7 @@ async fn parse_qlog(
         let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
 
         match event.which().map_err(Box::from)? {
-            log_capnp::event::InitData(init_data) => {
-                if let Ok(init_data) = init_data {}
-                writeln!(writer, "{:#?}", event).map_err(Box::from)?;
-            }
-            log_capnp::event::GpsLocationExternal(gps) => {
+            log_capnp::event::GpsLocationExternal(gps) | log_capnp::event::GpsLocation(gps)=> {
                 if let Ok(gps) = gps {
                     if ((gps.get_flags() % 2) == 1) { // has fix
                         let lat = gps.get_latitude();
@@ -483,7 +479,17 @@ async fn parse_qlog(
                     thumbnails.push(image_data.to_vec());
                 }
             }
-            _ => {writeln!(writer, "{:#?}", event).map_err(Box::from)?;}
+            log_capnp::event::InitData(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::PandaStates(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::DeviceState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::Can(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::Sendcan(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::ErrorLogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::GpsLocationExternal(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            log_capnp::event::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            _ => continue,
         }
     }
     if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
@@ -507,25 +513,18 @@ async fn parse_qlog(
         let mut combined_img = ImageBuffer::new(combined_width, 80);
 
         for (i, thumbnail) in downscaled_thumbnails.iter().enumerate() {
-            let offset = i as u32 * (1536 / 12);
-            for y in 0..80 {
-                for x in 0..(1536 / 12) {
-                    let pixel = thumbnail.get_pixel(x, y);
-                    combined_img.put_pixel(x + offset, y, *pixel);
-                }
-            }
+                    let offset = i as u32 * (1536 / 12);
+                    for y in 0..80 {
+                        for x in 0..(1536 / 12) {
+                            let pixel = thumbnail.get_pixel(x, y);
+                            combined_img.put_pixel(x + offset, y, *pixel);
+                        }
+                    }
         }
 
-        // Create the final image with a height of 96px
-        let mut final_img = ImageBuffer::new(1536, 96);
+        // Create the final image with a height of 80px
+        let mut final_img = ImageBuffer::new(combined_width, 80);
         image::imageops::overlay(&mut final_img, &DynamicImage::ImageRgba8(combined_img), 0, 0);
-
-        // Fill the bottom 16px with black in parallel
-        final_img.par_chunks_mut(1536 * 4).skip(80).for_each(|row| {
-            for chunk in row.chunks_mut(4) {
-                chunk.copy_from_slice(&[0, 0, 0, 255]);
-            }
-        });
 
         // Convert the final image to a byte vector
         let img_bytes = {
