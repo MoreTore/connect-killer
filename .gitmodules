@@ -7,3 +7,6 @@
 [submodule "minikeyvalue"]
 	path = minikeyvalue
 	url = https://github.com/MoreTore/minikeyvalue.git
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/MoreTore/connect.git
