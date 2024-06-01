@@ -82,18 +82,23 @@ struct UrlResponse {
 // }
 
 pub async fn get_route_files(
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(route_id): Path<String>,
     Extension(client): Extension<Client>
 ) -> impl IntoResponse {
-
-    println!("Fetching files for Route ID: {}", route_id);
-    let response = get_links_for_route(&route_id, &client).await;
-    match response {
-        Ok((_status, body)) => Ok(format::json(body)),
-        Err(_e) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    if let Ok(token) = jwt::JWT::new(&jwt_secret.secret).generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string()) {
+        println!("Fetching files for Route ID: {}", route_id);
+        let response = get_links_for_route(&route_id, &client, &token).await;
+        match response {
+            Ok((_status, body)) => Ok(format::json(body)),
+            Err(e) => unauthorized("err"),
+        }
+    } else {
+        return unauthorized("err");
     }
+
 }
 
 async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for security
@@ -135,7 +140,8 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
 
 async fn get_links_for_route(
     route_id: &str,
-    client: &Client
+    client: &Client,
+    jwt: &str
 ) -> Result<(StatusCode, FilesResponse), Box<dyn Error>> {
     // Assuming common::mkv_helpers::list_keys_starting_with is an async function
     let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "_"));
@@ -157,9 +163,10 @@ async fn get_links_for_route(
             let parts: Vec<&str> = key_str.split('_').collect();
             if parts.len() == 2 {
                 urls.push(format!(
-                    "https://connect-api.duckdns.org/connectdata{}/{}",
+                    "https://connect-api.duckdns.org/connectdata{}/{}?sig={}",
                     parts[0],
-                    transform_route_string(parts[1])
+                    transform_route_string(parts[1]),
+                    jwt
                 ));
             }
         }
