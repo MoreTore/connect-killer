@@ -138,26 +138,26 @@ async fn exit_handler(
     }
 }
 
-async fn reset_dongle(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>) -> () {
-    let json_request = JsonRpcRequest {
-        method: "resetDongle".to_string(),
-        params: Some(serde_json::json!({})),
-        jsonrpc: "2.0".to_string(),
-        id: 1,
-    };
-    match serde_json::to_string(&json_request) {
-        Ok(json_message) => {
-            let ws_message = Message::Text(json_message);
-            tracing::info!("Device not registered. Reseting DongleId: {}", endpoint_dongle_id);
-            if let Err(e) = forward_command_to_device(&endpoint_dongle_id, &manager, &ws_message).await {
-                tracing::error!("Failed to forward command to device: {}", e);
-            }
-        },
-        Err(e) => {
-            tracing::trace!("Failed to serialize JSON-RPC request: {}", e);
-        }
-    }
-}
+// async fn reset_dongle(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>) -> () {
+//     let json_request = JsonRpcRequest {
+//         method: "resetDongle".to_string(),
+//         params: Some(serde_json::json!({})),
+//         jsonrpc: "2.0".to_string(),
+//         id: 1,
+//     };
+//     match serde_json::to_string(&json_request) {
+//         Ok(json_message) => {
+//             let ws_message = Message::Text(json_message);
+//             tracing::info!("Device not registered. Reseting DongleId: {}", endpoint_dongle_id);
+//             if let Err(e) = forward_command_to_device(&endpoint_dongle_id, &manager, &ws_message).await {
+//                 tracing::error!("Failed to forward command to device: {}", e);
+//             }
+//         },
+//         Err(e) => {
+//             tracing::trace!("Failed to serialize JSON-RPC request: {}", e);
+//         }
+//     }
+// }
 
 async fn handle_socket(
     ctx: &AppContext,

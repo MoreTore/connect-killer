@@ -21,11 +21,14 @@ pub async fn file_stream(
     let lookup_key = format!("{dongle_id}_{timestamp}--{segment}--{file}");
     let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
     let mut request_builder = client.get(&internal_file_url);
-  
+    
     // Check for range header and forward it if present
-    if let Some(range) = headers.get(hyper::header::RANGE) {
+    let range_header_present = if let Some(range) = headers.get(hyper::header::RANGE) {
         request_builder = request_builder.header(hyper::header::RANGE, range.clone());
-    }
+        true
+    } else {
+        false
+    };
   
     let res = request_builder.send().await;
   
@@ -46,7 +49,11 @@ pub async fn file_stream(
                 }
                 
                 let body = reqwest::Body::wrap_stream(response.bytes_stream());
-                response_builder = response_builder.status(StatusCode::PARTIAL_CONTENT);
+                if range_header_present {
+                    response_builder = response_builder.status(StatusCode::PARTIAL_CONTENT);
+                } else {
+                    response_builder = response_builder.status(StatusCode::OK);
+                }
                 let proxy_response = response_builder.body(body).unwrap();
   
                 Ok(proxy_response)
