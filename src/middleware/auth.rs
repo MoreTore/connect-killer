@@ -20,7 +20,6 @@ use crate::models::_entities::{devices, users};
 const QUERY_TOKEN_PREFIX: &str = "sig";
 const TOKEN_PREFIX: &str = "JWT ";
 const AUTH_HEADER: &str = "Authorization";
-const AUTH_COOKIE: &str = "cookie";
 const AUTH_COOKIE_NAME: &str = "jwt";
 
 // Define a struct to represent user authentication information serialized

@@ -408,6 +408,22 @@ async fn route_segment(
     format::json(route_models)
 }
 
+async fn route_info(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(fullname): Path<String>,
+) -> Result<Response> {
+    let route_model = _entities::routes::Model::find_route(&ctx.db, &fullname).await?;
+    if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
+
+        } else {
+            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &route_model.device_dongle_id).await?; // just error if not found
+        }
+    }
+    format::json(route_model)
+}
+
 
 async fn preserved_routes( // TODO
     auth: crate::middleware::auth::MyJWT,
@@ -492,8 +508,9 @@ pub fn routes() -> Routes {
         //.add("/echo", post(echo))
         .add("/me", get(get_me))
         .add("/me/devices", get(get_my_devices))
-        .add("/route/:route_id/files", get(get_route_files))
-        .add("/route/:route_id/qcamera.m3u8", get(get_qcam_stream))
+        .add("/route/:fullname", get(route_info))
+        .add("/route/:fullname/files", get(get_route_files))
+        .add("/route/:fullname/qcamera.m3u8", get(get_qcam_stream))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
         .add(".4/:dongleId/upload_url/", get(get_upload_url))
         .add("/devices/:dongle_id/routes_segments", get(route_segment))
