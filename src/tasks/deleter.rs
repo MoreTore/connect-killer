@@ -4,14 +4,10 @@ use regex::Regex;
 use serde_json::from_str;
 use serde_json::Value;
 use loco_rs::prelude::*;
-use chrono::{DateTime, Utc, Duration, NaiveDateTime, ParseError};
+use chrono::{Utc, Duration, NaiveDateTime, ParseError};
 
 use crate::{models::_entities::{
-    devices,
-    users,
     segments,
-    routes,
-    bootlogs,
     },
     common::mkv_helpers,
 };
@@ -31,7 +27,7 @@ impl Task for Deleter {
     }
     async fn run(&self, ctx: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
         println!("Task Deleter generated");
-        let re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
+        let _re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
         let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
 
         let client = Client::new();
@@ -61,7 +57,7 @@ impl Task for Deleter {
                     let dongle_id = &caps[1];
                     let timestamp = &caps[2];
                     let segment = &caps[3];
-                    let file_type = &caps[4];
+                    let _file_type = &caps[4];
                     match segments::Model::find_by_segment(&ctx.db, &format!("{dongle_id}|{timestamp}--{segment}")).await {
                         Ok(segment) => {
                             let mut deleted = false;
@@ -75,7 +71,7 @@ impl Task for Deleter {
                                 delete_file(&client, &file_name).await;
                             }
                         },
-                        Err(e) => {
+                        Err(_e) => {
                             tracing::error!("No segment found for file: {file_name}. ");
                             if let Ok(derived_dt) = parse_timestamp(timestamp) {
                                 if derived_dt <= older_than {

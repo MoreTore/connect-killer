@@ -167,22 +167,6 @@ pub struct DeviceClaims {
     pub exp: usize,
 }
 
-
-/// extract JWT token from context configuration
-///
-/// # Errors
-/// Return an error when JWT token not configured
-fn get_jwt_from_config(ctx: &AppContext) -> Result<&JWTConfig, Error> {
-    ctx.config
-        .auth
-        .as_ref()
-        .ok_or_else(|| Error::string("auth not configured"))?
-        .jwt
-        .as_ref()
-        .ok_or_else(|| Error::string("JWT token not configured"))
-}
-
-
 fn extract_token(parts: &Parts) -> Result<String, Error> {
     // Attempt to extract the token from the query string
     extract_token_from_query(QUERY_TOKEN_PREFIX, parts)

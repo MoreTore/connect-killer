@@ -2,10 +2,6 @@
 use futures::{StreamExt};
 use loco_rs::prelude::*;
 use bytes::BytesMut;
-use crate::enforce_device_upload_permission;
-use crate::common;
-use crate::workers::bootlog_parser::{BootlogParserWorker, BootlogParserWorkerArgs};
-use crate::workers::log_parser::{LogSegmentWorker, LogSegmentWorkerArgs};
 use axum::{
     extract::{Path, State},
     http::{StatusCode},
@@ -15,14 +11,19 @@ use axum::{
   };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn echo(req_body: String) -> String {
-    req_body
-}
-
-pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
-    // do something with context (database, etc)
-    format::text("hello")
-}
+use crate::{
+    workers::{
+        bootlog_parser::{
+            BootlogParserWorker, 
+            BootlogParserWorkerArgs
+        },
+        log_parser::{
+            LogSegmentWorker, 
+            LogSegmentWorkerArgs
+        }
+    },
+    common,
+};
 
 pub async fn upload_bootlogs(
     auth: crate::middleware::auth::MyJWT,
@@ -31,7 +32,7 @@ pub async fn upload_bootlogs(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
 ) -> Result<(StatusCode, &'static str)> {
-    //enforce_device_upload_permission!(auth);
+    enforce_device_upload_permission!(auth);
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}", dongle_id, file));
     
     let mut buffer = BytesMut::new();
@@ -96,7 +97,7 @@ pub async fn upload_driving_logs(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
 ) -> impl IntoResponse {
-    //enforce_device_upload_permission!(auth);
+    enforce_device_upload_permission!(auth);
     // Construct the URL to store the file
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file));
     tracing::trace!("full_url: {full_url}");
@@ -173,6 +174,4 @@ pub fn routes() -> Routes {
         .prefix("connectincoming")
         .add("/:dongle_id/:timestamp/:segment/:file", put(upload_driving_logs))
         .add("/:dongle_id/boot/:file", put(upload_bootlogs))
-        .add("/", get(hello))
-        .add("/echo", post(echo))
 }

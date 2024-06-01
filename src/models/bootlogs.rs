@@ -2,7 +2,7 @@ use loco_rs::model::ModelResult;
 use sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait};
 use super::_entities::bootlogs::{self, ActiveModel, Model};
 
-use chrono::prelude::{Utc,DateTime};
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)

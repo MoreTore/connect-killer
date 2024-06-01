@@ -1,11 +1,11 @@
 use sea_orm::{entity::prelude::*, DeleteResult, TransactionTrait};
-use migration::m20240424_000004_segments::Segments as SegmentFields;
+
 use loco_rs::{prelude::*};
 use serde::{Serialize};
 
 pub use super::_entities::segments::{self, ActiveModel, Entity, Model};
 
-use chrono::prelude::{Utc,DateTime};
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)

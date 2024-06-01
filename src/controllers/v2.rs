@@ -1,9 +1,11 @@
 #![allow(clippy::unused_async)]
+use std::env;
+use sha2::{Sha256, Digest};
+use hex;
 use axum::{
-    extract::{Form, Query, State, FromRequest, FromRequestParts},
-    http::{HeaderMap, HeaderValue, StatusCode, Request, header},
-    response::{Html, IntoResponse, Redirect}, 
-	Extension,
+    extract::{Form, Query, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::{IntoResponse},
 	body::Body,
 };
 use loco_rs::prelude::*;
@@ -11,14 +13,6 @@ use serde::{Serialize, Deserialize};
 use jsonwebtoken::{
     decode, Algorithm, DecodingKey, TokenData, Validation,
 };
-use dotenv::dotenv;
-use std::env;
-
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
-
-use sha2::{Sha256, Digest};
-use hex;
 
 use crate::models::_entities;
 use crate::models::users::OAuthUserParams;
@@ -78,15 +72,6 @@ struct PilotAuthResponse {
     access_token: String,
 }
 
-pub async fn echo(req_body: String) -> String {
-    req_body
-}
-
-pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
-    // do something with context (database, etc)
-    format::text("hello")
-}
-
 async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<TokenData<DeviceClaims>> {
     //let mut validate = Validation::new(Algorithm::RS256);
     //validate.leeway = 0;
@@ -97,7 +82,7 @@ async fn decode_register_token(params: &DeviceRegistrationParams) -> Option<Toke
     );
     match claims {
         Ok(claims) => Some(claims),
-        Err(e) => None,
+        Err(_e) => None,
     }
 }
 
@@ -146,7 +131,7 @@ async fn decode_pair_token(ctx: &AppContext, jwt: &str) -> Result<DevicePairClai
     
     let device = match _entities::devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
         Ok(device) => device,
-        Err(e) => return Ok(token_data.claims),
+        Err(_e) => return Ok(token_data.claims),
     };
 
     let claims = decode::<DevicePairClaims>(
@@ -175,7 +160,7 @@ async fn pilotpair(
 
     if claims.pair {
         let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-        let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
+        let device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
         let first_pair = device_model.owner_id.is_none();
         
         if first_pair { // only pair if it wasn't already
@@ -200,7 +185,7 @@ struct GithubAuthParams {
 
 
 async fn github_redirect_handler(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     Query(params): Query<GithubAuthParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
     if let Some(state) = params.state {
@@ -384,8 +369,6 @@ async fn post_auth( // used for portal
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v2")
-        .add("/", get(hello))
-        .add("/echo", post(echo))
         .add("/pilotauth", post(pilotauth))
         .add("/pilotpair", post(pilotpair))
         .add("/auth", post(post_auth).get(get_auth))

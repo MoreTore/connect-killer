@@ -18,7 +18,7 @@ Ryleymcc
 
 
 
-use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
@@ -44,10 +44,10 @@ use ffmpeg::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
-use tokio::time::{sleep, Duration};
+
 use std::collections::HashMap;
 use tokio::sync::{Mutex, Notify};
-use std::thread;
+
 use std::sync::Arc;
 use once_cell::sync::Lazy;
 
@@ -66,7 +66,7 @@ pub struct LogSegmentWorkerArgs {
     pub create_time      : i64, // This is the time the call was made to the worker.
 }
 
-use sea_orm::{DatabaseConnection, DbErr, Statement, FromQueryResult};
+use sea_orm::{DatabaseConnection, DbErr, Statement};
 use async_trait::async_trait;
 
 pub struct LockManager {
@@ -131,12 +131,12 @@ impl worker::AppWorker<LogSegmentWorkerArgs> for LogSegmentWorker {
 impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
     async fn perform(&self, args: LogSegmentWorkerArgs) -> worker::Result<()> {
         let lock_manager = self.lock_manager.clone();
-        let start = Instant::now();
+        let start_time = Instant::now();
         tracing::trace!("Starting QlogParser for URL: {}", args.internal_file_url);
         let client = self.client.clone();
 
         // check if the device is in the database
-        let device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+        let _device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
             Err(e) => {
                 tracing::info!("Recieved file from an unregistered device. {} or DB Error: {}", &args.dongle_id, e.to_string());
@@ -235,7 +235,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             "qcamera.ts" => {
                 match get_qcam_duration(response).await {
                     Ok(duration) => seg.qcam_duration = ActiveValue::Set(duration),
-                    Err(e) => tracing::error!("failed to get duration"),
+                    Err(_e) => tracing::error!("failed to get duration"),
                 }
                 seg.qcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
             }
@@ -282,7 +282,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
 
         //active_device_model.update(&self.ctx.db).await.map_err(|e| sidekiq::Error::Message(e.to_string()))?;
-        tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed());
+        tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start_time.elapsed());
         return Ok(())
     }
 }
@@ -298,7 +298,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 //}
 
 async fn update_route_info(
-    ctx: &AppContext,
+    _ctx: &AppContext,
     active_route_model: &mut routes::ActiveModel,
     segment_models: &Vec<segments::Model>,
 ) -> worker::Result<()> {
@@ -331,9 +331,9 @@ async fn update_route_info(
     let mut maxecamera = 0;
     let mut maxlog = 0;
     let mut maxqlog = 0;
-    let mut proclog = 0;
-    let mut procqcamera = 0;
-    let mut procqlog = 0;
+    let _proclog = 0;
+    let _procqcamera = 0;
+    let _procqlog = 0;
     let mut maxqcamera = 0;
     let mut miles = 0.0;
 
@@ -413,7 +413,7 @@ async fn parse_qlog(
     seg: &mut segments::ActiveModel, 
     decompressed_data: Vec<u8>, 
     args: &LogSegmentWorkerArgs, 
-    ctx: &AppContext
+    _ctx: &AppContext
 ) -> worker::Result<Vec<u8>> {
     seg.ulog_url = ActiveValue::Set(
         format!(
@@ -443,7 +443,7 @@ async fn parse_qlog(
         match event.which().map_err(Box::from)? {
             log_capnp::event::GpsLocationExternal(gps) | log_capnp::event::GpsLocation(gps)=> {
                 if let Ok(gps) = gps {
-                    if ((gps.get_flags() % 2) == 1) { // has fix
+                    if (gps.get_flags() % 2) == 1 { // has fix
                         let lat = gps.get_latitude();
                         let lng = gps.get_longitude();
                         if !gps_seen { // gps_seen is false the first time
