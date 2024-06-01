@@ -13,7 +13,7 @@ use crate::controllers::v2::DeviceRegistrationParams;
 //     pub sim_id: String,
 // }
 
-use chrono::prelude::{Utc,DateTime};
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
@@ -44,7 +44,7 @@ impl super::_entities::devices::Model {
         // Check if the device is registered already
         match devices::Model::find_device(db, dongle_id).await {
             Ok(_) => Ok(()),
-            Err(e) => {
+            Err(_e) => {
                 // Add device to db
                 let txn = db.begin().await?;
                 let device = devices::Model {
@@ -76,6 +76,18 @@ impl super::_entities::devices::Model {
             .all(db)
             .await
             .expect("Database query failed")
+    }
+
+    pub async fn find_user_device(
+        db: &DatabaseConnection,
+        user_id: i32,
+        dongle_id: &str
+    ) -> Result<Option<Model>, DbErr> {
+        devices::Entity::find()
+            .filter(devices::Column::OwnerId.eq(user_id))
+            .filter(devices::Column::DongleId.eq(dongle_id))
+            .one(db)
+            .await
     }
 
     pub async fn find_all_devices(

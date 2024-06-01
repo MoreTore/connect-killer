@@ -22,7 +22,6 @@ impl Task for SeedFromMkv {
 
     async fn run(&self, app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
         println!("Task SeedFromMkv generated");
-        let start = Instant::now();
 
         let client = Client::new();
         // Get all keys from the MKV server
@@ -134,7 +133,6 @@ impl Task for SeedFromMkv {
             thread::sleep(sec);
             println!("waiting..");
         }
-        tracing::info!("All tasks completed in {:?}", start.elapsed());
         Ok(())
     }
 }

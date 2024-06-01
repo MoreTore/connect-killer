@@ -1,16 +1,13 @@
 #![allow(clippy::unused_async)]
 use loco_rs::prelude::*;
 use reqwest::Client;
-use crate::models::_entities;
-
-use crate::views;
 use serde::{Deserialize, Serialize};
 use axum::{
     extract::{Query, State}, Extension,
 };
 extern crate url;
 
-
+use crate::{models::_entities, views};
 
 #[derive(Deserialize)]
 pub struct OneBox {
@@ -57,20 +54,10 @@ pub struct MasterTemplate {
     pub bootlogs: Option<BootlogsTemplate>,
 }
 
-pub async fn echo(req_body: String) -> String {
-    req_body
-}
-
-pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
-    // do something with context (database, etc)
-    format::text("hello")
-}
-
 pub async fn onebox_handler(
     auth: crate::middleware::auth::MyJWT,
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
-    Extension(client): Extension<Client>,
     Query(params): Query<OneBox>,
 ) -> Result<impl IntoResponse> {
     
@@ -133,9 +120,6 @@ pub async fn onebox_handler(
     
         views::route::admin_route(v, master_template)
     } else if let Some(d_id) = dongle_id {
-        //let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?;
-        //let device_models =  _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await;
-        //let bootlogs_models: Vec<_entities::bootlogs::Model> = _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?;
         master_template.routes = Some(RoutesTemplate { 
             defined: true, 
             routes: _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?, 
@@ -184,5 +168,4 @@ pub fn routes() -> Routes {
     Routes::new()
         .add("/", get(onebox_handler))
         .add("/login", get(login))
-        .add("/echo", post(echo))
 }

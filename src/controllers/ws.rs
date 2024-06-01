@@ -1,11 +1,10 @@
 #![allow(clippy::unused_async)]
 use loco_rs::prelude::*;
-
 use axum::{
     extract::{ws::{Message, 
                    WebSocket, 
                    WebSocketUpgrade}, Path 
-             }, http::HeaderMap, response::IntoResponse, routing::get, Extension, Router 
+             }, http::HeaderMap, response::IntoResponse, routing::get, Extension 
 };
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
@@ -13,10 +12,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use futures_util::{SinkExt, StreamExt};
-use serde_json::json;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-
 use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -26,7 +22,6 @@ use crate::{
         devices, 
         users
     }
-    
 };
 
 #[derive(Deserialize, Serialize)]
@@ -51,11 +46,6 @@ pub struct ConnectionManager {
     devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
     clients: Mutex<HashMap<u64, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
 }
-
-// pub struct ConnectionManager {
-//     devices: Mutex<HashMap<String, futures::stream::SplitSink<WebSocket, Message>>>,
-//     clients: Mutex<HashMap<String, futures::stream::SplitSink<WebSocket, Message>>>,
-// }
 
 impl ConnectionManager {
     pub fn new() -> Arc<Self> {
@@ -87,7 +77,7 @@ async fn handle_jsonrpc_request(
     payload.id += now_id; // roll over is ok
     let message = Message::Text(serde_json::to_string(&payload).unwrap());
 
-    if let Err(e) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
+    if let Err(_e) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
         return loco_rs::controller::bad_request("Device not connected");
     }
 
@@ -107,7 +97,7 @@ async fn handle_jsonrpc_request(
                 // Acknowledge and continue waiting for a valid response
                 continue;
             },
-            Err(e) => return loco_rs::controller::bad_request("timed out"),
+            Err(_e) => return loco_rs::controller::bad_request("timed out"),
         }
     }
 }
@@ -115,7 +105,7 @@ async fn handle_jsonrpc_request(
 async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
     let mut devices = manager.devices.lock().await;
     if let Some(device_sender) = devices.get_mut(endpoint_dongle_id) {
-        device_sender.send(message.clone()).await.map_err(|e| {
+        device_sender.send(message.clone()).await.map_err(|_e| {
             axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
         })
     } else {
@@ -130,7 +120,7 @@ async fn exit_handler(
     jwt_identity: String,
     manager: Arc<ConnectionManager>,
 ) {
-    let is_device = jwt_identity == endpoint_dongle_id;
+    let _is_device = jwt_identity == endpoint_dongle_id;
     {
         tracing::debug!("Removing device to manager: {}", endpoint_dongle_id);
         let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
@@ -144,7 +134,7 @@ async fn exit_handler(
     device_active_model.online = ActiveValue::Set(false);
     match device_active_model.update(&ctx.db).await {
         Ok(_) => (),
-        Err(e) => return,
+        Err(_e) => return,
     }
 }
 
@@ -177,23 +167,14 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
+    let _is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
 
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = socket.split();
 
     if is_device {
-        {   
-            {
-                let mut devices: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
-                tracing::info!("Adding device to manager: {}", endpoint_dongle_id);
-                devices.insert(endpoint_dongle_id.clone(), sender);
-            }
-            if !is_registered {
-                reset_dongle(&endpoint_dongle_id, &manager).await;
-                exit_handler(ctx,endpoint_dongle_id, jwt_identity, manager).await; // This seems right. We shall see..
-                return;
-            }
-        }
+        let mut devices: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
+        tracing::info!("Adding device to manager: {}", endpoint_dongle_id);
+        devices.insert(endpoint_dongle_id.clone(), sender);
     }
     
     while let Some(message_result) = receiver.next().await {
@@ -212,14 +193,14 @@ async fn handle_socket(
                 // update last_athena_ping time here
                 let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
                     Ok(device) => device,
-                    Err(e) => break,
+                    Err(_e) => break,
                 };
                 let mut device_active_model = device.into_active_model();
                 device_active_model.last_athena_ping = ActiveValue::Set(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64);
                 device_active_model.online = ActiveValue::Set(true);
                 match device_active_model.update(&ctx.db).await {
                     Ok(_) => (),
-                    Err(e) => break,
+                    Err(_e) => break,
                 }
             }
             Message::Close(_) => {
@@ -235,7 +216,7 @@ async fn handle_socket(
                 }
                 // handle other things
             }
-            Message::Binary(bin) => {
+            Message::Binary(_bin) => {
                 // let response: JsonRpcResponse = serde_json::from_str(&bin).unwrap();
                 // let mut clients = manager.clients.lock().await;
                 // if let Some(client_sender) = clients.remove(&endpoint_dongle_id) {
@@ -251,7 +232,7 @@ async fn handle_socket(
 async fn handle_device_ws(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     ws: WebSocketUpgrade,
     axum::extract::Path(endpoint_dongle_id): axum::extract::Path<String>,
     Extension(manager): Extension<Arc<ConnectionManager>>,
@@ -275,15 +256,6 @@ async fn handle_device_ws(
     }))
 }
 
-pub async fn echo(req_body: String) -> String {
-    req_body
-}
-
-pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
-    // do something with context (database, etc)
-    format::text("hello")
-}
-
 pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
     let mut devices = manager.devices.lock().await;
     for (id, sender) in devices.iter_mut() {
@@ -295,10 +267,10 @@ pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
 }
 
 pub async fn send_reset( // called from crate::middleware::auth
-    ctx: &AppContext,
+    _ctx: &AppContext,
     socket: WebSocket
 ) {
-    let (mut sender, mut receiver) = socket.split();
+    let (mut sender, _receiver) = socket.split();
         let reset_dongle_rpc = JsonRpcRequest {
             method: "resetDongle".to_string(),
             params: Some(serde_json::json!({})),
@@ -316,8 +288,6 @@ pub async fn send_reset( // called from crate::middleware::auth
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("ws")
-        .add("/", get(hello))
-        .add("/echo", post(echo))
         .add("/v2/:dongle_id", get( handle_device_ws))
         .add("/:dongle_id", get( handle_device_ws))
         .add("/:dongle_id", post( handle_jsonrpc_request))

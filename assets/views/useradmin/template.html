@@ -139,124 +139,16 @@
       }
     </script>
     <script>
-      // Global WebSocket connection
-      // let ws;
-      
-      // Function to open a WebSocket connection
-      // function openWebSocket() {
-      //   const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6IkZyb250RW5kIiwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjQzMjUzMiwiZXhwIjo1MzUyMn0.QaGCFMY0NNUtAGcUkVrH27wVqGbcawiPHgh5E8Gam-Y';
-      //   document.cookie = `jwt=${jwt}; path=/`;
-    
-      //   const serverUri = 'wss://connect-ws.duckdns.org/' + '{{ dongle_id | safe }}';
-      //   ws = new WebSocket(serverUri);
-        
-      //   ws.addEventListener('open', function(event) {
-      //     console.log('WebSocket connection opened');
-      //     const progressCommand = {
-      //       jsonrpc: "2.0",
-      //       method: "listUploadQueue",
-      //       params: {},
-      //       id: 1
-      //     };
-      //     setInterval(() => {
-      //       ws.send(JSON.stringify(progressCommand));
-      //     }, 1000);  // Adjust polling interval as needed
-      //   });
-    
-      //   ws.addEventListener('message', function(event) {
-      //     console.log('Received:', event.data);
-      //     handleWebSocketMessage(event.data);
-      //   });
-    
-      //   ws.addEventListener('close', function(event) {
-      //     console.log('WebSocket connection closed');
-      //     setTimeout(openWebSocket, 5000);
-      //   });
-    
-      //   ws.addEventListener('error', function(event) {
-      //     console.error('WebSocket error:', event);
-      //     // Optionally, handle errors, such as attempting to reconnect
-      //   });
-      // }
-      // Function to handle incoming WebSocket messages
-      // function handleWebSocketMessage(data) {
-      //   const response = JSON.parse(data);
-      //   if (response && response.result && Array.isArray(response.result)) {
-      //     response.result.forEach(upload => {
-      //       const pathSegments = upload.path.split("--");
-      //       const segmentNumber = pathSegments[pathSegments.length - 1].split("/")[0];
-      //       const fileType = pathSegments[pathSegments.length - 1].split("/")[1];
-
-      //       const progressId = `uploadProgress_${segmentNumber}_${fileType}`;
-      //       const progressContainerId = `progressContainer_${segmentNumber}_${fileType}`;
-      //       const buttonId = `uploadButton_${segmentNumber}_${fileType}`;
-
-      //       const progressBar = document.getElementById(progressId);
-      //       const progressContainer = document.getElementById(progressContainerId);
-      //       const uploadButton = document.getElementById(buttonId);
-
-      //       if (progressBar && progressContainer && uploadButton) {
-      //         progressBar.value = upload.progress * 100;  // Update the progress bar value
-      //         progressContainer.style.display = 'block'; // Always show the progress bar container
-      //         uploadButton.style.display = 'none';
-      //       }
-      //     });
-      //   }
-      // }
-      
-      // Function to send an upload command via WebSocket
-      // function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
-      //   const route_name = canonical_route_name.split("|")[1];
-
-      //   const uploadCommand = {
-      //     jsonrpc: "2.0",
-      //     method: "uploadFileToUrl",
-      //     params: {
-      //       fn: route_name + "--" + segment_num + "/" + file.split(".")[0],
-      //       url: "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file,
-      //       headers: {},
-      //     },
-      //     id: 1
-      //   };
-    
-      //   // Send the command via the open WebSocket connection
-      //   ws.send(JSON.stringify(uploadCommand));
-    
-      //   // Display the progress bar and hide the button
-      //   document.getElementById('progressContainer_' + segment_num + '_' + file_type).style.display = 'block';
-      //   document.getElementById('uploadButton_' + segment_num + '_' + file_type).style.display = 'none';
-      // }
-
-      // function uploadAllFiles() {
-      //   // Assuming each row in your table has a class 'segment-row' and the button for uploading has an 'upload-button' class
-      //   const rows = document.querySelectorAll('.segment-row');
-    
-      //   rows.forEach(row => {
-      //     const dongleId = '{{ dongle_id }}';  // Assuming dongleId is constant or retrieved in another way
-      //     const segmentNumber = row.getAttribute('data-segment-number');
-      //     const canonicalRouteName = row.getAttribute('data-canonical-route-name');
-      //     const fileTypes = ['rlog.bz2', 'fcam.hevc', 'dcam.hevc', 'ecam.hevc'];  // List all types of files you need to upload
-  
-      //     fileTypes.forEach(fileType => {
-      //       const button = row.querySelector(`button[data-file-type="${fileType}"]`);
-      //       if (button && button.style.display !== 'none') {  // Check if the button is visible, indicating file needs to be uploaded
-      //         uploadFile(dongleId, segmentNumber, canonicalRouteName, fileType, segmentNumber, fileType.replace('.bz2', '').replace('.hevc', ''));
-      //       }
-      //     });
-      //   });
-      //   }      
-      // Open the WebSocket connection when the page loads
-      // window.onload = openWebSocket;
-            // Function to send an upload command via HTTP POST
           function getCookie(name) {
             const value = `; ${document.cookie}`;
             const parts = value.split(`; ${name}=`);
             if (parts.length === 2) return parts.pop().split(';').shift();
           }
+          const jwtToken = getCookie('jwt');
           async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
           const route_name = canonical_route_name.split("|")[1];
           const api_url = "https://connect-useradmin.duckdns.org/ws/" + dongle_id;
-          const uploadUrl = "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file;
+          const uploadUrl = "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
 
           const uploadCommand = {
             jsonrpc: "2.0",
@@ -271,7 +163,6 @@
 
           try {
             // Send the command via HTTP POST request with credentials included
-            const jwtToken = getCookie('jwt');
             const response = await fetch(api_url, {
               method: 'POST',
               headers: {

@@ -1,5 +1,5 @@
 #![allow(clippy::unused_async)]
-use loco_rs::{ hash, prelude::*};
+use loco_rs::{ prelude::*};
 use axum::{
     extract::{Path, Query, State}, Extension
 };
@@ -10,7 +10,6 @@ use std::error::Error;
 use std::fmt::Write as FmtWrite;
 
 use crate::{common, models::_entities, enforce_ownership_rule, middleware::jwt};
-
 use super::v1_responses::*;
 
 #[derive(Deserialize)]
@@ -64,36 +63,36 @@ struct UrlResponse {
     url: String,
 }
 
-pub async fn echo(State(ctx): State<AppContext>,
-    req_body: String
-) -> String {
-    let ret = req_body.clone();
-    crate::workers::log_parser::LogSegmentWorker::perform_later(
-        &ctx,
-        crate::workers::log_parser::LogSegmentWorkerArgs {
-            internal_file_url: "http://localhost:3000/164080f7933651c4_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
-            dongle_id: "164080f7933651c4".to_string(),
-            timestamp: "2024-02-05--16-22-28".to_string(),
-            segment: "10".to_string(),
-            file: "qlog.bz2".to_string(),
-            create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
-            },
-    ).await.unwrap();
-    ret
-}
+// pub async fn echo(State(ctx): State<AppContext>,
+//     req_body: String
+// ) -> String {
+//     let ret = req_body.clone();
+//     crate::workers::log_parser::LogSegmentWorker::perform_later(
+//         &ctx,
+//         crate::workers::log_parser::LogSegmentWorkerArgs {
+//             internal_file_url: "http://localhost:3000/164080f7933651c4_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
+//             dongle_id: "164080f7933651c4".to_string(),
+//             timestamp: "2024-02-05--16-22-28".to_string(),
+//             segment: "10".to_string(),
+//             file: "qlog.bz2".to_string(),
+//             create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+//             },
+//     ).await.unwrap();
+//     ret
+// }
 
 pub async fn get_route_files(
-    auth: crate::middleware::auth::MyJWT,
+    _auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(route_id): Path<String>,
     Extension(client): Extension<Client>
 ) -> impl IntoResponse {
 
     println!("Fetching files for Route ID: {}", route_id);
-    let response = get_links_for_route(ctx, &route_id, &client).await;
+    let response = get_links_for_route(&route_id, &client).await;
     match response {
-        Ok((status, body)) => Ok(format::json(body)),
-        Err(e) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok((_status, body)) => Ok(format::json(body)),
+        Err(_e) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
@@ -135,7 +134,6 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
 }
 
 async fn get_links_for_route(
-    ctx: AppContext,
     route_id: &str,
     client: &Client
 ) -> Result<(StatusCode, FilesResponse), Box<dyn Error>> {
@@ -220,11 +218,12 @@ async fn get_upload_url(
     Path(dongle_id): Path<String>,
     Query(mut params): Query<UploadUrlQuery>
 ) -> impl IntoResponse {
-    if auth.device_model.is_none() {
+    if let Some(device_model) = auth.device_model {
+        if !device_model.uploads_allowed {
+            return unauthorized("Uploads ignored");
+        }
+    } else {
         return unauthorized("Only registered devices can upload");
-    }
-    if !auth.device_model.unwrap().uploads_allowed {
-        return unauthorized("Uploads ignored");
     }
     // curl http://host/v1.4/ccfab3437bea5257/upload_url/?path=2019-06-06--11-30-31--9/fcamera.hevc&expiry_days=1
     // Assuming default expiry is 1 day if not specified
@@ -252,12 +251,6 @@ async fn upload_urls_handler(
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
 ) -> Result<Response> {
-    // if auth.device_model.is_none() {
-    //     return unauthorized("Only registered devices can upload");
-    // }
-    // if !auth.device_model.unwrap().uploads_allowed {
-    //     return unauthorized("Uploads ignored");
-    // }
     data.validate_expiry();
     let jwt_secret = ctx.config.get_jwt_config()?;
     if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
@@ -306,7 +299,7 @@ async fn unpair(
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
     let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let mut device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser {
         enforce_ownership_rule!(
             user_model.id, 
@@ -327,7 +320,7 @@ async fn device_info(
 ) -> Result<Response> {
     let device = match auth.device_model {
         Some(device) => device,
-        None => _entities::devices::Model::find_device(&ctx.db, &auth.claims.identity).await?,
+        None => _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?,
     };
     format::json(
         DeviceInfoResponse {
@@ -360,16 +353,16 @@ async fn device_info(
 
 async fn device_location(
     _auth: crate::middleware::auth::MyJWT,
-    State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
+    State(_ctx): State<AppContext>,
+    Path(_dongle_id): Path<String>,
 ) -> Result<Response> {
     format::json(DeviceLocationResponse {..Default::default()})
 }
 
 async fn device_stats(
     _auth: crate::middleware::auth::MyJWT,
-    State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
+    State(_ctx): State<AppContext>,
+    Path(_dongle_id): Path<String>,
 ) -> Result<Response> {
     //let utc_time_now_millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64;
     //let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
@@ -378,8 +371,8 @@ async fn device_stats(
 
 async fn device_users(
     _auth: crate::middleware::auth::MyJWT,
-    State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
+    State(_ctx): State<AppContext>,
+    Path(_dongle_id): Path<String>,
 ) -> Result<Response> {
     format::json(DeviceUsersResponse {..Default::default()})
 }
@@ -391,26 +384,37 @@ struct DeviceSegmentQuery {
 }
 
 async fn route_segment(
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(params): Query<DeviceSegmentQuery>,
 ) -> Result<Response> {
-    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
-    let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
+
+        } else {
+            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+        }
+    }
+    let mut route_models = _entities::routes::Model::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end).await?;
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
     format::json(route_models)
 }
 
 
 async fn preserved_routes( // TODO
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
-    let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
 
+        } else {
+            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+        }
+    }
+    let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
     format::json(route_models)
 }
 
@@ -460,12 +464,6 @@ async fn get_my_devices(
 }
 
 
-// email: String,
-// id: String,
-// points: i64,
-// regdate: i64,
-// sueruser: bool,
-// username: String,
 async fn get_me(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
@@ -479,13 +477,12 @@ async fn get_me(
        superuser: user_model.superuser,
        username: user_model.name, // TODO change the usermode names to match comma api to simplify this
     })
-    //format::json(MeResponse { ..Default::default()})
 }
 
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v1")
-        .add("/echo", post(echo))
+        //.add("/echo", post(echo))
         .add("/me", get(get_me))
         .add("/me/devices", get(get_my_devices))
         .add("/route/:route_id/files", get(get_route_files))

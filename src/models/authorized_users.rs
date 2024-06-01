@@ -10,7 +10,7 @@ pub struct AuthorizeParams {
     pub device_dongle_id: String,
 }
 
-use chrono::prelude::{Utc,DateTime};
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)

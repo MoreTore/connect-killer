@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::_entities::users;
+
 use loco_rs::prelude::*;
 
 

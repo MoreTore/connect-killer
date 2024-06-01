@@ -10,20 +10,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::common;
 
-pub async fn echo(req_body: String) -> String {
-    req_body
-}
-
-pub async fn hello(State(_ctx): State<AppContext>) -> Result<Response> {
-    // do something with context (database, etc)
-    format::text("hello")
-}
-
 // used for comma tools
 pub async fn file_stream(
-    //_auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap, // Include headers from the incoming request
   ) -> impl IntoResponse {
@@ -70,7 +61,7 @@ pub async fn file_stream(
 // used for useradmin browser download
 pub async fn file_download(
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -118,7 +109,7 @@ pub async fn file_download(
 // used for useradmin browser download
 pub async fn bootlog_file_download(
     Path(bootlog_file): Path<String>,
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -164,8 +155,8 @@ pub async fn bootlog_file_download(
 
 // a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19/12/sprite.jpg
 pub async fn thumbnail_download(
-    Path((dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
-    State(ctx): State<AppContext>,
+    Path((_dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
+    State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -223,7 +214,7 @@ pub struct UlogText {
 pub async fn render_segment_ulog(
     //auth: crate::middleware::auth::MyJWT,
     ViewEngine(v): ViewEngine<TeraView>, 
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     Extension(client): Extension<reqwest::Client>,
     Query(params): Query<UlogQuery>
 ) -> Result<impl IntoResponse> {
@@ -256,6 +247,4 @@ pub fn routes() -> Routes {
         .add("/logs/", get(render_segment_ulog))
         .add("/:dongle_id/:route_name/:segment/sprite.jpg", get(thumbnail_download))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
-        .add("/", get(hello))
-        .add("/echo", post(echo))
 }

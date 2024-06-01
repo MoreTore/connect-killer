@@ -1,6 +1,6 @@
-use async_trait::async_trait;
-use chrono::offset::Local;
-use loco_rs::{hash, prelude::*};
+
+
+use loco_rs::{prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::middleware::jwt;
@@ -41,7 +41,7 @@ impl Validatable for super::_entities::users::ActiveModel {
         })
     }
 }
-use chrono::prelude::{Utc,DateTime};
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for super::_entities::users::ActiveModel {
     async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>

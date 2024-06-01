@@ -6,8 +6,8 @@ use loco_rs::prelude::*;
 use tokio::io::AsyncReadExt;
 use std::time::Instant;
 use std::io::Write;
-use dotenv::dotenv;
-use std::env;
+
+
 use crate::{cereal::log_capnp, common, models::_entities::{self}};
 
 pub struct BootlogParserWorker {
@@ -51,7 +51,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
         // check if the device is in the database
         let _device = match _entities::devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
-            Err(e) => {
+            Err(_e) => {
                 tracing::info!("Recieved file from an unregistered device. Do something: {}", &args.dongle_id);
                 return Ok(())
             }

@@ -3,11 +3,11 @@ use loco_rs::prelude::*;
 use sea_orm::DeleteResult;
 use sea_orm::{ActiveValue, TransactionTrait};
 use super::_entities::routes::{self, ActiveModel, Entity, Model};
-use migration::m20240424_000003_routes::Routes as RouteFields;
 
 
 
-use chrono::prelude::{Utc,DateTime};
+
+use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
@@ -88,6 +88,20 @@ impl super::_entities::routes::Model {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn find_time_filtered_device_routes(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+        from: i64,
+        to: i64,
+    ) -> ModelResult<Vec<Model>> {
+        let routes = routes::Entity::find()
+            .filter(routes::Column::Fullname.starts_with(dongle_id))
+            .filter(routes::Column::StartTimeUtcMillis.between(from, to))
+            .all(db)
+            .await?;
+        Ok(routes)
     }
 
     // pub async fn find_all_routes(

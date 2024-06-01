@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::net::IpAddr;
+
 use std::path::Path;
 use std::env;
-use std::str::FromStr;
+
 use std::sync::{Arc, Mutex};
-use tokio::time::{self, Duration};
+use tokio::time::{self};
 use async_trait::async_trait;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
@@ -15,8 +15,6 @@ use loco_rs::{
     task::Tasks,
     worker::{AppWorker, Processor},
     Result,
-    storage,
-    config::Config,
 };
 use migration::{Migrator};
 use sea_orm::DatabaseConnection;
@@ -24,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     controllers, initializers,
-    models::_entities::{devices, notes, routes, segments, users},
+    models::_entities::{devices, notes, users},
     tasks,
 };
 
@@ -37,13 +35,11 @@ use axum::{
     extract::Host,
     handler::HandlerWithoutStateExt,
     http::{StatusCode, Uri},
-    response::Redirect,
-    routing::get,
-    BoxError, Router, Extension,
+    response::Redirect, Extension,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use std::{net::SocketAddr, path::PathBuf};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 
 #[derive(Serialize, Deserialize, Clone)]
 struct JsonRpcCommand {
@@ -156,7 +152,7 @@ impl Hooks for App {
         });
         
 
-        let (command_sender, command_receiver) = mpsc::channel(100);
+        let (command_sender, _command_receiver) = mpsc::channel(100);
         let shared_state = Arc::new(RwLock::new(App {
             command_sender,
             pending_commands: Arc::new(Mutex::new(HashMap::new())),
