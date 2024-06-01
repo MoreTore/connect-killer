@@ -12,7 +12,7 @@ use crate::common;
 
 // used for comma tools
 pub async fn file_stream(
-    auth: crate::middleware::auth::MyJWT,
+    //auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,

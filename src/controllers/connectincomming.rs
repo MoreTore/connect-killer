@@ -32,7 +32,7 @@ pub async fn upload_bootlogs(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
 ) -> Result<(StatusCode, &'static str)> {
-    enforce_device_upload_permission!(auth);
+    //enforce_device_upload_permission!(auth);
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}", dongle_id, file));
     
     let mut buffer = BytesMut::new();
@@ -97,7 +97,7 @@ pub async fn upload_driving_logs(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
 ) -> impl IntoResponse {
-    enforce_device_upload_permission!(auth);
+    //enforce_device_upload_permission!(auth);
     // Construct the URL to store the file
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file));
     tracing::trace!("full_url: {full_url}");
