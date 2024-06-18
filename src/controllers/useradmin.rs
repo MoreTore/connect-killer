@@ -70,7 +70,7 @@ pub async fn onebox_handler(
         None => user_model.name.clone(),
     };
     // Regex to match a complete canonical route name
-    let re = regex::Regex::new(r"^([0-9a-z]{16})([_|/|]?([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}))?$").unwrap();
+    let re = regex::Regex::new(r"^([0-9a-z]{16})([_|/|]?([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10}))?$").unwrap();
 
     let mut canonical_route_name: Option<String> = None;
     let mut dongle_id: Option<String> = None;

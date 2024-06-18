@@ -258,7 +258,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         }
         let segment_models = match segments::Model::find_segments_by_route(&self.ctx.db, &route_model.fullname).await {
             Ok(mut segments) => {
-                segments.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
+                //segments.retain(|segment| segment.qlog_url != ""); // exclude ones wher the qlog is missing
                 segments.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
                 segments
             }
@@ -489,7 +489,7 @@ async fn parse_qlog(
             log_capnp::event::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             log_capnp::event::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             log_capnp::event::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            _ => continue,
+            _ => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
         }
     }
     if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {

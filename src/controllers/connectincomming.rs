@@ -33,7 +33,7 @@ pub async fn upload_bootlogs(
     body: axum::body::Body,
 ) -> Result<(StatusCode, &'static str)> {
     //enforce_device_upload_permission!(auth);
-    let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}", dongle_id, file));
+    let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_boot_{}", dongle_id, file));
     
     let mut buffer = BytesMut::new();
     let mut stream = body.into_data_stream();
@@ -77,6 +77,55 @@ pub async fn upload_bootlogs(
                             return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."));
                         }
                     }
+                }
+                _ => {tracing::error!("Unhandled status. File not uploaded."); return Ok((status, "Unhandled status. File not uploaded."));}
+            }
+        },
+        Err(e) => {
+            
+            tracing::error!("PUT request failed: {}", format!("{}", e));
+            return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"));
+        }
+    }
+}
+
+pub async fn upload_crash(
+    auth: crate::middleware::auth::MyJWT,
+    Path((dongle_id, id, commit, name)): Path<(String, String, String, String)>,//:dongle_id/crash/:log_id/:commit/:name
+    State(ctx): State<AppContext>,
+    axum::Extension(client): axum::Extension<reqwest::Client>,
+    body: axum::body::Body,
+) -> Result<(StatusCode, &'static str)> {
+    //enforce_device_upload_permission!(auth);
+    let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_crash_{}_{}_{}", dongle_id, id, commit, name));
+    
+    let mut buffer = BytesMut::new();
+    let mut stream = body.into_data_stream();
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(data) => buffer.extend_from_slice(&data),
+            Err(_) => return Ok((StatusCode::BAD_REQUEST, "Error reading request body")),
+        }
+    }
+    let data = buffer.freeze();
+    tracing::info!(
+        "File `{}` received is {} bytes",
+        full_url, data.len()
+    );
+    // Post the binary data to the specified URL
+    let response = client.put(&full_url)
+        .body(data)
+        .send()
+        .await;
+    match response {
+        Ok(response) => {
+            let status = response.status();
+            tracing::trace!("Got Ok response with status {status}");
+            match status {
+                StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
+                StatusCode::CREATED | StatusCode::OK => {
+                    // Enqueue the file for processing
+                    tracing::debug!("{full_url} file Uploaded Successfully"); return Ok((status, "File uploaded."));
                 }
                 _ => {tracing::error!("Unhandled status. File not uploaded."); return Ok((status, "Unhandled status. File not uploaded."));}
             }
@@ -173,5 +222,7 @@ pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
         .add("/:dongle_id/:timestamp/:segment/:file", put(upload_driving_logs))
+        //.add("/:dongle_id/:category/:file", put(upload_other))
+        .add("/:dongle_id/crash/:log_id/:commit/:name", put(upload_crash))
         .add("/:dongle_id/boot/:file", put(upload_bootlogs))
 }
