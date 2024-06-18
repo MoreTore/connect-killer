@@ -280,23 +280,28 @@ async fn upload_urls_handler(
 fn transform_route_string(input_string: &str) -> String {
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 or 2024-03-02--19-02-46--0/rlog
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)(?:--|/)(.+)$").unwrap();
-
+    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)(?:--|/)(.+)$").unwrap();
+    // or for openpilot version 0.9.7+ the new format is 0000008c--8a84371aea--0/rlog.bz2
+    // let re_new_format = regex::Regex::new(r"^([0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)/(.+)$").unwrap();
+    // the crash log format is crash/0000008c--8a84371aea_<8 digit hex serial>__<crash name>
+    let re_crash_log = regex::Regex::new(r"^crash/([0-9a-f]{8}--[0-9a-f]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})_([0-9a-f]{8})_(.+)$").unwrap();
+    let re_boot_log = regex::Regex::new(r"^boot/([0-9a-z]{8}--[0-9a-z]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}).bz2$").unwrap();
     if let Some(caps) = re_drive_log.captures(input_string) {
-        format!("{}--{}/{}/{}",
-            &caps[1], // Date
-            &caps[2], // Time
-            &caps[3], // Segment number
-            &caps[4]  // File name
+        format!("{}/{}/{}",
+            &caps[1], // DateTime or monotonic--uid
+            &caps[2], // Segment number
+            &caps[3]  // File name
         )
+    } else if let Some(caps) = re_crash_log.captures(input_string) {
+        format!("crash/{}/{}/{}",
+            &caps[1], // ID
+            &caps[2], // commit
+            &caps[3] // name
+        )
+    } else if re_boot_log.is_match(input_string) {
+        input_string.to_owned()
     } else {
-        // example input_string = boot/0000008c--8a84371aea.bz2
-        let re_boot_log = regex::Regex::new(r"^boot/[0-9a-z]{8}--[0-9a-z]{10}.bz2$").unwrap();
-        if re_boot_log.is_match(input_string) {
-            input_string.to_owned()
-        } else {
-            "Invalid".to_string()
-        }
+        "Invalid".to_string()
     }
 }
 
@@ -386,8 +391,9 @@ async fn device_users(
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DeviceSegmentQuery {
-    end: i64,
-    start: i64,
+    end: Option<i64>,
+    start: Option<i64>,
+    limit: Option<u64>,
 }
 
 async fn route_segment(
@@ -403,7 +409,7 @@ async fn route_segment(
             let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
         }
     }
-    let mut route_models = _entities::routes::Model::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end).await?;
+    let mut route_models = _entities::routes::Model::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
     format::json(route_models)
 }
@@ -477,6 +483,7 @@ async fn get_my_devices(
             serial: device_model.serial,
             sim_id: device_model.sim_id,
             trial_claimed: true,
+            online: device_model.online,
             ..Default::default()
 
         };

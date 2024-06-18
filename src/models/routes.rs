@@ -1,7 +1,6 @@
 use loco_rs::model::{ModelError, ModelResult};
 use loco_rs::prelude::*;
-use sea_orm::DeleteResult;
-use sea_orm::{ActiveValue, TransactionTrait};
+use sea_orm::{ActiveValue, TransactionTrait, QuerySelect, DeleteResult};
 use super::_entities::routes::{self, ActiveModel, Entity, Model};
 
 
@@ -93,14 +92,16 @@ impl super::_entities::routes::Model {
     pub async fn find_time_filtered_device_routes(
         db: &DatabaseConnection,
         dongle_id: &str,
-        from: i64,
-        to: i64,
-    ) -> ModelResult<Vec<Model>> {
+        from: Option<i64>,
+        to: Option<i64>,
+        limit: Option<u64>,
+    ) -> ModelResult<Vec<routes::Model>> {
         let routes = routes::Entity::find()
             .filter(routes::Column::Fullname.starts_with(dongle_id))
-            .filter(routes::Column::StartTimeUtcMillis.between(from, to))
-            .all(db)
-            .await?;
+            .filter(routes::Column::StartTimeUtcMillis.gte(from))
+            .filter(routes::Column::StartTimeUtcMillis.lte(to))
+            .limit(limit)
+            .all(db).await?;
         Ok(routes)
     }
 

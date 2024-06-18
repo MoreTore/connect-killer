@@ -169,6 +169,7 @@ pub struct DeviceResponse {
     pub serial: String,
     pub sim_id: Option<String>,
     pub trial_claimed: bool,
+    pub online: bool,
 
 }
 #[derive(Serialize, Deserialize, Default, Debug)]

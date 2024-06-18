@@ -28,7 +28,7 @@ impl Task for Deleter {
     async fn run(&self, ctx: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
         println!("Task Deleter generated");
         let _re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
-        let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
+        let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)--(.+)$").unwrap();
 
         let client = Client::new();
         // Get all keys from the MKV server
@@ -47,7 +47,7 @@ impl Task for Deleter {
         let keys = json["keys"].as_array().unwrap(); // Safely extract as an array
         // TODO: Refactor to not load the whole response in ram at once as it could get large.
         let now: NaiveDateTime = Utc::now().naive_utc();
-        let older_than = now - Duration::days(14);
+        let older_than = now - Duration::days(1);
         tracing::info!("now: {now}, deleting files older than: {older_than}");
         for key in keys {
             let mut file_name = key.as_str().unwrap().to_string(); // Convert to string for independent ownership
@@ -61,13 +61,13 @@ impl Task for Deleter {
                     match segments::Model::find_by_segment(&ctx.db, &format!("{dongle_id}|{timestamp}--{segment}")).await {
                         Ok(segment) => {
                             let mut deleted = false;
-                            if let Ok(derived_dt) = parse_timestamp(timestamp) { // Try using file name timestamp first
-                                if derived_dt <= older_than {
-                                    delete_file(&client, &file_name).await;
-                                    deleted = true;
-                                }
-                            };
-                            if segment.created_at <= older_than && !deleted { // Fallback to created_at
+                            // if let Ok(derived_dt) = parse_timestamp(timestamp) { // Try using file name timestamp first
+                            //     if derived_dt <= older_than {
+                            //         delete_file(&client, &file_name).await;
+                            //         deleted = true;
+                            //     }
+                            // };
+                            if segment.updated_at <= older_than && !deleted { // Fallback to updated_at
                                 delete_file(&client, &file_name).await;
                             }
                         },
