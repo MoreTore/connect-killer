@@ -113,6 +113,7 @@ impl Hooks for App {
     }
 
     fn register_tasks(tasks: &mut Tasks) {
+        tasks.register(tasks::huggingface::Huggingface);
         tasks.register(tasks::deleter::Deleter);
         tasks.register(tasks::collect_data::CollectData);
         tasks.register(tasks::seed_from_mkv::SeedFromMkv);

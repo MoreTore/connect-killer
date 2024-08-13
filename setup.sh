@@ -6,7 +6,7 @@ BASEDIR=$PWD
 git submodule update --init
 sudo apt-get update -y
 sudo apt upgrade -y
-sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+sudo apt install make gcc git apt-transport-https ca-certificates curl software-properties-common -y
 sudo apt-get install pkg-config libavutil-dev libavformat-dev libavcodec-dev libavdevice-dev -y # for ffmpeg
 sudo apt-get install libclang-dev clang -y # for ffmpeg
 # Install Rust, pnpm, nvm, node, docker
@@ -65,7 +65,7 @@ cd $BASEDIR
 cd minikeyvalue
 docker volume create kvstore
 docker build -t minikeyvalue -f Dockerfile .
-docker run -d -p 3000-3005:3000-3005 kvstore:/tmp minikeyvalue
+docker run -d -p 3000-3005:3000-3005 -v kvstore:/tmp minikeyvalue
 cd $BASEDIR
 git clone --depth 1 https://github.com/commaai/cereal.git
 go version
@@ -76,5 +76,5 @@ docker -v
 docker-compose -v
 cargo -V
 cd $BASEDIR
-cargo loco start --server-and-worker
+pip install -U "huggingface_hub[cli,hf_transfer]"
 

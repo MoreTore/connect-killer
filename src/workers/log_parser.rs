@@ -22,22 +22,23 @@ use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuff
 use serde::{Deserialize, Serialize};
 use loco_rs::prelude::*;
 use capnp::message::ReaderOptions;
-use crate::models::_entities::{devices, routes, segments};
-//                     devices,
-//                     users,
-//                     authorized_users};
+use std::env;
+
 use std::io::{Write, Cursor};
-//use bzip2::read::BzDecoder;
-use crate::cereal::log_capnp::{self};
-use reqwest::{Client, Response};
 use crate::common;
+use crate::cereal::{log_capnp, car_capnp};
+use log_capnp::event as LogEvent;
+use capnp::serialize::{read_message, write_message};
+use crate::models::_entities::{devices, routes, segments, anonlogs};
+use reqwest::{Client, Response};
+
 
 use std::time::Instant;
 //use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
                 
 use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
 use tokio_util::io::StreamReader;
-use async_compression::tokio::bufread::BzDecoder;
+use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
 use tokio::io::AsyncReadExt; // for read_to_end
 use rayon::prelude::*;
 use ffmpeg::{format as ffmpeg_format, Error as FfmpegError};
@@ -225,7 +226,13 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let mut seg = segment.into_active_model();
         let mut ignore_uploads = None;
         match args.file.as_str() {
-            "rlog.bz2" =>  seg.rlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/rlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "rlog.bz2" =>  {
+                seg.rlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/rlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
+                match anonamize_rlog(&self.ctx, response, &client, &args).await {
+                    Ok(_) => (),
+                    Err(e) => return Err(sidekiq::Error::Message("Failed to anonamize rlog: ".to_string() + &e.to_string())),
+                }
+            }
             "qlog.bz2" =>  {
                     match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
                         Ok(_) => (),
@@ -438,10 +445,10 @@ async fn parse_qlog(
     let mut last_lng = None;
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
-        let event = message_reader.get_root::<log_capnp::event::Reader>().map_err(Box::from)?;
+        let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
 
         match event.which().map_err(Box::from)? {
-            log_capnp::event::GpsLocationExternal(gps) | log_capnp::event::GpsLocation(gps)=> {
+            LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
                 if let Ok(gps) = gps {
                     if (gps.get_flags() % 2) == 1 { // has fix
                         let lat = gps.get_latitude();
@@ -469,7 +476,7 @@ async fn parse_qlog(
                 }
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
             }
-            log_capnp::event::Thumbnail(thumbnail) => {
+            LogEvent::Thumbnail(thumbnail) => {
                 // take the jpg and add it to the array of the other jpgs.
                 // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
                 if let Ok(thumbnail) = thumbnail {
@@ -479,16 +486,16 @@ async fn parse_qlog(
                     thumbnails.push(image_data.to_vec());
                 }
             }
-            log_capnp::event::InitData(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::PandaStates(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::DeviceState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::Can(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::Sendcan(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::ErrorLogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::GpsLocationExternal(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            log_capnp::event::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::InitData(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::PandaStates(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::DeviceState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::Can(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::Sendcan(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::ErrorLogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::GpsLocationExternal(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             _ => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
         }
     }
@@ -546,7 +553,7 @@ async fn parse_qlog(
 
 
 
-async fn upload_data(client: &Client, url: &String, body: Vec<u8>) -> worker::Result<()> {
+async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {
     let response = client.put(url)
         .body(body)
         .send().await
@@ -583,4 +590,354 @@ async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     let context = ffmpeg_format::input(&temp_file.path())?;
     let duration = context.duration() as f32 / 1_000_000.0;
     Ok(duration)
+}
+
+macro_rules! reader_to_builder {
+    ($set_fn:ident, $event_variant:ident, $event:expr, $event_builder:expr) => {
+        if let Ok(reader) = $event {
+            $event_builder.$set_fn(reader);
+        }
+    };
+}
+
+async fn anonamize_rlog_old(ctx: &AppContext, response: Response, client: &Client, args: &LogSegmentWorkerArgs) -> worker::Result<()> {
+    let start_time = Instant::now();
+
+    let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    let stream_reader = StreamReader::new(bytes_stream);
+    let mut bz2_decoder = BzDecoder::new(stream_reader);
+
+    let mut decompressed_data = Vec::new();
+    match bz2_decoder.read_to_end(&mut decompressed_data).await { 
+        Ok(_)=> (), 
+        Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
+    };
+    let decompress_duration = start_time.elapsed();
+    tracing::trace!("decompressing file stream took: {:?}", decompress_duration);
+
+    let process_start = Instant::now();
+    let mut cursor = Cursor::new(decompressed_data);
+    let mut writer = Vec::new();
+    //let mut utf8_writer = Vec::new(); // Buffer to store the uncompressed UTF-8 version
+    let mut car_fingerprint: Option<String> = None;
+    // Process each message
+    while let Ok(message_reader) = read_message(&mut cursor, capnp::message::ReaderOptions::default()) {
+        let event = match message_reader.get_root::<LogEvent::Reader>() {
+            Ok(event) => event,
+            Err(_) => continue, // Skip if there is an error
+        };
+        let mut message_builder = ::capnp::message::Builder::new_default();
+        let mut event_builder = message_builder.init_root::<LogEvent::Builder>();
+        //println!("{:#?}", event);
+        let event_type = event.which().unwrap();
+        match event_type {
+            LogEvent::CarState(reader) => reader_to_builder!(set_car_state, event_type, reader, event_builder),
+            LogEvent::LiveParameters(reader) => reader_to_builder!(set_live_parameters, event_type, reader, event_builder),
+            LogEvent::CarControl(reader) => reader_to_builder!(set_car_control, event_type, reader, event_builder),
+            LogEvent::LateralPlanDEPRECATED(reader) => reader_to_builder!(set_lateral_plan_d_e_p_r_e_c_a_t_e_d, event_type, reader, event_builder),
+            LogEvent::CarOutput(reader) => reader_to_builder!(set_car_output, event_type, reader, event_builder),
+            LogEvent::ModelV2(reader) => reader_to_builder!(set_model_v2, event_type, reader, event_builder),
+            LogEvent::LiveTorqueParameters(reader) => reader_to_builder!(set_live_torque_parameters, event_type, reader, event_builder),
+            LogEvent::LiveCalibration(reader) => reader_to_builder!(set_live_calibration, event_type, reader, event_builder),
+            LogEvent::Sendcan(reader) => reader_to_builder!(set_sendcan, event_type, reader, event_builder),
+            LogEvent::Can(reader) => reader_to_builder!(set_can, event_type, reader, event_builder),
+            LogEvent::LongitudinalPlan(reader) => reader_to_builder!(set_longitudinal_plan, event_type, reader, event_builder),
+            LogEvent::CarParams(reader) => {
+                reader_to_builder!(set_car_params, event_type, reader, event_builder);
+                if let Ok(mut reader) = reader {
+                    car_fingerprint = Some(reader.get_car_fingerprint().unwrap().to_string().unwrap());
+                }
+            }
+            LogEvent::LiveLocationKalman(llk) => {
+                if let Ok(mut llk_reader) = llk {
+                    let mut builder = capnp::message::Builder::new_default();
+                    let mut llk_builder: log_capnp::live_location_kalman::Builder = builder.get_root::<log_capnp::live_location_kalman::Builder>().unwrap();
+                    llk_builder.set_angular_velocity_calibrated(llk_reader.get_angular_velocity_calibrated().unwrap());
+                    llk_builder.set_orientation_n_e_d(llk_reader.get_orientation_n_e_d().unwrap());
+                    llk_builder.set_calibrated_orientation_n_e_d(llk_reader.get_calibrated_orientation_n_e_d().unwrap());
+                    llk_reader = llk_builder.into_reader();
+                    event_builder.set_live_location_kalman(llk_reader).unwrap();
+
+                }
+            },
+            _ => continue, // Skip other event types
+        }
+        write_message(&mut writer, &message_builder).unwrap();
+        //writeln!(utf8_writer, "{:#?}", event).unwrap();
+    }
+    
+    let process_duration = process_start.elapsed();
+    tracing::trace!("Processing messages took: {:?}", process_duration);
+    if car_fingerprint.is_none() { // early return if car_fingerprint message is missing
+        return Ok(())
+    }
+    // Compress 'writer' to bz2 and collect it into a buffer
+    let compress_start = Instant::now();
+    let mut bz_encoder: BzEncoder<Vec<u8>> = BzEncoder::new(Vec::new());
+    bz_encoder.write_all(&writer).await;
+    let compressed_data: Vec<u8> = bz_encoder.into_inner();
+    let compress_duration = compress_start.elapsed();
+    tracing::trace!("Compressing and writing file took: {:?}", compress_duration);
+    
+    let anonlog_url = common::mkv_helpers::get_mkv_file_url(
+        &format!("anonlog_{}_{}--{}--{}",
+            args.dongle_id,
+            args.timestamp,
+            args.segment,
+            args.file,
+        )
+    );
+    // Upload the compressed data
+    //upload_data(client, &anonlog_url, compressed_data).await?;
+    // Add the url to the anonlog table
+
+    match anonlogs::Model::add_anonlog(&ctx.db, &anonlog_url).await {
+        Ok(_) => tracing::info!("Added anonlog {anonlog_url} to Database"),
+        Err(e) => tracing::error!("Failed to add anonlog {anonlog_url} to Database: {}", e.to_string()),
+    };
+    
+    // Create a temporary file to store the log data
+    let mut temp_file: NamedTempFile = NamedTempFile::new().unwrap();
+    temp_file.write_all(&compressed_data);
+    temp_file.flush();
+
+    upload_huggingface(temp_file.path(),
+        &format!("{}/{}/{}--{}--{}",
+            car_fingerprint.unwrap_or("mock".to_string()),
+            args.dongle_id,
+            args.timestamp,
+            args.segment,
+            args.file,
+        )
+    ).await;
+
+
+    let total_duration = start_time.elapsed();
+    tracing::trace!("Total operation took: {:?}", total_duration);
+
+    Ok(())
+}
+
+// makes calls the huggingface-cli 
+async fn upload_huggingface(path: &std::path::Path, segment_name: &str) -> () {
+    let repo_id = "MoreTorque/rlogs";
+
+    // Ensure the environment variable is set for authentication
+    //std::env::set_var("HF_TOKEN", hugging_face_token);
+    //std::env::set_var("HF_HUB_ENABLE_HF_TRANSFER", "1");
+
+    // Construct the command to upload the file
+    let status = std::process::Command::new("huggingface-cli")
+        .arg("upload")
+        .arg(repo_id)
+        .arg(path)
+        .arg(segment_name)  // Include this if you want to specify the path in the repo
+        .arg("--repo-type=dataset")
+        .status()
+        .expect("failed to execute process");
+
+    if status.success() {
+        tracing::info!("File uploaded to huggingface successfully");
+    } else {
+        tracing::error!("Failed to upload file to huggingface");
+    }
+}
+
+const MAX_FOLDER_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
+const MAX_FILE_COUNT: usize = 10;
+
+macro_rules! reader_to_builder {
+    ($set_fn:ident, $event_variant:ident, $event:expr, $event_builder:expr) => {
+        if let Ok(reader) = $event {
+            $event_builder.$set_fn(reader);
+        }
+    };
+}
+
+async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, args: &LogSegmentWorkerArgs) -> Result<(), Error> {
+    let start_time = Instant::now();
+    
+    let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    let stream_reader = StreamReader::new(bytes_stream);
+    let mut bz2_decoder = BzDecoder::new(stream_reader);
+    
+    let mut decompressed_data = Vec::new();
+    match bz2_decoder.read_to_end(&mut decompressed_data).await { 
+        Ok(_) => (), 
+        Err(e) => return Err(Error::Message(e.to_string())),
+    };
+    let decompress_duration = start_time.elapsed();
+    tracing::trace!("Decompressing file stream took: {:?}", decompress_duration);
+
+    let process_start = Instant::now();
+    let mut cursor = Cursor::new(decompressed_data);
+    let mut writer = Vec::new();
+    let mut car_fingerprint: Option<String> = None;
+    let mut total_meters_traveled = 0.0; // gets converted to miles
+    let mut last_lat = None;
+    let mut last_lng = None;
+    let mut gps_seen = false;
+    while let Ok(message_reader) = read_message(&mut cursor, capnp::message::ReaderOptions::default()) {
+        let event = match message_reader.get_root::<LogEvent::Reader>() {
+            Ok(event) => event,
+            Err(_) => continue,
+        };
+        let mut message_builder = ::capnp::message::Builder::new_default();
+        let mut event_builder = message_builder.init_root::<LogEvent::Builder>();
+        event_builder.set_log_mono_time(event.get_log_mono_time());
+        let event_type = event.which().unwrap();
+        match event_type {
+            LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
+                if let Ok(gps) = gps {
+                    if (gps.get_flags() % 2) == 1 { // has fix
+                        let lat = gps.get_latitude();
+                        let lng = gps.get_longitude();
+                        if !gps_seen { // gps_seen is false the first time
+                            gps_seen = true;
+                        }
+                        // Calculate distance if we have previous coordinates
+                        if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
+                            total_meters_traveled += super::log_helpers::haversine_distance(
+                                last_lat, last_lng, lat, lng
+                            );
+                        }
+                        // Update last coordinates
+                        last_lat = Some(lat);
+                        last_lng = Some(lng);
+                    }
+                }
+                continue;
+            },
+            LogEvent::CarState(reader) => reader_to_builder!(set_car_state, event_type, reader, event_builder),
+            LogEvent::LiveParameters(reader) => reader_to_builder!(set_live_parameters, event_type, reader, event_builder),
+            LogEvent::CarControl(reader) => reader_to_builder!(set_car_control, event_type, reader, event_builder),
+            LogEvent::LateralPlanDEPRECATED(reader) => reader_to_builder!(set_lateral_plan_d_e_p_r_e_c_a_t_e_d, event_type, reader, event_builder),
+            LogEvent::CarOutput(reader) => reader_to_builder!(set_car_output, event_type, reader, event_builder),
+            LogEvent::ModelV2(reader) => reader_to_builder!(set_model_v2, event_type, reader, event_builder),
+            LogEvent::LiveTorqueParameters(reader) => reader_to_builder!(set_live_torque_parameters, event_type, reader, event_builder),
+            LogEvent::LiveCalibration(reader) => reader_to_builder!(set_live_calibration, event_type, reader, event_builder),
+            LogEvent::Sendcan(reader) => reader_to_builder!(set_sendcan, event_type, reader, event_builder),
+            LogEvent::Can(reader) => reader_to_builder!(set_can, event_type, reader, event_builder),
+            LogEvent::LongitudinalPlan(reader) => reader_to_builder!(set_longitudinal_plan, event_type, reader, event_builder),
+            LogEvent::CarParams(reader) => {
+                reader_to_builder!(set_car_params, event_type, reader, event_builder);
+                if let Ok(mut reader) = reader {
+                    car_fingerprint = Some(reader.get_car_fingerprint().unwrap().to_string().unwrap());
+                }
+            }
+            LogEvent::LiveLocationKalman(llk) => {
+                if let Ok(mut llk_reader) = llk {
+                    let mut builder = capnp::message::Builder::new_default();
+                    let mut llk_builder: log_capnp::live_location_kalman::Builder = builder.get_root::<log_capnp::live_location_kalman::Builder>().unwrap();
+                    llk_builder.set_angular_velocity_calibrated(llk_reader.get_angular_velocity_calibrated().unwrap());
+                    llk_builder.set_orientation_n_e_d(llk_reader.get_orientation_n_e_d().unwrap());
+                    llk_builder.set_calibrated_orientation_n_e_d(llk_reader.get_calibrated_orientation_n_e_d().unwrap());
+                    llk_reader = llk_builder.into_reader();
+                    event_builder.set_live_location_kalman(llk_reader).unwrap();
+                }
+            },
+            _ => continue,
+        }
+        write_message(&mut writer, &message_builder).unwrap();
+    }
+    
+    let process_duration = process_start.elapsed();
+    tracing::trace!("Processing messages took: {:?}", process_duration);
+    if car_fingerprint.is_none() || (total_meters_traveled <= 40.0) {
+        return Ok(());
+    }
+    let platform = car_fingerprint.unwrap_or("mock".to_string()).clone();
+
+    let compress_start = Instant::now();
+    let compress_duration = compress_start.elapsed();
+    tracing::trace!("Compressing and writing file took: {:?}", compress_duration);
+    let prefix = "/tmp/anonlogs/";
+    let local_path = format!("{prefix}/{}/{}", &platform, &args.dongle_id);
+    let persistent_dir = std::path::Path::new(&local_path);
+    if !persistent_dir.exists() {
+        match std::fs::create_dir_all(persistent_dir) {
+            Ok(_) => (),
+            Err(e) => tracing::error!("Failed to create dir: {e}"),
+        }
+    }
+    let temp_path = persistent_dir.join(format!("{}--{}--{}", &args.timestamp, &args.segment, &args.file));
+    let mut temp_file = tokio::fs::File::create(&temp_path).await?;
+    let mut async_writer = tokio::io::BufWriter::new(temp_file);
+    let mut async_bz_encoder = BzEncoder::with_quality(&mut async_writer, async_compression::Level::Default);
+    
+    async_bz_encoder.write_all(&writer).await?;
+    async_bz_encoder.shutdown().await?;
+    async_writer.flush().await?;
+
+    let folder_size = get_folder_size(persistent_dir)?;
+    let file_count = get_file_count(persistent_dir)?;
+
+    if folder_size >= MAX_FOLDER_SIZE || file_count >= MAX_FILE_COUNT {
+        let repo_path = format!("{}/{}", &platform, &args.dongle_id);
+        upload_folder_to_huggingface(&prefix, &repo_path).await; // Upload everything
+        clear_directory(persistent_dir)?; // only delete the dongle_id path to avoid a race
+    }
+
+    let total_duration = start_time.elapsed();
+    tracing::trace!("Total operation took: {:?}", total_duration);
+
+    Ok(())
+}
+
+fn get_folder_size(path: &std::path::Path) -> std::io::Result<u64> {
+    let mut size = 0;
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        if metadata.is_file() {
+            size += metadata.len();
+        }
+    }
+    Ok(size)
+}
+
+fn get_file_count(path: &std::path::Path) -> std::io::Result<usize> {
+    let mut count = 0;
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        if entry.metadata()?.is_file() {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+async fn upload_folder_to_huggingface(local_path: &str, repo_path: &str) {
+    let repo_id = "MoreTorque/rlogs";
+
+    let status = std::process::Command::new("huggingface-cli")
+        .arg("upload")
+        .arg(repo_id)
+        .arg(local_path)
+        .arg("/")
+        .arg("--repo-type=dataset")
+        .status()
+        .expect("failed to execute process");
+
+    if status.success() {
+        tracing::info!("Folder {local_path} uploaded to Hugging Face successfully");
+    } else {
+        tracing::error!("Failed to upload folder {local_path} to Hugging Face");
+    }
+}
+
+fn clear_directory(path: &std::path::Path) -> std::io::Result<()> {
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                clear_directory(&entry_path)?;
+                std::fs::remove_dir(&entry_path)?;
+            } else {
+                std::fs::remove_file(&entry_path)?;
+            }
+        }
+    }
+    Ok(())
 }
