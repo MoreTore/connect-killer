@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod anonlogs;
 pub mod authorized_users;
 pub mod bootlogs;
 pub mod devices;

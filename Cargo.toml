@@ -66,6 +66,7 @@ rayon = "1.10.0"
 ffmpeg = "0.3.0"
 tempfile = "3.10.1"
 once_cell = "1.19.0"
+sysinfo = "0.30.12"
 
 [[bin]]
 name = "connect-cli"
