@@ -41,7 +41,7 @@ use tokio_util::io::StreamReader;
 use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
 use tokio::io::AsyncReadExt; // for read_to_end
 use rayon::prelude::*;
-use ffmpeg::{format as ffmpeg_format, Error as FfmpegError};
+use ffmpeg_next::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt;
