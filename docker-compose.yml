@@ -1,0 +1,64 @@
+version: "3"
+
+services:
+  db:
+    image: postgres:15.3-alpine
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    networks:
+      - db
+    volumes:
+      # - postgres-data:/var/lib/postgresql/data
+      - ./pgvector:/pgvector
+    env_file:
+      - .env
+    # entrypoint: ["sh", "/pgvector/init_pgvector.sh"]
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    networks:
+      - redis
+  minikeyvalue:
+    build:
+      context: ./minikeyvalue
+      dockerfile: Dockerfile
+    volumes:
+      - kvstore:/tmp
+    ports:
+      - "3000-3005:3000-3005"
+    networks:
+      - kvnetwork
+    restart: unless-stopped
+  connect:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3222:3222"
+      - "3223:3223"
+    depends_on:
+      - db
+      - redis
+      - minikeyvalue
+    env_file:
+      - .env
+    networks:
+      - db
+      - redis
+      - kvnetwork
+    volumes:
+      - cargo-cache:/usr/local/cargo
+      - connect-target:/usr/src/connect/target
+
+volumes:
+  postgres-data:
+  kvstore:
+  cargo-cache:
+  connect-target:
+
+networks:
+  db:
+  redis:
+  kvnetwork:

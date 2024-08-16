@@ -586,7 +586,7 @@ async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     temp_file_async.sync_all().await.unwrap();
 
     // Use FFmpeg to open the file and get the duration
-    ffmpeg::init()?;
+    ffmpeg_next::init()?;
     let context = ffmpeg_format::input(&temp_file.path())?;
     let duration = context.duration() as f32 / 1_000_000.0;
     Ok(duration)
