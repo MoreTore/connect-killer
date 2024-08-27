@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     clang \
     curl \
     wget \
+    cron \
+    libpq-dev \
     libssl-dev \
     pkg-config \
     libavutil-dev \
@@ -21,9 +23,6 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Python packages
-RUN pip3 install -U "huggingface_hub[cli,hf_transfer]"
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- --default-toolchain 1.80.1 -y
@@ -40,12 +39,20 @@ WORKDIR /usr/src/connect
 
 # Copy the Cargo.toml and source code
 COPY . .
+# Install Python packages
+RUN pip3 install -U "huggingface_hub[cli,hf_transfer]"
+RUN pip3 install --no-cache-dir -r fetch/requirements.txt
 
 # Load NVM and install Node.js
 RUN /bin/bash -c "./install_deps.sh"
 # Build the application with necessary features
-RUN /bin/bash -c "source $HOME/.cargo/env && cargo install loco-cli cargo-insta sea-orm-cli"
-RUN /bin/bash -c "source $HOME/.cargo/env && cargo build"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=33554432 && cargo install loco-cli cargo-insta sea-orm-cli"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=33554432 && cargo build --release"
+
+# Setup cronjob for deleting old files
+RUN echo "0 * * * * cd /usr/src/connect && ./target/release/connect-cli task deleter >> /var/log/cron.log 2>&1" > /etc/cron.d/connect-cron
+RUN chmod 0644 /etc/cron.d/connect-cron
+RUN crontab /etc/cron.d/connect-cron
 
 # Expose the ports your server runs on
 # HTTPS
@@ -56,4 +63,4 @@ EXPOSE 3111
 EXPOSE 3112
 
 
-CMD ./start_useradmin.sh & ./start_connect.sh & wait
+CMD ./start_connect.sh & ./start_useradmin.sh & wait

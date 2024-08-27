@@ -6,11 +6,10 @@ services:
     restart: unless-stopped
     ports:
       - 5432:5432
-    networks:
-      - db
+    network_mode: "host"
     volumes:
-      # - postgres-data:/var/lib/postgresql/data
-      - ./pgvector:/pgvector
+      - pgdata:/var/lib/postgresql/data
+      #- ./pgvector:/pgvector
     env_file:
       - .env
     # entrypoint: ["sh", "/pgvector/init_pgvector.sh"]
@@ -19,18 +18,16 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
-    networks:
-      - redis
+    network_mode: "host"
   minikeyvalue:
     build:
       context: ./minikeyvalue
       dockerfile: Dockerfile
     volumes:
-      - kvstore:/tmp
+      - /mnt/raid5/kvstore:/tmp
     ports:
       - "3000-3005:3000-3005"
-    networks:
-      - kvnetwork
+    network_mode: "host"
     restart: unless-stopped
   connect:
     build: .
@@ -38,27 +35,19 @@ services:
     ports:
       - "3222:3222"
       - "3223:3223"
+      - "3111:3111"
+      - "3112:3112"
     depends_on:
       - db
-      - redis
+      # - redis
       - minikeyvalue
     env_file:
       - .env
-    networks:
-      - db
-      - redis
-      - kvnetwork
+    network_mode: "host"
     volumes:
       - cargo-cache:/usr/local/cargo
-      - connect-target:/usr/src/connect/target
 
 volumes:
-  postgres-data:
-  kvstore:
+  pgdata:
   cargo-cache:
   connect-target:
-
-networks:
-  db:
-  redis:
-  kvnetwork:

@@ -2,8 +2,7 @@
 **/config/*.local.yaml
 /tests
 .env
-.secrete
-logfile.txt
+venv/
 cert.pem
 key.pem
 start*

@@ -1,9 +1,11 @@
-pub const MKV_ENDPOINT: &str = "http://localhost:3000";
+use::std::env;
 
 pub fn list_keys_starting_with(str: &str) -> String {
-  format!("{}/{}?list", MKV_ENDPOINT, str)
+  let mkv_endpoint = env::var("MKV_ENDPOINT").expect("MKV_ENDPOINT env variable not set");
+  format!("{}/{}?list", mkv_endpoint, str)
 }
 
 pub fn get_mkv_file_url(file: &str) -> String {
-    format!("{}/{}", MKV_ENDPOINT, file)
+  let mkv_endpoint = env::var("MKV_ENDPOINT").expect("MKV_ENDPOINT env variable not set");
+  format!("{}/{}", mkv_endpoint, file)
 }

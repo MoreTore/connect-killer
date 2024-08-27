@@ -23,6 +23,7 @@ impl MigrationTrait for Migration {
                     .col(integer_null(Devices::OwnerId))
                     .col(string(Devices::DeviceType))
                     .col(string(Devices::Alias))
+                    .col(big_integer_null(Devices::ServerStorage))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-devices-users")
@@ -60,6 +61,7 @@ enum Devices {
     OwnerId,
     DeviceType,
     Alias,
+    ServerStorage,
 }
 
 

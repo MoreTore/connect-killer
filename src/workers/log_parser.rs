@@ -37,17 +37,22 @@ use std::time::Instant;
 //use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
                 
 use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
-use tokio_util::io::StreamReader;
-use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
-use tokio::io::AsyncReadExt; // for read_to_end
+
+
 use rayon::prelude::*;
 use ffmpeg_next::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
+use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
 use futures_util::StreamExt;
-use tokio::io::AsyncWriteExt;
+use tokio_util::io::StreamReader;
+use tokio::{
+    io::{AsyncWriteExt, AsyncReadExt},
+    process::Command,
+    sync::{Mutex, Notify},
+};
+
 
 use std::collections::HashMap;
-use tokio::sync::{Mutex, Notify};
 
 use std::sync::Arc;
 use once_cell::sync::Lazy;
@@ -135,6 +140,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let start_time = Instant::now();
         tracing::trace!("Starting QlogParser for URL: {}", args.internal_file_url);
         let client = self.client.clone();
+        let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
 
         // check if the device is in the database
         let _device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
@@ -156,7 +162,10 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 let default_route_model = routes::Model {
                     fullname: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
-                    url: format!("https://connect-api.duckdns.org/connectdata/{}/{}_{}", args.dongle_id, args.dongle_id, args.timestamp),
+                    url: format!("{api_endpoint}/connectdata/{}/{}_{}", 
+                        args.dongle_id,
+                        args.dongle_id,
+                        args.timestamp),
                     ..Default::default()
                 };
                 match default_route_model.add_route_self(&self.ctx.db).await {
@@ -227,7 +236,11 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let mut ignore_uploads = None;
         match args.file.as_str() {
             "rlog.bz2" =>  {
-                seg.rlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/rlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
+                seg.rlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/rlog/{}/{}/{}/{}",
+                    args.dongle_id,
+                    args.timestamp,
+                    args.segment,
+                    args.file));
                 match anonamize_rlog(&self.ctx, response, &client, &args).await {
                     Ok(_) => (),
                     Err(e) => return Err(sidekiq::Error::Message("Failed to anonamize rlog: ".to_string() + &e.to_string())),
@@ -244,11 +257,15 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     Ok(duration) => seg.qcam_duration = ActiveValue::Set(duration),
                     Err(_e) => tracing::error!("failed to get duration"),
                 }
-                seg.qcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
+                seg.qcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qcam/{}/{}/{}/{}", 
+                    args.dongle_id, 
+                    args.timestamp, 
+                    args.segment, 
+                    args.file));
             }
-            "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             f => { 
                 tracing::error!("Got invalid file type: {}", f);
                 ignore_uploads = Some(true);
@@ -422,19 +439,20 @@ async fn parse_qlog(
     args: &LogSegmentWorkerArgs, 
     _ctx: &AppContext
 ) -> worker::Result<Vec<u8>> {
+    let api_endpoint = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     seg.ulog_url = ActiveValue::Set(
         format!(
-            "https://connect-api.duckdns.org/connectdata/logs?url={}",
-            common::mkv_helpers::get_mkv_file_url(
-                &format!("{}_{}--{}--{}",
-                    args.dongle_id,
-                    args.timestamp,
-                    args.segment,
-                    args.file.replace("bz2", "unlog")
-                )
+            "{api_endpoint}/connectdata/logs?url={}",
+                common::mkv_helpers::get_mkv_file_url(
+                    &format!("{}_{}--{}--{}",
+                        args.dongle_id,
+                        args.timestamp,
+                        args.segment,
+                        args.file.replace("bz2", "unlog")
+                    )
             )
         ));
-    seg.qlog_url = ActiveValue::Set(format!("https://connect-api.duckdns.org/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
+    seg.qlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
 
     let mut writer = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);
@@ -569,7 +587,7 @@ async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Resul
 
 async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     // Create a temporary file to store the video data
-    let temp_file = NamedTempFile::new().unwrap();
+    let temp_file: NamedTempFile = NamedTempFile::new().unwrap();
     let mut temp_file_async = tokio::fs::File::from_std(temp_file.reopen().unwrap());
     let mut stream = response.bytes_stream();
 
@@ -910,13 +928,14 @@ fn get_file_count(path: &std::path::Path) -> std::io::Result<usize> {
 async fn upload_folder_to_huggingface(local_path: &str, repo_path: &str) {
     let repo_id = "MoreTorque/rlogs";
 
-    let status = std::process::Command::new("huggingface-cli")
+    let status = Command::new("huggingface-cli")
         .arg("upload")
         .arg(repo_id)
         .arg(local_path)
         .arg("/")
         .arg("--repo-type=dataset")
         .status()
+        .await
         .expect("failed to execute process");
 
     if status.success() {

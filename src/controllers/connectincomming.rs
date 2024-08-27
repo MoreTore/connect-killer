@@ -44,10 +44,12 @@ pub async fn upload_bootlogs(
         }
     }
     let data = buffer.freeze();
+    let data_len = data.len() as i64;
     tracing::info!(
         "File `{}` received is {} bytes",
         full_url, data.len()
     );
+
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
         .body(data)
@@ -60,6 +62,18 @@ pub async fn upload_bootlogs(
             match status {
                 StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
                 StatusCode::CREATED | StatusCode::OK => {
+                    if let Some(device) = auth.device_model {
+                        let prev_server_usage = device.server_storage;
+                        let mut active_device = device.into_active_model();
+                        active_device.server_storage = ActiveValue::Set(data_len + prev_server_usage);
+                        match active_device.update(&ctx.db).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
+                            }
+                        }
+                
+                    }
                     // Enqueue the file for processing
                     tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
                     let result = BootlogParserWorker::perform_later(&ctx, 
@@ -108,10 +122,12 @@ pub async fn upload_crash(
         }
     }
     let data = buffer.freeze();
+    let data_len = data.len() as i64;
     tracing::info!(
         "File `{}` received is {} bytes",
         full_url, data.len()
     );
+
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
         .body(data)
@@ -125,7 +141,19 @@ pub async fn upload_crash(
                 StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
                 StatusCode::CREATED | StatusCode::OK => {
                     // Enqueue the file for processing
-                    tracing::debug!("{full_url} file Uploaded Successfully"); return Ok((status, "File uploaded."));
+                    tracing::debug!("{full_url} file Uploaded Successfully");
+                    if let Some(device) = auth.device_model {
+                        let prev_server_usage = device.server_storage;
+                        let mut active_device = device.into_active_model();
+                        active_device.server_storage = ActiveValue::Set(data_len + prev_server_usage);
+                        match active_device.update(&ctx.db).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
+                            }
+                        }
+                    }
+                    return Ok((status, "File uploaded."));
                 }
                 _ => {tracing::error!("Unhandled status. File not uploaded."); return Ok((status, "Unhandled status. File not uploaded."));}
             }
@@ -170,7 +198,7 @@ pub async fn upload_driving_logs(
     );
 
     let data = buffer.freeze();
-
+    let data_len = data.len() as i64;
 
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
@@ -198,7 +226,21 @@ pub async fn upload_driving_logs(
                         },
                     ).await;
                     match result {
-                        Ok(_) => { tracing::debug!("Queued Worker"); return Ok((status, "Queued Worker"));}
+                        Ok(_) => { 
+                            tracing::debug!("Queued Worker");
+                            if let Some(device) = auth.device_model {
+                                let prev_server_usage = device.server_storage;
+                                let mut active_device = device.into_active_model();
+                                active_device.server_storage = ActiveValue::Set(data_len + prev_server_usage);
+                                match active_device.update(&ctx.db).await {
+                                    Ok(_) => (),
+                                    Err(e) => {
+                                        tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
+                                    }
+                                }
+                            }
+                            return Ok((status, "Queued Worker"));
+                        }
                         Err(e) => {
                             tracing::error!("Failed to queue worker: {}", format!("{}", e));
                             return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."));

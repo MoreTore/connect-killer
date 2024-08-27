@@ -88,16 +88,23 @@ async fn handle_jsonrpc_request(
     }
 
     loop {
-        match time::timeout(Duration::from_secs(60), response_rx.recv()).await {
+        match time::timeout(Duration::from_secs(30), response_rx.recv()).await {
             Ok(Some(mut response)) => {
                 response.id -= now_id;
+                //let mut clients = manager.clients.lock().await;
+                //clients.remove(&now_id);
                 return format::json(response)
             },
             Ok(None) => {
                 // Acknowledge and continue waiting for a valid response
                 continue;
             },
-            Err(_e) => return loco_rs::controller::bad_request("timed out"),
+            Err(_e) => {
+                // Remove client on timeout
+                //let mut clients = manager.clients.lock().await;
+                //clients.remove(&now_id);
+                return loco_rs::controller::bad_request("timed out");
+            },
         }
     }
 }

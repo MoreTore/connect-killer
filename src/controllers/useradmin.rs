@@ -6,6 +6,7 @@ use axum::{
     extract::{Query, State}, Extension,
 };
 extern crate url;
+use std::env;
 
 use crate::{models::_entities, views};
 
@@ -85,14 +86,16 @@ pub async fn onebox_handler(
             canonical_route_name = Some(format!("{}|{}", dongle_id.as_ref().unwrap(), timestamp.as_ref().unwrap()));
         }
     }
-    let api_host = ctx.config.server.full_url().replace("http", "https");
-    let ws_host = api_host.replace("3112", "3223");
+    let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
+    let ws_endpoint: String = env::var("WS_ENDPOINT").expect("WS_ENDPOINT env variable not set");
+    //let api_host = ctx.config.server.full_url().replace("http", "https");
+    //let ws_host = api_host.replace("3112", "3223");
 
     let mut master_template = MasterTemplate {
         dongle_id: dongle_id.clone().unwrap_or_default(),
         onebox: onebox,
-        api_host: api_host,
-        ws_host: ws_host,
+        api_host: api_endpoint,
+        ws_host: ws_endpoint,
         ..Default::default()
     };
     if user_model.superuser {
@@ -159,7 +162,7 @@ pub async fn login(
     views::auth::login(
         v, 
         crate::views::auth::LoginTemplate { 
-            api_host: ctx.config.server.full_url()
+            api_host: env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set")
         }
     )
 }
