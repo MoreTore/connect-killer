@@ -147,8 +147,8 @@
           const jwtToken = getCookie('jwt');
           async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
           const route_name = canonical_route_name.split("|")[1];
-          const api_url = "https://connect-useradmin.duckdns.org/ws/" + dongle_id;
-          const uploadUrl = "https://connect-api.duckdns.org/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
+          const api_url = "https://useradmin.springerelectronics.com/ws/" + dongle_id;
+          const uploadUrl = "https://api.springerelectronics.com/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
 
           const uploadCommand = {
             jsonrpc: "2.0",
@@ -237,6 +237,7 @@
         <td style="white-space: nowrap">dongle_id</td>
         <td style="white-space: nowrap">serial</td>
         <td style="white-space: nowrap">device_type</td>
+        <td style="white-space: nowrap">server_storage</td>
         <td style="white-space: nowrap">alias</td>
         <td style="white-space: nowrap">sim_id</td>
         <td style="white-space: nowrap">prime</td>
@@ -248,7 +249,8 @@
       <tr>
         <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
         <td style="white-space: nowrap">{{ device.serial }}</td>
-        <td style="white-space: nowrap">{{ device.device_type }}</td>
+        <td style="white-space: nowrap">{{ device.device_type }}</td> 
+        <td style="white-space: nowrap">{{ device.server_storage }}</td> 
         <td style="white-space: nowrap">{{ device.alias }}</td>
         <td style="white-space: nowrap">{{ device.sim_id }}</td>
         <td style="white-space: nowrap">{{ device.prime }}</td>

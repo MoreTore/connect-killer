@@ -12,6 +12,7 @@ mod m20240504_174513_bootlogs;
 mod m20240522_001958_add_segment_miles;
 mod m20240522_001958_add_route_miles;
 mod m20240622_195829_anonlogs;
+mod m20240826_165428_add_devices_storage;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             //Box::new(m20240522_001958_add_route_miles::Migration),
             //Box::new(m20240522_001958_add_segment_miles::Migration),
             Box::new(m20240622_195829_anonlogs::Migration),
+            Box::new(m20240826_165428_add_devices_storage::Migration),
         ]
     }
 }

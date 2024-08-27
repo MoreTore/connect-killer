@@ -23,6 +23,7 @@ pub struct Model {
     pub owner_id: Option<i32>,
     pub device_type: String,
     pub alias: String,
+    pub server_storage: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

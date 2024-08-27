@@ -145,7 +145,7 @@ impl Hooks for App {
         let manager: Arc<ConnectionManager> = ConnectionManager::new();
         let ping_manager = manager.clone();
         tokio::spawn(async move {
-            let mut interval = time::interval(time::Duration::from_secs(30)); // Ping every 30 seconds
+            let mut interval = time::interval(time::Duration::from_secs(10)); // Ping every 10 seconds
             loop {
                 interval.tick().await;
                 crate::controllers::ws::send_ping_to_all_devices(ping_manager.clone()).await; 
@@ -187,16 +187,42 @@ impl Hooks for App {
         )
         .await
         .unwrap();
+    // Clone the app for the HTTP server
+    let app_clone = app.clone();
+    // HTTPS Listener
+    let https_addr = SocketAddr::from((
+        std::net::Ipv6Addr::UNSPECIFIED, 
+        my_server_config.https
+    ));
 
-        let addr = SocketAddr::from((
-            std::net::Ipv6Addr::UNSPECIFIED, 
-            my_server_config.https
-        ));
-        axum_server::bind_rustls(addr, config)
+    let https_server = tokio::spawn(async move {
+        axum_server::bind_rustls(https_addr, config)
             .serve(app.into_make_service())
             .await
-            .unwrap();
-        Ok(())
+    });
+
+    // HTTP Listener
+    let http_addr = SocketAddr::from((
+        std::net::Ipv6Addr::UNSPECIFIED,
+        my_server_config.http
+    ));
+
+    let http_server = tokio::spawn(async move {
+        axum_server::bind(http_addr)
+            .serve(app_clone.into_make_service())
+            .await
+    });
+
+    // Await both servers separately
+    if let Err(e) = http_server.await {
+        eprintln!("HTTP server failed: {}", e);
+    }
+
+    if let Err(e) = https_server.await {
+        eprintln!("HTTPS server failed: {}", e);
+    }
+
+    Ok(())
     }
 }
 

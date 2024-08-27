@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::Write as FmtWrite;
+use std::env;
 
 use crate::{common, models::_entities, enforce_ownership_rule, middleware::jwt};
 use super::v1_responses::*;
@@ -162,8 +163,8 @@ async fn get_links_for_route(
         if let Some(key_str) = key.as_str() {
             let parts: Vec<&str> = key_str.split('_').collect();
             if parts.len() == 2 {
-                urls.push(format!(
-                    "https://connect-api.duckdns.org/connectdata{}/{}?sig={}",
+                urls.push(format!("{}/connectdata{}/{}?sig={}",
+                    env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
                     parts[0],
                     transform_route_string(parts[1]),
                     jwt
@@ -242,7 +243,8 @@ async fn get_upload_url(
             auth.claims.identity.to_string()) {
         Ok(Json(json!({
             //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
-            "url": format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}",
+            "url": format!("{}/connectincoming/{dongle_id}/{}",
+                            env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
                             transform_route_string(&params.path)),
             "headers": {"Content-Type": "application/octet-stream",
                         "Authorization": format!("JWT {}", token)},
@@ -266,8 +268,9 @@ async fn upload_urls_handler(
         auth.claims.identity.to_string()) {
         let urls = data.paths.iter().map(|path| {
             UrlResponse {
-                url: format!("https://connect-api.duckdns.org/connectincoming/{dongle_id}/{}?sig={token}",
-                transform_route_string(path),
+                url: format!("{}/connectincoming/{dongle_id}/{}?sig={token}",
+                    env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
+                    transform_route_string(path),
                 ),
             }
         }).collect::<Vec<_>>();

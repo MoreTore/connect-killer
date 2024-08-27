@@ -6,6 +6,8 @@ use serde_json::Value;
 use loco_rs::prelude::*;
 use chrono::{Utc, Duration, NaiveDateTime, ParseError};
 use sysinfo::Disks;
+use std::env;
+use std::path::Path;
 
 use crate::{models::_entities::{
     segments,
@@ -19,9 +21,17 @@ fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, ParseError> {
 
 fn get_available_storage() -> u64 {
     let disks = Disks::new_with_refreshed_list();
-    disks.iter().map(|disk| disk.available_space()).sum()
+    println!("{:?}", disks);
+    let mount_point = env::var("MOUNT_POINT").expect("MOUNT_POINT env variable not set");
+    // Filter to only include the RAID 5 disk by checking the device name or mount point
+    disks
+        .iter()
+        .filter(|disk| {
+            disk.mount_point() == Path::new(&mount_point)
+        })
+        .map(|disk| disk.available_space())
+        .sum()
 }
-
 pub struct Deleter;
 #[async_trait]
 impl Task for Deleter {
