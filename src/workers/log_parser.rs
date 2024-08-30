@@ -1,15 +1,15 @@
 // Apology for the Messy Code
-/* 
-I apologize for the messiness and potential lack of clarity in this code. 
-It evolved organically over time with various additions and modifications to handle multiple aspects 
-of the log processing. This includes handling database interactions, HTTP requests, image processing, 
+/*
+I apologize for the messiness and potential lack of clarity in this code.
+It evolved organically over time with various additions and modifications to handle multiple aspects
+of the log processing. This includes handling database interactions, HTTP requests, image processing,
 and video duration extraction, among other tasks. As a result, the code may appear disjointed and less organized than ideal.
 
-I recognize that there are areas that could benefit from refactoring and clearer documentation to improve 
-readability and maintainability. Specifically, there are opportunities to modularize the code further, improve 
+I recognize that there are areas that could benefit from refactoring and clearer documentation to improve
+readability and maintainability. Specifically, there are opportunities to modularize the code further, improve
 error handling consistency, and enhance the overall structure.
 
-Your understanding and patience are greatly appreciated. I am committed to improving this codebase and 
+Your understanding and patience are greatly appreciated. I am committed to improving this codebase and
 welcome any suggestions you may have for making it cleaner and more efficient.
 
 Sincerely,
@@ -35,7 +35,7 @@ use reqwest::{Client, Response};
 
 use std::time::Instant;
 //use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
-                
+
 use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
 
 
@@ -155,15 +155,15 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
         let key = super::log_helpers::calculate_advisory_lock_key(&canonical_route_name);
         lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
-        
+
         let route_model = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
             Ok(route) => route,
-            Err(e) => { 
+            Err(e) => {
                 tracing::trace!("Recieved file for a new route. Adding to DB: {} or Db Error: {}", &canonical_route_name, e);
                 let default_route_model = routes::Model {
                     fullname: format!("{}|{}", args.dongle_id, args.timestamp),
                     device_dongle_id: args.dongle_id.clone(),
-                    url: format!("{api_endpoint}/connectdata/{}/{}_{}", 
+                    url: format!("{api_endpoint}/connectdata/{}/{}_{}",
                         args.dongle_id,
                         args.dongle_id,
                         args.timestamp),
@@ -186,7 +186,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         };
         self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
 
-        
+
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
         let key = super::log_helpers::calculate_advisory_lock_key(&canonical_name);
         self.lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
@@ -231,7 +231,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 return Err(sidekiq::Error::Message(e.to_string()));
             }
         };
-        
+
 
         let mut seg = segment.into_active_model();
         let mut ignore_uploads = None;
@@ -258,16 +258,16 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     Ok(duration) => seg.qcam_duration = ActiveValue::Set(duration),
                     Err(_e) => tracing::error!("failed to get duration"),
                 }
-                seg.qcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qcam/{}/{}/{}/{}", 
-                    args.dongle_id, 
-                    args.timestamp, 
-                    args.segment, 
+                seg.qcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qcam/{}/{}/{}/{}",
+                    args.dongle_id,
+                    args.timestamp,
+                    args.segment,
                     args.file));
             }
             "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
             "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            f => { 
+            f => {
                 tracing::error!("Got invalid file type: {}", f);
                 ignore_uploads = Some(true);
                 return Ok(())
@@ -317,7 +317,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 //     active_route_model: &routes::ActiveModel,
 //     ignore_uploads: &Option<bool>,
 // ) -> worker::Result<()> {
-    
+
 //     return Ok(());
 //}
 
@@ -347,9 +347,6 @@ async fn update_route_info(
     let mut segment_start_times = vec![];
     let mut segment_end_times = vec![];
     let mut segment_numbers = vec![];
-    let _proclog = -1;
-    let _procqcamera = -1;
-    let _procqlog = -1;
     let mut miles = 0.0;
     let mut hpgps = false;
 
@@ -385,6 +382,7 @@ async fn update_route_info(
             active_route_model.maxecamera = ActiveValue::Set(segment_model.number as i32);
         }
     }
+
     active_route_model.length = ActiveValue::Set(miles);
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
@@ -395,23 +393,23 @@ async fn update_route_info(
 
 async fn handle_qlog(
     seg: &mut segments::ActiveModel,
-    response: Response, 
-    args: &LogSegmentWorkerArgs, 
-    ctx: &AppContext, 
+    response: Response,
+    args: &LogSegmentWorkerArgs,
+    ctx: &AppContext,
     client: &Client
 ) -> worker::Result<()> {
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(bytes_stream);
     let mut bz2_decoder = BzDecoder::new(stream_reader);
-    
+
     let mut decompressed_data = Vec::new();
-    match bz2_decoder.read_to_end(&mut decompressed_data).await { 
-        Ok(_)=> (), 
+    match bz2_decoder.read_to_end(&mut decompressed_data).await {
+        Ok(_)=> (),
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
     // Prepare route and segment parameters
-    let writer = match parse_qlog(&client, seg, decompressed_data, args, ctx).await { 
-        Ok(writer) => writer, 
+    let writer = match parse_qlog(&client, seg, decompressed_data, args, ctx).await {
+        Ok(writer) => writer,
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
     // Upload the processed data
@@ -422,10 +420,10 @@ async fn handle_qlog(
 }
 
 async fn parse_qlog(
-    client: &Client, 
-    seg: &mut segments::ActiveModel, 
-    decompressed_data: Vec<u8>, 
-    args: &LogSegmentWorkerArgs, 
+    client: &Client,
+    seg: &mut segments::ActiveModel,
+    decompressed_data: Vec<u8>,
+    args: &LogSegmentWorkerArgs,
     _ctx: &AppContext
 ) -> worker::Result<Vec<u8>> {
     let api_endpoint = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
@@ -491,7 +489,7 @@ async fn parse_qlog(
                                 }));
                             }
                         }
-        
+
                         // Update last coordinates
                         last_lat = Some(lat);
                         last_lng = Some(lng);
@@ -538,7 +536,6 @@ async fn parse_qlog(
             LogEvent::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::ManagerState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::NavInstruction(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::GpsLocation(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::OnroadEvents(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::UploaderState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
@@ -653,14 +650,14 @@ macro_rules! reader_to_builder {
 
 async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, args: &LogSegmentWorkerArgs) -> Result<(), Error> {
     let start_time = Instant::now();
-    
+
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(bytes_stream);
     let mut bz2_decoder = BzDecoder::new(stream_reader);
-    
+
     let mut decompressed_data = Vec::new();
-    match bz2_decoder.read_to_end(&mut decompressed_data).await { 
-        Ok(_) => (), 
+    match bz2_decoder.read_to_end(&mut decompressed_data).await {
+        Ok(_) => (),
         Err(e) => return Err(Error::Message(e.to_string())),
     };
     let decompress_duration = start_time.elapsed();
@@ -737,7 +734,7 @@ async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, a
         }
         write_message(&mut writer, &message_builder).unwrap();
     }
-    
+
     let process_duration = process_start.elapsed();
     tracing::trace!("Processing messages took: {:?}", process_duration);
     if car_fingerprint.is_none() || (total_meters_traveled <= 40.0) {
@@ -761,7 +758,7 @@ async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, a
     let mut temp_file = tokio::fs::File::create(&temp_path).await?;
     let mut async_writer = tokio::io::BufWriter::new(temp_file);
     let mut async_bz_encoder = BzEncoder::with_quality(&mut async_writer, async_compression::Level::Default);
-    
+
     async_bz_encoder.write_all(&writer).await?;
     async_bz_encoder.shutdown().await?;
     async_writer.flush().await?;

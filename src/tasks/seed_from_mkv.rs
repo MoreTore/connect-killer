@@ -1,27 +1,12 @@
 use std::collections::BTreeMap;
 use std::thread;
-use std::time::{Duration, Instant};
-use regex::Regex;   
+use std::time::Duration;
 use reqwest::Client;
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{Value, from_str};
 use crate::{common, workers::{bootlog_parser::{BootlogParserWorker, BootlogParserWorkerArgs}, log_parser::{LogSegmentWorker, LogSegmentWorkerArgs}}};
 use loco_rs::prelude::*;
-
-const DONGLE_ID: &str = r"[0-9a-z]{16}";
-/// 
-/// const MONOTONIC_TIMESTAMP: &str = r"[0-9a-f]{8}--[0-9a-f]{10}";
-/// 
-/// const TIMESTAMP: &str = r"[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}";
-///
-/// MONOTONIC_TIMESTAMP or TIMESTAMP
-const ROUTE_NAME: &str = r"[0-9a-f]{8}--[0-9a-f]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}";
-/// Any number
-const NUMBER: &str = r"[0-9]+";
-/// Any file name
-const ANY_FILENAME: &str = r".+";
-const ALLOWED_FILENAME: &str = r"(rlog\.bz2|qlog\.bz2|qcamera\.ts|fcamera\.hevc|dcamera\.hevc|ecamera\.hevc|qlog\.unlog|sprite\.jpg|coords\.json|events\.json)";
-
+use crate::common::re::*;
 pub struct SeedFromMkv;
 
 #[async_trait]
@@ -54,8 +39,6 @@ impl Task for SeedFromMkv {
 
 
         // Define regex pattern for key parsing
-        // /164080f7933651c4_2024-04-26--19-07-52--1--qcamera.ts
-        //let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
         let segment_file_regex_string = format!(
             r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)"
         );

@@ -64,24 +64,6 @@ struct UrlResponse {
     url: String,
 }
 
-// pub async fn echo(State(ctx): State<AppContext>,
-//     req_body: String
-// ) -> String {
-//     let ret = req_body.clone();
-//     crate::workers::log_parser::LogSegmentWorker::perform_later(
-//         &ctx,
-//         crate::workers::log_parser::LogSegmentWorkerArgs {
-//             internal_file_url: "http://localhost:3000/164080f7933651c4_2024-02-05--16-22-28--10--qlog.bz2".to_string(),
-//             dongle_id: "164080f7933651c4".to_string(),
-//             timestamp: "2024-02-05--16-22-28".to_string(),
-//             segment: "10".to_string(),
-//             file: "qlog.bz2".to_string(),
-//             create_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
-//             },
-//     ).await.unwrap();
-//     ret
-// }
-
 pub async fn get_route_files(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
@@ -283,14 +265,23 @@ async fn upload_urls_handler(
 }
 
 fn transform_route_string(input_string: &str) -> String {
+    use crate::common::re::*;
+    let segment_file_regex_string = format!(
+        r"^({ROUTE_NAME})--({NUMBER})(?:--|/)({ALLOWED_FILENAME}$)"
+    );
+    let boot_file_regex_string = format!(
+        r"^boot/({ROUTE_NAME}).bz2$)"
+    );
+    let crash_file_regex_string = format!(
+        r"^crash/({ROUTE_NAME})_{}_(.+)$)","([0-9a-f]{8})"
+    );
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 or 2024-03-02--19-02-46--0/rlog
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
-    let re_drive_log = regex::Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)(?:--|/)(.+)$").unwrap();
+    let re_drive_log = regex::Regex::new(&segment_file_regex_string).unwrap();
     // or for openpilot version 0.9.7+ the new format is 0000008c--8a84371aea--0/rlog.bz2
-    // let re_new_format = regex::Regex::new(r"^([0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)/(.+)$").unwrap();
     // the crash log format is crash/0000008c--8a84371aea_<8 digit hex serial>__<crash name>
-    let re_crash_log = regex::Regex::new(r"^crash/([0-9a-f]{8}--[0-9a-f]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})_([0-9a-f]{8})_(.+)$").unwrap();
-    let re_boot_log = regex::Regex::new(r"^boot/([0-9a-z]{8}--[0-9a-z]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}).bz2$").unwrap();
+    let re_crash_log = regex::Regex::new(&crash_file_regex_string).unwrap();
+    let re_boot_log = regex::Regex::new(&boot_file_regex_string).unwrap();
     if let Some(caps) = re_drive_log.captures(input_string) {
         format!("{}/{}/{}",
             &caps[1], // DateTime or monotonic--uid
