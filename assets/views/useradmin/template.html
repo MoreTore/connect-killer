@@ -237,7 +237,7 @@
         <td style="white-space: nowrap">dongle_id</td>
         <td style="white-space: nowrap">serial</td>
         <td style="white-space: nowrap">device_type</td>
-        <td style="white-space: nowrap">server_storage</td>
+        <td style="white-space: nowrap">server storage used</td>
         <td style="white-space: nowrap">alias</td>
         <td style="white-space: nowrap">sim_id</td>
         <td style="white-space: nowrap">prime</td>
@@ -250,7 +250,7 @@
         <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
         <td style="white-space: nowrap">{{ device.serial }}</td>
         <td style="white-space: nowrap">{{ device.device_type }}</td> 
-        <td style="white-space: nowrap">{{ device.server_storage }}</td> 
+        <td style="white-space: nowrap">{{ device.server_storage / 1000000000}} GB</td> 
         <td style="white-space: nowrap">{{ device.alias }}</td>
         <td style="white-space: nowrap">{{ device.sim_id }}</td>
         <td style="white-space: nowrap">{{ device.prime }}</td>

@@ -45,9 +45,7 @@ pub async fn upload_bootlogs(
     }
     let data = buffer.freeze();
     let data_len = data.len() as i64;
-    tracing::info!(
-        "File `{}` received is {} bytes",
-        full_url, data.len()
+    tracing::info!("File `{}` received is {} bytes", full_url, data.len()
     );
 
     // Post the binary data to the specified URL
@@ -60,7 +58,7 @@ pub async fn upload_bootlogs(
             let status = response.status();
             tracing::trace!("Got Ok response with status {status}");
             match status {
-                StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
+                StatusCode::FORBIDDEN => { tracing::error!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
                 StatusCode::CREATED | StatusCode::OK => {
                     if let Some(device) = auth.device_model {
                         let prev_server_usage = device.server_storage;
@@ -123,10 +121,7 @@ pub async fn upload_crash(
     }
     let data = buffer.freeze();
     let data_len = data.len() as i64;
-    tracing::info!(
-        "File `{}` received is {} bytes",
-        full_url, data.len()
-    );
+    tracing::info!("File `{}` received is {} bytes", full_url, data.len());
 
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
@@ -138,7 +133,7 @@ pub async fn upload_crash(
             let status = response.status();
             tracing::trace!("Got Ok response with status {status}");
             match status {
-                StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
+                StatusCode::FORBIDDEN => { tracing::error!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
                 StatusCode::CREATED | StatusCode::OK => {
                     // Enqueue the file for processing
                     tracing::debug!("{full_url} file Uploaded Successfully");
@@ -173,7 +168,7 @@ pub async fn upload_driving_logs(
     State(ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
-) -> impl IntoResponse {
+) -> Result<(StatusCode, &'static str)> {
     //enforce_device_upload_permission!(auth);
     // Construct the URL to store the file
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file));
@@ -192,13 +187,9 @@ pub async fn upload_driving_logs(
         }
     }
 
-    println!(
-        "File `{}` received from `{}` is {} bytes",
-        file, dongle_id, buffer.len()
-    );
-
     let data = buffer.freeze();
     let data_len = data.len() as i64;
+    tracing::info!("File `{}` received is {} bytes", full_url, data.len());
 
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
@@ -211,44 +202,45 @@ pub async fn upload_driving_logs(
             let status = response.status();
             tracing::trace!("Got Ok response with status {status}");
             match status {
-                StatusCode::FORBIDDEN => { tracing::trace!("Duplicate file uploaded"); return Ok((status, "Duplicate File Upload")); }
+                StatusCode::FORBIDDEN => { tracing::error!("Duplicate file uploaded");}
                 StatusCode::CREATED | StatusCode::OK => {
-                    // Enqueue the file for processing
-                    tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
-                    let result = LogSegmentWorker::perform_later(&ctx, 
-                        LogSegmentWorkerArgs {
-                            internal_file_url: full_url,
-                            dongle_id: dongle_id,
-                            timestamp: timestamp,
-                            segment: segment,
-                            file: file,
-                            create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
-                        },
-                    ).await;
-                    match result {
-                        Ok(_) => { 
-                            tracing::debug!("Queued Worker");
-                            if let Some(device) = auth.device_model {
-                                let prev_server_usage = device.server_storage;
-                                let mut active_device = device.into_active_model();
-                                active_device.server_storage = ActiveValue::Set(data_len + prev_server_usage);
-                                match active_device.update(&ctx.db).await {
-                                    Ok(_) => (),
-                                    Err(e) => {
-                                        tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
-                                    }
-                                }
+                    if let Some(device) = auth.device_model {
+                        let prev_server_usage = device.server_storage;
+                        let mut active_device = device.into_active_model();
+                        active_device.server_storage = ActiveValue::Set(data_len + prev_server_usage);
+                        match active_device.update(&ctx.db).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                tracing::error!("Failed to update active route model. DB Error {}", e.to_string());
                             }
-                            return Ok((status, "Queued Worker"));
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to queue worker: {}", format!("{}", e));
-                            return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."));
                         }
                     }
                 }
                 _ => {tracing::error!("Unhandled status. File not uploaded."); return Ok((status, "Unhandled status. File not uploaded."));}
             }
+            // Enqueue the file for processing
+            tracing::debug!("File Uploaded Successfully. Queuing worker for {full_url}");
+            let result = LogSegmentWorker::perform_later(&ctx, 
+                LogSegmentWorkerArgs {
+                    internal_file_url: full_url,
+                    dongle_id: dongle_id,
+                    timestamp: timestamp,
+                    segment: segment,
+                    file: file,
+                    create_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64,
+                },
+            ).await;
+            match result {
+                Ok(_) => { 
+                    tracing::debug!("Queued Worker");
+                    return Ok((status, "Queued Worker"));
+                }
+                Err(e) => {
+                    tracing::error!("Failed to queue worker: {}", format!("{}", e));
+                    return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to queue worker."));
+                }
+            }
+
         },
         Err(e) => {
             
@@ -256,7 +248,6 @@ pub async fn upload_driving_logs(
             return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong"));
         }
     }
-    return unauthorized("error"); 
 }
 
 

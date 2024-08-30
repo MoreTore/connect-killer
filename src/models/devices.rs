@@ -1,5 +1,6 @@
 use sea_orm::entity::prelude::*;
 pub use super::_entities::devices::{self, ActiveModel, Entity, Model};
+use sea_orm::{ActiveValue, TransactionTrait, QueryOrder};
 use loco_rs::{prelude::*};
 
 use crate::controllers::v2::DeviceRegistrationParams;
@@ -73,6 +74,8 @@ impl super::_entities::devices::Model {
     ) -> Vec<devices::Model> {
         devices::Entity::find()
             .filter(devices::Column::OwnerId.eq(user_id))
+            .order_by_desc(devices::Column::Online)
+            .order_by_desc(devices::Column::LastAthenaPing)
             .all(db)
             .await
             .expect("Database query failed")
@@ -94,6 +97,8 @@ impl super::_entities::devices::Model {
         db: &DatabaseConnection,
     ) -> Vec<Model> {
         Entity::find()
+            .order_by_desc(devices::Column::Online)
+            .order_by_desc(devices::Column::LastAthenaPing)
             .all(db)
             .await
             .expect("Database query failed")
@@ -101,14 +106,26 @@ impl super::_entities::devices::Model {
 
     pub async fn find_device(
         db: &DatabaseConnection,
-        dongle_id: &String,
+        dongle_id: &str,
     ) -> ModelResult<Model> {
         let device = Entity::find()
             .filter(devices::Column::DongleId.eq(dongle_id))
             .one(db)
             .await?;
         device.ok_or_else(|| ModelError::EntityNotFound)
-    }    
+    }
+
+    pub async fn reset_online(
+        db: &DatabaseConnection,
+    ) -> Result<(), DbErr> {
+        // Update all devices to set `Online` to `false`
+        Entity::update_many()
+            .col_expr(devices::Column::Online, Expr::value(false))
+            .exec(db)
+            .await?;
+            
+        Ok(())
+    }
 
     // pub async fn add_own_device(
     //     &self, 

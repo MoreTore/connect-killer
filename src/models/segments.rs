@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, DeleteResult, TransactionTrait};
+use sea_orm::{entity::prelude::*, DeleteResult, TransactionTrait, QueryOrder};
 
 use loco_rs::{prelude::*};
 use serde::{Serialize};
@@ -148,7 +148,7 @@ impl super::_entities::segments::Model {
         
     }
 
-    pub async fn find_by_segment(
+    pub async fn find_one(
         db: &DatabaseConnection,
         canonical_name: &String,
     ) -> ModelResult<Model> {
@@ -158,18 +158,19 @@ impl super::_entities::segments::Model {
             .await?;
         segment.ok_or_else(|| ModelError::EntityNotFound)
     }
-
+    /// Sorted by segment number ascending
     pub async fn find_segments_by_route(
         db: &DatabaseConnection,
         canonical_route_name: &str,
     ) -> ModelResult<Vec<Model>> {
         let segments = segments::Entity::find()
             .filter(segments::Column::CanonicalRouteName.eq(canonical_route_name))
+            .order_by_asc(segments::Column::Number)
             .all(db)
             .await?;
         Ok(segments)
     }
-
+    /// Sorted by segment number ascending
     pub async fn find_time_filtered_device_segments(
         db: &DatabaseConnection,
         dongle_id: &str,
@@ -179,6 +180,7 @@ impl super::_entities::segments::Model {
         let segments = segments::Entity::find()
             .filter(segments::Column::CanonicalRouteName.starts_with(dongle_id))
             .filter(segments::Column::StartTimeUtcMillis.between(from, to))
+            .order_by_asc(segments::Column::Number)
             .all(db)
             .await?;
         Ok(segments)

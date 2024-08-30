@@ -89,7 +89,7 @@ impl Task for Deleter {
                         let timestamp = &caps[2];
                         let segment = &caps[3];
                         let _file_type = &caps[4];
-                        match segments::Model::find_by_segment(&ctx.db, &format!("{dongle_id}|{timestamp}--{segment}")).await {
+                        match segments::Model::find_one(&ctx.db, &format!("{dongle_id}|{timestamp}--{segment}")).await {
                             Ok(segment) => {
                                 let mut deleted = false;
                                 if segment.updated_at <= older_than && !deleted { // Fallback to updated_at
