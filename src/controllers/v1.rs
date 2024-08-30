@@ -10,7 +10,7 @@ use std::error::Error;
 use std::fmt::Write as FmtWrite;
 use std::env;
 
-use crate::{common, models::_entities, enforce_ownership_rule, middleware::jwt};
+use crate::{common, enforce_ownership_rule, middleware::jwt, models::{_entities}};
 use super::v1_responses::*;
 
 #[derive(Deserialize)]
@@ -233,6 +233,10 @@ async fn get_upload_url(
     } else {
         return unauthorized("Only registered devices can upload");
     }
+    let upload_url = format!("{}/connectincoming/{dongle_id}/{}",
+        env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
+        transform_route_string(&params.path));
+    tracing::info!("Device will upload to {upload_url}");
     // curl http://host/v1.4/ccfab3437bea5257/upload_url/?path=2019-06-06--11-30-31--9/fcamera.hevc&expiry_days=1
     // Assuming default expiry is 1 day if not specified
     params.validate_expiry();
@@ -243,9 +247,7 @@ async fn get_upload_url(
             auth.claims.identity.to_string()) {
         Ok(Json(json!({
             //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
-            "url": format!("{}/connectincoming/{dongle_id}/{}",
-                            env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
-                            transform_route_string(&params.path)),
+            "url": upload_url,
             "headers": {"Content-Type": "application/octet-stream",
                         "Authorization": format!("JWT {}", token)},
         })))
@@ -376,12 +378,50 @@ async fn device_location(
 
 async fn device_stats(
     _auth: crate::middleware::auth::MyJWT,
-    State(_ctx): State<AppContext>,
-    Path(_dongle_id): Path<String>,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    //let utc_time_now_millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as i64;
-    //let mut route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
-    format::json(DeviceStatsResponse {..Default::default()})
+    use std::time::{SystemTime, UNIX_EPOCH, Duration};
+
+    // Get the current time in milliseconds since the UNIX epoch
+    let utc_time_now_millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+
+    // Calculate the start of the week (7 days ago)
+    let one_week_ago_millis = utc_time_now_millis - Duration::from_secs(7 * 24 * 60 * 60).as_millis() as i64;
+
+    // Get total stats
+    let (total_length, route_count) = _entities::routes::Model::total_length_and_count_time_filtered(
+        &ctx.db,
+        &dongle_id,
+        None, // No time filter for total stats
+        None,
+    ).await?;
+
+    // Get stats for the past week
+    let (week_length, week_count) = _entities::routes::Model::total_length_and_count_time_filtered(
+        &ctx.db,
+        &dongle_id,
+        Some(one_week_ago_millis), // From one week ago
+        Some(utc_time_now_millis), // To now
+    ).await?;
+
+    let ret = DeviceStatsResponse{
+        all: DeviceStats {
+            distance: total_length,
+            routes: route_count,
+            ..Default::default()
+        },
+        week: DeviceStats {
+            distance: week_length,
+            routes: week_count,
+            ..Default::default()
+        },
+    };
+
+    format::json(ret)
 }
 
 async fn device_users(

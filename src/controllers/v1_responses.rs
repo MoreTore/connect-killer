@@ -44,9 +44,9 @@ pub struct DeviceLocationResponse {
 
 #[derive(Serialize, Debug, Default)]
 pub struct DeviceStats {
-    pub distance: f64,
-    pub minutes: i64,
-    pub routes: i64,
+    pub distance: f32,
+    pub minutes: i32,
+    pub routes: u32,
 }
 
 /// ## Device driving statistics

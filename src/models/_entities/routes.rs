@@ -11,7 +11,7 @@ pub struct Model {
     pub git_remote: Option<String>,
     pub version: Option<String>,
     pub git_branch: Option<String>,
-    pub start_time: Option<DateTime>,
+    
     pub platform: String,
     pub public: bool,
     pub devicetype: Option<i16>,
@@ -29,8 +29,10 @@ pub struct Model {
     pub end_lat: f64,
     #[sea_orm(column_type = "Double")]
     pub end_lng: f64,
-    pub end_time: Option<DateTime>,
+    pub start_time_utc_millis: i64,
     pub end_time_utc_millis: i64,
+    pub start_time: Option<DateTime>,
+    pub end_time: Option<DateTime>,
     pub hpgps: bool,
     pub init_logmonotime: i64,
     pub is_preserved: bool,
@@ -58,7 +60,6 @@ pub struct Model {
     pub segment_start_times: JsonValue,
     pub share_exp: String,
     pub share_sig: String,
-    pub start_time_utc_millis: i64,
     pub user_id: String,
     pub vin: String,
     pub created_at: DateTime,
