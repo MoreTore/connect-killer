@@ -472,6 +472,8 @@ async fn parse_qlog(
     let mut last_lat = None;
     let mut last_lng = None;
     let mut coordinates: Vec<serde_json::Value> = Vec::new();
+    let mut start_time: i64= -1;
+    let mut end_time: i64 = -1;
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
@@ -480,6 +482,7 @@ async fn parse_qlog(
             LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
                 let log_mono_time = event.get_log_mono_time();
                 if let Ok(gps) = gps {
+                    let gps_ts = gps.get_unix_timestamp_millis();
                     if (gps.get_flags() % 2) == 1 { // has fix
                         let lat = gps.get_latitude();
                         let lng = gps.get_longitude();
@@ -487,7 +490,7 @@ async fn parse_qlog(
                         if !gps_seen { // gps_seen is false the first time
                             gps_seen = true;
                             seg.hpgps = ActiveValue::Set(true);
-                            seg.start_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
+                            seg.start_time_utc_millis = ActiveValue::Set(gps_ts);
                             seg.start_lat = ActiveValue::Set(lat);
                             seg.start_lng = ActiveValue::Set(lng);
                         }
@@ -498,7 +501,7 @@ async fn parse_qlog(
                             total_meters_traveled += meters;
 
                             if let Some(onroad_mono_time) = onroad_mono_time{
-                                let route_time = (log_mono_time - onroad_mono_time) / 1000000000;
+                                let route_time = (log_mono_time - onroad_mono_time) / 1000000000; // time since the start of route
                                 coordinates.push(serde_json::json!({
                                     "t": route_time,
                                     "lat": lat,
@@ -512,7 +515,14 @@ async fn parse_qlog(
                         // Update last coordinates
                         last_lat = Some(lat);
                         last_lng = Some(lng);
-                        seg.end_time_utc_millis = ActiveValue::Set(gps.get_unix_timestamp_millis());
+
+                    } else if start_time == -1{
+                        start_time = gps_ts;
+                        seg.start_time_utc_millis = ActiveValue::Set(start_time);
+                    }
+                    if end_time < gps_ts {
+                        end_time = gps_ts;
+                        seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
                     }
                 }
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
