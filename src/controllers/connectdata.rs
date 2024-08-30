@@ -162,12 +162,12 @@ pub async fn bootlog_file_download(
 
 // a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19/12/sprite.jpg
 pub async fn thumbnail_download(
-    Path((_dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
+    Path((_dongle_id, canonical_route_name, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let lookup_key = format!("{canonical_route_name}--{segment}--sprite.jpg");
+    let lookup_key = format!("{canonical_route_name}--{segment}--{file}");
     let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
 
     // Prepare a request to fetch the file from storage
@@ -243,15 +243,15 @@ pub async fn render_segment_ulog(
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
-        .add("/:dongle_id/:timestamp/:segment/:file", get(file_stream))
+        //.add("/:dongle_id/:timestamp/:segment/:file", get(file_stream))
+        .add("/:dongle_id/:route_name/:segment/:file", get(thumbnail_download))
         //https://commadata2.blob.core.windows.net/qlog/164080f7933651c4/2024-04-07--11-04-32/0/qlog.bz2
         .add("/qlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/rlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/qcam/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/fcam/:dongle_id/:timestamp/:segment/:file", get(file_download))
-        .add("/dlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
-        .add("/elog/:dongle_id/:timestamp/:segment/:file", get(file_download))
+        .add("/dcam/:dongle_id/:timestamp/:segment/:file", get(file_download))
+        .add("/ecam/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/logs/", get(render_segment_ulog))
-        .add("/:dongle_id/:route_name/:segment/sprite.jpg", get(thumbnail_download))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
 }

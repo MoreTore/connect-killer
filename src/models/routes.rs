@@ -1,6 +1,6 @@
 use loco_rs::model::{ModelError, ModelResult};
 use loco_rs::prelude::*;
-use sea_orm::{ActiveValue, TransactionTrait, QuerySelect, DeleteResult};
+use sea_orm::{ActiveValue, TransactionTrait, QuerySelect, DeleteResult, QueryOrder};
 use super::_entities::routes::{self, ActiveModel, Entity, Model};
 
 
@@ -97,9 +97,10 @@ impl super::_entities::routes::Model {
         limit: Option<u64>,
     ) -> ModelResult<Vec<routes::Model>> {
         let routes = routes::Entity::find()
-            .filter(routes::Column::Fullname.starts_with(dongle_id))
+            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
             .filter(routes::Column::StartTimeUtcMillis.gte(from))
             .filter(routes::Column::StartTimeUtcMillis.lte(to))
+            .order_by_desc(routes::Column::CreatedAt)
             .limit(limit)
             .all(db).await?;
         Ok(routes)
@@ -127,14 +128,72 @@ impl super::_entities::routes::Model {
     /// Returns a `ModelResult` containing a vector of found routes on success, or an error on failure.
     pub async fn find_device_routes(
         db: &DatabaseConnection,
-        device_dongle_id: &String,
+        dongle_id: &String,
     ) -> ModelResult<Vec<Model>> {
         let routes = routes::Entity::find()
-            .filter(routes::Column::DeviceDongleId.eq(device_dongle_id))
+            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
+            .order_by_desc(routes::Column::CreatedAt)
             .all(db)
             .await?;
         Ok(routes)
     }
+
+    pub async fn total_length_and_count(
+        db: &DatabaseConnection,
+        dongle_id: &String,
+    ) -> ModelResult<(f32, u32)> {
+        use sea_orm::prelude::*;
+        use sea_orm::QuerySelect;
+
+        let routes: Vec<f32> = routes::Entity::find()
+            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
+            .select_only()
+            .column(routes::Column::Length)
+            .into_tuple::<f32>() // Use f32 to match the SQL type
+            .all(db)
+            .await?;
+    
+        let total_length: f32 = routes.iter().sum(); // Sum all the lengths
+        let route_count = routes.len() as u32; // Count the number of routes
+    
+        Ok((total_length, route_count))
+    }
+
+    pub async fn total_length_and_count_time_filtered(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+        from: Option<i64>,
+        to: Option<i64>,
+    ) -> ModelResult<(f32, u32)> {
+        use sea_orm::prelude::*;
+        use sea_orm::QuerySelect;
+        use sea_orm::Condition;
+    
+        let mut condition = Condition::all()
+            .add(routes::Column::DeviceDongleId.eq(dongle_id));
+    
+        if let Some(from) = from {
+            condition = condition.add(routes::Column::StartTimeUtcMillis.gte(from));
+        }
+    
+        if let Some(to) = to {
+            condition = condition.add(routes::Column::StartTimeUtcMillis.lte(to));
+        }
+    
+        let routes: Vec<f32> = routes::Entity::find()
+            .filter(condition)
+            .select_only()
+            .column(routes::Column::Length)
+            .into_tuple::<f32>() // Use f32 to match the SQL type
+            .all(db)
+            .await?;
+    
+        let total_length: f32 = routes.iter().sum(); // Sum all the lengths
+        let route_count = routes.len() as u32; // Count the number of routes
+    
+        Ok((total_length, route_count))
+    }
+
 
     /// Deletes a route by its canonical route name.
     ///
