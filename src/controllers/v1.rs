@@ -270,10 +270,10 @@ fn transform_route_string(input_string: &str) -> String {
         r"^({ROUTE_NAME})--({NUMBER})(?:--|/)({ALLOWED_FILENAME}$)"
     );
     let boot_file_regex_string = format!(
-        r"^boot/({ROUTE_NAME}).bz2$)"
+        r"^boot/({ROUTE_NAME}).bz2$"
     );
     let crash_file_regex_string = format!(
-        r"^crash/({ROUTE_NAME})_{}_(.+)$)","([0-9a-f]{8})"
+        r"^crash/({ROUTE_NAME})_([0-9a-f]{{8}})_(.+)$"
     );
     // example input_string = 2024-03-02--19-02-46--0--rlog.bz2 or 2024-03-02--19-02-46--0/rlog
     // converts to =          2024-03-02--19-02-46/0/rlog.bz2
