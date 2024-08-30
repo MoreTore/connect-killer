@@ -146,6 +146,23 @@ pub struct MeResponse {
 // "sim_id": "890000000000000000",
 // "trial_claimed": false
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DeviceFeatures {
+    nav: bool,
+    prime: bool,
+    prime_data: bool,
+}
+
+impl Default for DeviceFeatures {
+    fn default() -> Self {
+        Self {
+            nav: true,
+            prime: true,
+            prime_data: false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct DeviceResponse {
     pub alias: String,
@@ -170,6 +187,7 @@ pub struct DeviceResponse {
     pub sim_id: Option<String>,
     pub trial_claimed: bool,
     pub online: bool,
+    pub eligible_features: DeviceFeatures,
 
 }
 #[derive(Serialize, Deserialize, Default, Debug)]

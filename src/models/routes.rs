@@ -89,6 +89,23 @@ impl super::_entities::routes::Model {
         }
     }
 
+    pub async fn find_latest_pos(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+    ) -> ModelResult<(f64, f64, i64)> {
+        let route = Entity::find()
+            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
+            .filter(routes::Column::Hpgps.eq(true))
+            .order_by_desc(routes::Column::EndTimeUtcMillis)
+            .one(db)
+            .await?
+            .unwrap_or_default();
+
+        Ok((route.end_lat, route.end_lng, route.end_time_utc_millis))
+    }
+
+
+
     pub async fn find_time_filtered_device_routes(
         db: &DatabaseConnection,
         dongle_id: &str,

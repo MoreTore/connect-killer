@@ -360,11 +360,30 @@ async fn device_info(
 }
 
 async fn device_location(
-    _auth: crate::middleware::auth::MyJWT,
-    State(_ctx): State<AppContext>,
-    Path(_dongle_id): Path<String>,
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    format::json(DeviceLocationResponse {..Default::default()})
+    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    if !user_model.superuser {
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id, 
+            "Can only locate owned devices!"
+        );
+    }
+    // get most recent route with gps
+    let (lat, lng, time) = _entities::routes::Model::find_latest_pos(&ctx.db, &dongle_id).await?;
+    let response = DeviceLocationResponse {
+        dongle_id,
+        lat,
+        lng,
+        time,
+        ..Default::default()
+    };
+
+    format::json(response)
 }
 
 async fn device_stats(
@@ -543,6 +562,23 @@ async fn get_me(
     })
 }
 
+struct Destination {
+    latitude: f64,
+    longitude: f64,
+    place_details: String,
+    place_name: String,
+}
+
+// async fn set_destination(
+//     auth: crate::middleware::auth::MyJWT,
+//     State(_ctx): State<AppContext>,
+//     Path(dongle_id): Path<String>,
+//     Form(destination): Form<Destination>
+// ) -> Result<Response> {
+    
+// }
+
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("v1")
@@ -561,4 +597,5 @@ pub fn routes() -> Routes {
         .add(".1/devices/:dongle_id/stats", get(device_stats))
         .add("/devices/:dongle_id/users", get(device_users))
         .add(".1/devices/:dongle_id", get(device_info))
+        //.add("/navigation/:dongle_id/set_destination", post(set_destination))
     }
