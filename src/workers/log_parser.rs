@@ -347,15 +347,9 @@ async fn update_route_info(
     let mut segment_start_times = vec![];
     let mut segment_end_times = vec![];
     let mut segment_numbers = vec![];
-    // let mut maxcamera = -1;
-    // let mut maxdcamera = -1;
-    // let mut maxecamera = -1;
-    // let mut maxlog = -1;
-    // let mut maxqlog = -1;
     let _proclog = -1;
     let _procqcamera = -1;
     let _procqlog = -1;
-    //let mut maxqcamera = -1;
     let mut miles = 0.0;
     let mut hpgps = false;
 
@@ -365,37 +359,29 @@ async fn update_route_info(
         segment_end_times.push(segment_model.end_time_utc_millis);
         segment_numbers.push(segment_model.number);
 
-        // check if we have gps time reference in this segment, and not in the first segment because gps didn't lock until this segment
-        if (segment_model.start_time_utc_millis != 0) && (segment_models[0].start_time_utc_millis == 0) {
-            let calculated_start_time = (segment_model.start_time_utc_millis - (segment_model.number as i64 * 60000)); // 60000ms in a segment
+        if segment_model.hpgps { // if this segment has accurate timestamp
+            let calculated_start_time = (segment_model.start_time_utc_millis - (segment_model.number as i64 * 60000));
             active_route_model.start_time_utc_millis = ActiveValue::Set(calculated_start_time);
             active_route_model.start_time =  ActiveValue::Set(DateTime::from_timestamp_millis(calculated_start_time));
         }
 
-
         hpgps |= segment_model.hpgps;
         if segment_model.qlog_url != "" {
-            //maxqlog+= 1;
             active_route_model.maxqlog = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.rlog_url != "" {
-            //maxlog+= 1;
             active_route_model.maxlog = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.qcam_url != "" {
-            //maxqcamera+= 1;
             active_route_model.maxqcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.fcam_url != "" {
-            //maxcamera+= 1;
             active_route_model.maxcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.dcam_url != "" {
-            //maxdcamera+= 1;
             active_route_model.maxdcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.ecam_url != "" {
-            //maxecamera+= 1;
             active_route_model.maxecamera = ActiveValue::Set(segment_model.number as i32);
         }
     }
@@ -405,12 +391,6 @@ async fn update_route_info(
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
     active_route_model.hpgps = ActiveValue::Set(hpgps);
     return Ok(());
-    // return Ok(active_route_model);
-    // // Update the route in the db
-    // match active_route_model.update(&ctx.db).await {
-    //     Ok(_) => return Ok(()),
-    //     Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
-    // }
 }
 
 async fn handle_qlog(
