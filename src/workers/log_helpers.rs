@@ -16,9 +16,9 @@ pub fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     r * c // Distance in meters
 }
 
-pub fn calculate_advisory_lock_key(canonical_name: &str) -> i64 {
-    // Generate a unique key for the advisory lock based on the canonical name
+pub fn calculate_advisory_lock_key(canonical_name: &str) -> u32 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical_name.hash(&mut hasher);
-    hasher.finish() as i64
+    // Get the lower 32 bits of the hash
+    hasher.finish() as u32
 }

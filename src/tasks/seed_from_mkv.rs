@@ -8,6 +8,19 @@ use serde_json::{Value, from_str};
 use crate::{common, workers::{bootlog_parser::{BootlogParserWorker, BootlogParserWorkerArgs}, log_parser::{LogSegmentWorker, LogSegmentWorkerArgs}}};
 use loco_rs::prelude::*;
 
+const DONGLE_ID: &str = r"[0-9a-z]{16}";
+/// 
+/// const MONOTONIC_TIMESTAMP: &str = r"[0-9a-f]{8}--[0-9a-f]{10}";
+/// 
+/// const TIMESTAMP: &str = r"[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}";
+///
+/// MONOTONIC_TIMESTAMP or TIMESTAMP
+const ROUTE_NAME: &str = r"[0-9a-f]{8}--[0-9a-f]{10}|[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}";
+/// Any number
+const NUMBER: &str = r"[0-9]+";
+/// Any file name
+const ANY_FILENAME: &str = r".+";
+const ALLOWED_FILENAME: &str = r"(rlog\.bz2|qlog\.bz2|qcamera\.ts|fcamera\.hevc|dcamera\.hevc|ecamera\.hevc|qlog\.unlog|sprite\.jpg|coords\.json|events\.json)";
 
 pub struct SeedFromMkv;
 
@@ -42,37 +55,46 @@ impl Task for SeedFromMkv {
 
         // Define regex pattern for key parsing
         // /164080f7933651c4_2024-04-26--19-07-52--1--qcamera.ts
-        let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
-
+        //let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2})--([0-9]+)--(.+)$").unwrap();
+        let segment_file_regex_string = format!(
+            r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)"
+        );
+        let re = regex::Regex::new(&segment_file_regex_string).unwrap();
         for key_value in keys {
             let file_name = key_value.as_str().unwrap().trim_start_matches('/').to_string(); // Convert to string for independent ownership
     
             match re.captures(&file_name) {
                 Some(caps) => {
-                    let dongle_id = caps[1].to_string();
-                    let timestamp = caps[2].to_string();
+                    let dongle_id = caps[1].to_string(); 
+                    let timestamp = caps[2].to_string(); // DateTime or monotonic--uid
                     let segment = caps[3].to_string();
                     let file_type = caps[4].to_string();
-                    if dongle_id != "3b58edf884ab4eaf" {
+
+                    if file_type != "qlog.bz2" {
                         continue;
                     }
-                    // if timestamp != "2024-05-13--18-15-51" {
-                    //     continue;
-                    // }
 
-                    if file_type.to_string().ends_with(".unlog") || file_type.to_string().ends_with("sprite.jpg") {
+                    if  file_type.to_string().ends_with(".unlog") || 
+                        file_type.to_string().ends_with("sprite.jpg") ||
+                        file_type.to_string().ends_with("coords.json") {
                         // skip this file 
                         continue
+                    
                     } else if file_type.to_string().ends_with("qlog.bz2") {
                         // delete the unlog file from mkv
                         let unlog_file_name = file_name.replace(".bz2", ".unlog");
                         let internal_unlog_url = common::mkv_helpers::get_mkv_file_url(&unlog_file_name);
                         tracing::trace!("Deleting: {internal_unlog_url}");
                         let response = client.delete(&internal_unlog_url).send().await.unwrap();
+                        // delete the sprite file from mkv
                         let sprite_file_name = file_name.replace("qlog.bz2", "sprite.jpg");
                         let internal_sprite_url = common::mkv_helpers::get_mkv_file_url(&sprite_file_name);
                         tracing::trace!("Deleting: {internal_sprite_url}");
                         let response = client.delete(&internal_sprite_url).send().await.unwrap();
+                        let coords_file_name = file_name.replace("qlog.bz2", "coords.json");
+                        let internal_coords_url = common::mkv_helpers::get_mkv_file_url(&coords_file_name);
+                        tracing::trace!("Deleting: {internal_coords_url}");
+                        let response = client.delete(&internal_coords_url).send().await.unwrap();
                     }
     
                     let internal_url = common::mkv_helpers::get_mkv_file_url(&file_name);
@@ -90,7 +112,7 @@ impl Task for SeedFromMkv {
                     ).await;
     
                     match result {
-                        Ok(_) => tracing::debug!("Queued Worker"),
+                        Ok(_) => tracing::info!("Queued Worker"),
                         Err(e) => {
                             tracing::error!("Failed to queue worker: {}", e);
                             return Ok(());
