@@ -76,7 +76,7 @@ use sea_orm::{DatabaseConnection, DbErr, Statement};
 use async_trait::async_trait;
 
 pub struct LockManager {
-    keys: Mutex<HashMap<i64, bool>>,
+    keys: Mutex<HashMap<u32, bool>>,
     notify: Notify,
 }
 
@@ -88,7 +88,7 @@ impl LockManager {
         }
     }
 
-    pub async fn acquire_advisory_lock(&self, db: &DatabaseConnection, key: i64) -> Result<(), DbErr> {
+    pub async fn acquire_advisory_lock(&self, db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
         // This is the local server lock
         let mut keys = self.keys.lock().await;
         while keys.contains_key(&key) {
@@ -101,24 +101,25 @@ impl LockManager {
         // Insert the key to indicate it is locked
         keys.insert(key, true);
         // This is the global lock (literally for servers around the globe accessing the same db)
-        tracing::trace!("Attempting to acquire advisory lock with key: {}", key);
-        let sql = format!("SELECT pg_advisory_lock({})", key);
-        db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
-        tracing::trace!("Successfully acquired advisory lock with key: {}", key);
+        // tracing::trace!("Attempting to acquire advisory lock with key: {}", key);
+        // let sql = format!("SELECT pg_advisory_lock({})", key);
+        // db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
+        // tracing::trace!("Successfully acquired advisory lock with key: {}", key);
+
 
         Ok(())
     }
 
-    pub async fn release_advisory_lock(&self, db: &DatabaseConnection, key: i64) -> Result<(), DbErr> {
+    pub async fn release_advisory_lock(&self, db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
         let mut keys = self.keys.lock().await;
         if keys.remove(&key).is_some() {
             // Notify all waiting threads that a key has been removed
             self.notify.notify_waiters();
         }
-        tracing::trace!("Releasing advisory lock with key: {}", key);
-        let sql = format!("SELECT pg_advisory_unlock({})", key);
-        db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
-        tracing::trace!("Successfully released advisory lock with key: {}", key);
+        // tracing::trace!("Releasing advisory lock with key: {}", key);
+        // let sql = format!("SELECT pg_advisory_unlock({})", key);
+        // db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
+        // tracing::trace!("Successfully released advisory lock with key: {}", key);
 
         Ok(())
     }
@@ -189,7 +190,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
         let key = super::log_helpers::calculate_advisory_lock_key(&canonical_name);
         self.lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
-        let segment = match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
+        let segment = match segments::Model::find_one(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
                 tracing::trace!("Received file for a new segment. Adding to DB: {} or DB Error: {}", &canonical_name, e);
@@ -203,7 +204,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     Ok(segment) => segment, // The segment was added and here is the row.
                     Err(e) => {
                         tracing::trace!("Failed to add the default segment {}: {}", &canonical_name, e);
-                        match segments::Model::find_by_segment(&self.ctx.db, &canonical_name).await {
+                        match segments::Model::find_one(&self.ctx.db, &canonical_name).await {
                             Ok(segment) => {
                                 tracing::trace!("But it was added in a separate thread!");
                                 segment
@@ -283,7 +284,6 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let segment_models = match segments::Model::find_segments_by_route(&self.ctx.db, &route_model.fullname).await {
             Ok(mut segments) => {
                 //segments.retain(|segment| segment.qlog_url != ""); // exclude ones wher the qlog is missing
-                segments.sort_by(|a,b| a.start_time_utc_millis.cmp(&b.start_time_utc_millis));
                 segments
             }
             Err(e) => {
@@ -342,59 +342,68 @@ async fn update_route_info(
         active_route_model.end_time_utc_millis = ActiveValue::Set(last_seg.end_time_utc_millis);
         active_route_model.end_lat = ActiveValue::Set(last_seg.end_lat);
         active_route_model.end_lng = ActiveValue::Set(last_seg.end_lng);
-    } else {
-        tracing::error!("segment_models is empty!");
-        return Err(sidekiq::Error::Message("segment_models is empty!".to_string()))
     }
     // all segments in route
     let mut segment_start_times = vec![];
     let mut segment_end_times = vec![];
     let mut segment_numbers = vec![];
-    let mut maxcamera = 0;
-    let mut maxdcamera = 0;
-    let mut maxecamera = 0;
-    let mut maxlog = 0;
-    let mut maxqlog = 0;
-    let _proclog = 0;
-    let _procqcamera = 0;
-    let _procqlog = 0;
-    let mut maxqcamera = 0;
+    // let mut maxcamera = -1;
+    // let mut maxdcamera = -1;
+    // let mut maxecamera = -1;
+    // let mut maxlog = -1;
+    // let mut maxqlog = -1;
+    let _proclog = -1;
+    let _procqcamera = -1;
+    let _procqlog = -1;
+    //let mut maxqcamera = -1;
     let mut miles = 0.0;
+    let mut hpgps = false;
 
     for segment_model in segment_models {
         miles += segment_model.miles;
         segment_start_times.push(segment_model.start_time_utc_millis);
         segment_end_times.push(segment_model.end_time_utc_millis);
         segment_numbers.push(segment_model.number);
+
+        // check if we have gps time reference in this segment, and not in the first segment because gps didn't lock until this segment
+        if (segment_model.start_time_utc_millis != 0) && (segment_models[0].start_time_utc_millis == 0) {
+            let calculated_start_time = (segment_model.start_time_utc_millis - (segment_model.number as i64 * 60000)); // 60000ms in a segment
+            active_route_model.start_time_utc_millis = ActiveValue::Set(calculated_start_time);
+            active_route_model.start_time =  ActiveValue::Set(DateTime::from_timestamp_millis(calculated_start_time));
+        }
+
+
+        hpgps |= segment_model.hpgps;
         if segment_model.qlog_url != "" {
-            maxqlog+= 1;
-            active_route_model.maxqlog = ActiveValue::Set(maxqlog);
+            //maxqlog+= 1;
+            active_route_model.maxqlog = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.rlog_url != "" {
-            maxlog+= 1;
-            active_route_model.maxlog = ActiveValue::Set(maxlog);
+            //maxlog+= 1;
+            active_route_model.maxlog = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.qcam_url != "" {
-            maxqcamera+= 1;
-            active_route_model.maxqcamera = ActiveValue::Set(maxqcamera);
+            //maxqcamera+= 1;
+            active_route_model.maxqcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.fcam_url != "" {
-            maxcamera+= 1;
-            active_route_model.maxcamera = ActiveValue::Set(maxcamera);
+            //maxcamera+= 1;
+            active_route_model.maxcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.dcam_url != "" {
-            maxdcamera+= 1;
-            active_route_model.maxdcamera = ActiveValue::Set(maxdcamera);
+            //maxdcamera+= 1;
+            active_route_model.maxdcamera = ActiveValue::Set(segment_model.number as i32);
         }
         if segment_model.ecam_url != "" {
-            maxecamera+= 1;
-            active_route_model.maxecamera = ActiveValue::Set(maxecamera);
+            //maxecamera+= 1;
+            active_route_model.maxecamera = ActiveValue::Set(segment_model.number as i32);
         }
     }
     active_route_model.length = ActiveValue::Set(miles);
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
+    active_route_model.hpgps = ActiveValue::Set(hpgps);
     return Ok(());
     // return Ok(active_route_model);
     // // Update the route in the db
@@ -456,21 +465,25 @@ async fn parse_qlog(
 
     let mut writer = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);
+    let mut onroad_mono_time: Option<u64> = None;
     let mut gps_seen = false;
     let mut thumbnails: Vec<Vec<u8>> = Vec::new();
     let mut total_meters_traveled = 0.0; // gets converted to miles
     let mut last_lat = None;
     let mut last_lng = None;
+    let mut coordinates: Vec<serde_json::Value> = Vec::new();
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
 
         match event.which().map_err(Box::from)? {
             LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
+                let log_mono_time = event.get_log_mono_time();
                 if let Ok(gps) = gps {
                     if (gps.get_flags() % 2) == 1 { // has fix
                         let lat = gps.get_latitude();
                         let lng = gps.get_longitude();
+                        let speed = gps.get_speed();
                         if !gps_seen { // gps_seen is false the first time
                             gps_seen = true;
                             seg.hpgps = ActiveValue::Set(true);
@@ -478,12 +491,22 @@ async fn parse_qlog(
                             seg.start_lat = ActiveValue::Set(lat);
                             seg.start_lng = ActiveValue::Set(lng);
                         }
-        
+
                         // Calculate distance if we have previous coordinates
                         if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
-                            total_meters_traveled += super::log_helpers::haversine_distance(
-                                last_lat, last_lng, lat, lng
-                            );
+                            let meters = super::log_helpers::haversine_distance(last_lat, last_lng, lat, lng);
+                            total_meters_traveled += meters;
+
+                            if let Some(onroad_mono_time) = onroad_mono_time{
+                                let route_time = (log_mono_time - onroad_mono_time) / 1000000000;
+                                coordinates.push(serde_json::json!({
+                                    "t": route_time,
+                                    "lat": lat,
+                                    "lng": lng,
+                                    "speed": speed,
+                                    "dist": meters,
+                                }));
+                            }
                         }
         
                         // Update last coordinates
@@ -494,6 +517,16 @@ async fn parse_qlog(
                 }
                 writeln!(writer, "{:#?}", event).map_err(Box::from)?;
             }
+            LogEvent::DeviceState(device_state) => {
+                if let Ok(device_state) = device_state {
+
+                    if device_state.get_started() {
+                        onroad_mono_time = Some(device_state.get_started_mono_time());
+                    }
+                }
+                writeln!(writer, "{:#?}", event).map_err(Box::from)?
+            }
+
             LogEvent::Thumbnail(thumbnail) => {
                 // take the jpg and add it to the array of the other jpgs.
                 // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
@@ -506,15 +539,19 @@ async fn parse_qlog(
             }
             LogEvent::InitData(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::PandaStates(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::DeviceState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::Can(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::Sendcan(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::ErrorLogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::GpsLocationExternal(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
             LogEvent::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            _ => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::ManagerState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::NavInstruction(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::GpsLocation(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::OnroadEvents(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::UploaderState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
         }
     }
     if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
@@ -522,7 +559,13 @@ async fn parse_qlog(
         seg.end_lng = ActiveValue::Set(last_lng);
         seg.miles = ActiveValue::Set((total_meters_traveled*0.000621371) as f32);
     }
+    // Convert coordinates to JSON
+    let json_coordinates = serde_json::to_vec(&coordinates).map_err(Box::from)?;
 
+    let json_url = common::mkv_helpers::get_mkv_file_url(
+        &format!("{}_{}--{}--coords.json", args.dongle_id, args.timestamp, args.segment)
+    );
+    upload_data(client, &json_url, json_coordinates).await?;
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
         // Downscale each thumbnail in parallel
@@ -568,9 +611,6 @@ async fn parse_qlog(
     Ok(writer)
 }
 
-
-
-
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {
     let response = client.put(url)
         .body(body)
@@ -581,7 +621,7 @@ async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Resul
         tracing::debug!("Response status: {}", response.status());
         return Err(sidekiq::Error::Message(format!("Failed to upload data to {}", url)));
     }
-
+    tracing::debug!("Uploaded {url} Response status: {}", response.status());
     Ok(())
 }
 
@@ -608,157 +648,6 @@ async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     let context = ffmpeg_format::input(&temp_file.path())?;
     let duration = context.duration() as f32 / 1_000_000.0;
     Ok(duration)
-}
-
-macro_rules! reader_to_builder {
-    ($set_fn:ident, $event_variant:ident, $event:expr, $event_builder:expr) => {
-        if let Ok(reader) = $event {
-            $event_builder.$set_fn(reader);
-        }
-    };
-}
-
-async fn anonamize_rlog_old(ctx: &AppContext, response: Response, client: &Client, args: &LogSegmentWorkerArgs) -> worker::Result<()> {
-    let start_time = Instant::now();
-
-    let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
-    let stream_reader = StreamReader::new(bytes_stream);
-    let mut bz2_decoder = BzDecoder::new(stream_reader);
-
-    let mut decompressed_data = Vec::new();
-    match bz2_decoder.read_to_end(&mut decompressed_data).await { 
-        Ok(_)=> (), 
-        Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
-    };
-    let decompress_duration = start_time.elapsed();
-    tracing::trace!("decompressing file stream took: {:?}", decompress_duration);
-
-    let process_start = Instant::now();
-    let mut cursor = Cursor::new(decompressed_data);
-    let mut writer = Vec::new();
-    //let mut utf8_writer = Vec::new(); // Buffer to store the uncompressed UTF-8 version
-    let mut car_fingerprint: Option<String> = None;
-    // Process each message
-    while let Ok(message_reader) = read_message(&mut cursor, capnp::message::ReaderOptions::default()) {
-        let event = match message_reader.get_root::<LogEvent::Reader>() {
-            Ok(event) => event,
-            Err(_) => continue, // Skip if there is an error
-        };
-        let mut message_builder = ::capnp::message::Builder::new_default();
-        let mut event_builder = message_builder.init_root::<LogEvent::Builder>();
-        //println!("{:#?}", event);
-        let event_type = event.which().unwrap();
-        match event_type {
-            LogEvent::CarState(reader) => reader_to_builder!(set_car_state, event_type, reader, event_builder),
-            LogEvent::LiveParameters(reader) => reader_to_builder!(set_live_parameters, event_type, reader, event_builder),
-            LogEvent::CarControl(reader) => reader_to_builder!(set_car_control, event_type, reader, event_builder),
-            LogEvent::LateralPlanDEPRECATED(reader) => reader_to_builder!(set_lateral_plan_d_e_p_r_e_c_a_t_e_d, event_type, reader, event_builder),
-            LogEvent::CarOutput(reader) => reader_to_builder!(set_car_output, event_type, reader, event_builder),
-            LogEvent::ModelV2(reader) => reader_to_builder!(set_model_v2, event_type, reader, event_builder),
-            LogEvent::LiveTorqueParameters(reader) => reader_to_builder!(set_live_torque_parameters, event_type, reader, event_builder),
-            LogEvent::LiveCalibration(reader) => reader_to_builder!(set_live_calibration, event_type, reader, event_builder),
-            LogEvent::Sendcan(reader) => reader_to_builder!(set_sendcan, event_type, reader, event_builder),
-            LogEvent::Can(reader) => reader_to_builder!(set_can, event_type, reader, event_builder),
-            LogEvent::LongitudinalPlan(reader) => reader_to_builder!(set_longitudinal_plan, event_type, reader, event_builder),
-            LogEvent::CarParams(reader) => {
-                reader_to_builder!(set_car_params, event_type, reader, event_builder);
-                if let Ok(mut reader) = reader {
-                    car_fingerprint = Some(reader.get_car_fingerprint().unwrap().to_string().unwrap());
-                }
-            }
-            LogEvent::LiveLocationKalman(llk) => {
-                if let Ok(mut llk_reader) = llk {
-                    let mut builder = capnp::message::Builder::new_default();
-                    let mut llk_builder: log_capnp::live_location_kalman::Builder = builder.get_root::<log_capnp::live_location_kalman::Builder>().unwrap();
-                    llk_builder.set_angular_velocity_calibrated(llk_reader.get_angular_velocity_calibrated().unwrap());
-                    llk_builder.set_orientation_n_e_d(llk_reader.get_orientation_n_e_d().unwrap());
-                    llk_builder.set_calibrated_orientation_n_e_d(llk_reader.get_calibrated_orientation_n_e_d().unwrap());
-                    llk_reader = llk_builder.into_reader();
-                    event_builder.set_live_location_kalman(llk_reader).unwrap();
-
-                }
-            },
-            _ => continue, // Skip other event types
-        }
-        write_message(&mut writer, &message_builder).unwrap();
-        //writeln!(utf8_writer, "{:#?}", event).unwrap();
-    }
-    
-    let process_duration = process_start.elapsed();
-    tracing::trace!("Processing messages took: {:?}", process_duration);
-    if car_fingerprint.is_none() { // early return if car_fingerprint message is missing
-        return Ok(())
-    }
-    // Compress 'writer' to bz2 and collect it into a buffer
-    let compress_start = Instant::now();
-    let mut bz_encoder: BzEncoder<Vec<u8>> = BzEncoder::new(Vec::new());
-    bz_encoder.write_all(&writer).await;
-    let compressed_data: Vec<u8> = bz_encoder.into_inner();
-    let compress_duration = compress_start.elapsed();
-    tracing::trace!("Compressing and writing file took: {:?}", compress_duration);
-    
-    let anonlog_url = common::mkv_helpers::get_mkv_file_url(
-        &format!("anonlog_{}_{}--{}--{}",
-            args.dongle_id,
-            args.timestamp,
-            args.segment,
-            args.file,
-        )
-    );
-    // Upload the compressed data
-    //upload_data(client, &anonlog_url, compressed_data).await?;
-    // Add the url to the anonlog table
-
-    match anonlogs::Model::add_anonlog(&ctx.db, &anonlog_url).await {
-        Ok(_) => tracing::info!("Added anonlog {anonlog_url} to Database"),
-        Err(e) => tracing::error!("Failed to add anonlog {anonlog_url} to Database: {}", e.to_string()),
-    };
-    
-    // Create a temporary file to store the log data
-    let mut temp_file: NamedTempFile = NamedTempFile::new().unwrap();
-    temp_file.write_all(&compressed_data);
-    temp_file.flush();
-
-    upload_huggingface(temp_file.path(),
-        &format!("{}/{}/{}--{}--{}",
-            car_fingerprint.unwrap_or("mock".to_string()),
-            args.dongle_id,
-            args.timestamp,
-            args.segment,
-            args.file,
-        )
-    ).await;
-
-
-    let total_duration = start_time.elapsed();
-    tracing::trace!("Total operation took: {:?}", total_duration);
-
-    Ok(())
-}
-
-// makes calls the huggingface-cli 
-async fn upload_huggingface(path: &std::path::Path, segment_name: &str) -> () {
-    let repo_id = "MoreTorque/rlogs";
-
-    // Ensure the environment variable is set for authentication
-    //std::env::set_var("HF_TOKEN", hugging_face_token);
-    //std::env::set_var("HF_HUB_ENABLE_HF_TRANSFER", "1");
-
-    // Construct the command to upload the file
-    let status = std::process::Command::new("huggingface-cli")
-        .arg("upload")
-        .arg(repo_id)
-        .arg(path)
-        .arg(segment_name)  // Include this if you want to specify the path in the repo
-        .arg("--repo-type=dataset")
-        .status()
-        .expect("failed to execute process");
-
-    if status.success() {
-        tracing::info!("File uploaded to huggingface successfully");
-    } else {
-        tracing::error!("Failed to upload file to huggingface");
-    }
 }
 
 const MAX_FOLDER_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
@@ -925,24 +814,42 @@ fn get_file_count(path: &std::path::Path) -> std::io::Result<usize> {
     Ok(count)
 }
 
-async fn upload_folder_to_huggingface(local_path: &str, repo_path: &str) {
+async fn upload_folder_to_huggingface(folder_path: &str, repo_path: &str) -> Result<(), std::io::Error> {
     let repo_id = "MoreTorque/rlogs";
 
-    let status = Command::new("huggingface-cli")
-        .arg("upload")
-        .arg(repo_id)
-        .arg(local_path)
-        .arg("/")
-        .arg("--repo-type=dataset")
-        .status()
-        .await
-        .expect("failed to execute process");
+    // Clone the local_path and repo_path into owned Strings
+    let folder_path2 = folder_path.to_string();
 
-    if status.success() {
-        tracing::info!("Folder {local_path} uploaded to Hugging Face successfully");
-    } else {
-        tracing::error!("Failed to upload folder {local_path} to Hugging Face");
+    // Spawn a blocking task to run the Python script
+    let result = tokio::task::spawn_blocking(move || {
+        let status = std::process::Command::new("huggingface-cli")
+            .arg("upload")
+            .arg(repo_id)
+            .arg(&folder_path2)
+            .arg("/")
+            .arg("--repo-type=dataset")
+            .status();
+
+        status
+    })
+    .await
+    .expect("Failed to run blocking task");
+
+    match result {
+        Ok(status) => {
+            if status.success() {
+                tracing::info!("Folder {} uploaded to Hugging Face successfully", folder_path);
+            } else {
+                tracing::error!("Failed to upload folder {} to Hugging Face", folder_path);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to execute process: {}", e);
+            return Err(e);
+        }
     }
+
+    Ok(())
 }
 
 fn clear_directory(path: &std::path::Path) -> std::io::Result<()> {

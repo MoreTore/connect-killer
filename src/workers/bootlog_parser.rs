@@ -37,7 +37,6 @@ impl worker::AppWorker<BootlogParserWorkerArgs> for BootlogParserWorker {
 #[async_trait]
 impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
     async fn perform(&self, args: BootlogParserWorkerArgs) -> worker::Result<()> {
-        println!("=================BootlogParser=======================");
         let start = Instant::now();
         tracing::trace!("Starting BootlogParser for URL: {}", args.internal_file_url);
         let client = Client::new();
