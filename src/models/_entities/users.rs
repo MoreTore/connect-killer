@@ -12,16 +12,11 @@ pub struct Model {
     pub id: i32,
     pub identity: Uuid,
     pub email: Option<String>,
-    //pub password: String,
     #[sea_orm(unique)]
     pub name: String,
     pub points: i64,
     pub superuser: bool,
-    // pub reset_token: Option<String>,
-    // pub reset_sent_at: Option<DateTime>,
-    // pub email_verification_token: Option<String>,
-    // pub email_verification_sent_at: Option<DateTime>,
-    // pub email_verified_at: Option<DateTime>,
+    //pub locations: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

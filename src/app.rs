@@ -60,9 +60,9 @@ type SharedState = Arc<RwLock<App>>;
 use crate::controllers::ws::ConnectionManager;
 
 pub struct App {
-    command_sender: mpsc::Sender<JsonRpcCommand>,
-    pending_commands: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
-    offline_queues: Arc<Mutex<HashMap<String, Vec<JsonRpcCommand>>>>, // offline queue for each device
+    // command_sender: mpsc::Sender<JsonRpcCommand>,
+    // pending_commands: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
+    // offline_queues: Arc<Mutex<HashMap<String, Vec<JsonRpcCommand>>>>, // offline queue for each device
 }
 #[async_trait]
 impl Hooks for App {
@@ -157,18 +157,18 @@ impl Hooks for App {
             }
         });
 
-        let (command_sender, _command_receiver) = mpsc::channel(100);
-        let shared_state = Arc::new(RwLock::new(App {
-            command_sender,
-            pending_commands: Arc::new(Mutex::new(HashMap::new())),
-            offline_queues: Arc::new(Mutex::new(HashMap::new())),
-        }));
+        //let (command_sender, _command_receiver) = mpsc::channel(100);
+        // let shared_state: Arc<RwLock<App>> = Arc::new(RwLock::new(App {
+        //      command_sender,
+        //      pending_commands: Arc::new(Mutex::new(HashMap::new())),
+        //      offline_queues: Arc::new(Mutex::new(HashMap::new())),
+        // }));
         let client = Client::new();
 
         let router = router
             .layer(Extension(client))
-            .layer(Extension(manager))
-            .layer(Extension(shared_state));
+            .layer(Extension(manager));
+            //.layer(Extension(shared_state));
 
         Ok(router)
     }

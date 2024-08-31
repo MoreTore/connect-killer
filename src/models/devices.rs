@@ -127,6 +127,19 @@ impl super::_entities::devices::Model {
         Ok(())
     }
 
+    pub async fn get_locations(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+    ) -> ModelResult<Option<serde_json::Value>> {
+        let device = Entity::find()
+            .filter(devices::Column::DongleId.eq(dongle_id))
+            .one(db)
+            .await?;
+        let device = device.ok_or(ModelError::EntityNotFound)?;
+        // Return the optional JSON data stored in the locations field
+        Ok(device.locations)
+    }
+
     // pub async fn add_own_device(
     //     &self, 
     //     db: &DatabaseConnection, 

@@ -24,6 +24,7 @@ pub struct Model {
     pub device_type: String,
     pub alias: String,
     pub server_storage: i64,
+    pub locations: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

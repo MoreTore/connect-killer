@@ -10,16 +10,10 @@ impl MigrationTrait for Migration {
             .col(pk_auto(Users::Id))
             .col(uuid(Users::Identity))
             .col(string_null(Users::Email))
-            //.col(string(Users::Password))
-            //.col(string(Users::ApiKey).unique_key())
             .col(string(Users::Name))
             .col(big_integer(Users::Points))
             .col(boolean(Users::Superuser))
-            //.col(string_null(Users::ResetToken))
-            //.col(timestamp_null(Users::ResetSentAt))
-            // .col(string_null(Users::EmailVerificationToken))
-            // .col(timestamp_null(Users::EmailVerificationSentAt))
-            // .col(timestamp_null(Users::EmailVerifiedAt))
+            //.col(json_null(Users::Locations))
             .to_owned();
         manager.create_table(table).await?;
         Ok(())
@@ -41,11 +35,5 @@ pub enum Users {
     Name,
     Superuser,
     Points,
-    // Password,
-    // ApiKey,
-    // ResetToken,
-    // ResetSentAt,
-    // EmailVerificationToken,
-    // EmailVerificationSentAt,
-    // EmailVerifiedAt,
+    //Locations,
 }

@@ -152,6 +152,15 @@ impl super::_entities::users::Model {
         user.ok_or_else(|| ModelError::EntityNotFound)
     }
 
+    pub async fn find_by_id(db: &DatabaseConnection, id: i32) -> ModelResult<Self> {
+        let user = users::Entity::find()
+            .filter(users::Column::Id.eq(id))
+            .one(db)
+            .await?;
+        user.ok_or_else(|| ModelError::EntityNotFound)
+    }
+
+
     /// finds a user by the provided api key
     ///
     /// # Errors
@@ -244,6 +253,8 @@ impl super::_entities::users::Model {
             } 
         }
     }
+
+
 
     /// Creates a JWT
     ///

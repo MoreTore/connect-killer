@@ -562,6 +562,7 @@ async fn get_me(
     })
 }
 
+#[derive(Serialize, Deserialize, Default, Debug)]
 struct Destination {
     latitude: f64,
     longitude: f64,
@@ -569,14 +570,290 @@ struct Destination {
     place_name: String,
 }
 
-// async fn set_destination(
-//     auth: crate::middleware::auth::MyJWT,
-//     State(_ctx): State<AppContext>,
-//     Path(dongle_id): Path<String>,
-//     Form(destination): Form<Destination>
-// ) -> Result<Response> {
+async fn set_destination(
+    auth: crate::middleware::auth::MyJWT,   
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Json(destination): Json<Destination>
+) -> impl IntoResponse {
+    let mut active_device;
+    let mut is_online = false;
+    if let Some(device_model) = auth.device_model {
+        is_online = device_model.online;
+        active_device = device_model.into_active_model();
+    } else if let Some(user_model) = auth.user_model {
+        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        is_online = device_model.online;
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id, 
+            "Can only edit owned devices locations!"
+        ); // early return if not owned
+        active_device = device_model.into_active_model();
+    } else {
+        return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+
     
-// }
+
+    // Deserialize the current locations
+    let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
+        serde_json::from_value(locations_json.clone()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Check if the label exists and update, otherwise add the new location
+    let mut location_found = false;
+    for loc in locations.iter_mut() {
+        if loc.label == Some(destination.place_name.clone()) {
+            // Update existing location
+            loc.place_name = destination.place_name.clone();
+            loc.place_details = destination.place_details.clone();
+            loc.latitude = destination.latitude;
+            loc.longitude = destination.longitude;
+            loc.save_type = "recent".to_string();
+            loc.modified = chrono::Utc::now().timestamp_millis().to_string();
+            loc.next = !is_online;
+            location_found = true;
+            break;
+        }
+    }
+
+    if !location_found {
+        // Create a new SavedLocation entry
+        let new_location = SavedLocation {
+            id: locations.len() as i32 + 1,  // Generating an ID, this might need to be replaced by a proper ID generator
+            dongle_id: dongle_id.clone(),
+            place_name: destination.place_name.clone(),
+            place_details: destination.place_details.clone(),
+            latitude: destination.latitude,
+            longitude: destination.longitude,
+            save_type: "recent".to_string(),
+            label: Some(destination.place_name),
+            modified: chrono::Utc::now().timestamp_millis().to_string(),
+            next: !is_online,
+        };
+        locations.push(new_location);
+    }
+    // Serialize the updated locations back to JSON
+    active_device.locations = ActiveValue::Set(Some(serde_json::to_value(locations)?));
+
+    let mut response;
+    // Update the device model in the database
+    match active_device.update(&ctx.db).await {
+        Ok(_) => {
+            response = serde_json::json!({
+                "success": true,
+                "dongle_id": dongle_id,
+                "saved_next": !is_online
+            });
+        }, // Respond with success
+        Err(e) => {
+            tracing::error!("Failed to update device locations. DB Error {}", e);
+            response = serde_json::json!({
+                //"success": false,
+                "error": true,
+                //"dongle_id": dongle_id,
+                //"saved_next": false
+            });
+        }
+    }
+
+    format::json(response)
+
+}
+
+
+async fn get_next_destination(
+    auth: crate::middleware::auth::MyJWT,   
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+) -> impl IntoResponse {
+
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct SavedLocation {
+    next: bool,
+    id: i32,
+    dongle_id: String,
+    place_name: String,
+    place_details: String,
+    latitude: f64,
+    longitude: f64,
+    save_type: String,  // Could be an enum, but using String for simplicity
+    label: Option<String>,
+    modified: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PutSavedLocation {
+    place_name: String,
+    place_details: String,
+    latitude: f64,
+    longitude: f64,
+    save_type: String,  // Could be an enum, but using String for simplicity
+    label: Option<String>,
+}
+
+async fn put_locations(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Json(destination): Json<PutSavedLocation>,
+) -> Result<Response, loco_rs::Error> {
+    let mut active_device;
+
+    if let Some(device_model) = auth.device_model {
+        active_device = device_model.into_active_model();
+    } else if let Some(user_model) = auth.user_model {
+        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id, 
+            "Can only edit owned devices locations!"
+        ); // early return if not owned
+        active_device = device_model.into_active_model();
+    } else {
+        return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+
+    // Deserialize the current locations
+    let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
+        serde_json::from_value(locations_json.clone()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Check if the label exists and update, otherwise add the new location
+    let mut location_found = false;
+    for loc in locations.iter_mut() {
+        if loc.label == destination.label {
+            // Update existing location
+            loc.place_name = destination.place_name.clone();
+            loc.place_details = destination.place_details.clone();
+            loc.latitude = destination.latitude;
+            loc.longitude = destination.longitude;
+            loc.save_type = destination.save_type.clone();
+            loc.modified = chrono::Utc::now().timestamp_millis().to_string();
+            location_found = true;
+            break;
+        }
+    }
+
+    if !location_found {
+        // Create a new SavedLocation entry
+        let new_location = SavedLocation {
+            id: locations.len() as i32 + 1,  // Generating an ID, this might need to be replaced by a proper ID generator
+            dongle_id: dongle_id.clone(),
+            place_name: destination.place_name.clone(),
+            place_details: destination.place_details.clone(),
+            latitude: destination.latitude,
+            longitude: destination.longitude,
+            save_type: destination.save_type.clone(),
+            label: destination.label.clone(),
+            modified: chrono::Utc::now().timestamp_millis().to_string(),
+            next: false,
+        };
+        locations.push(new_location);
+    }
+
+    // Serialize the updated locations back to JSON
+    active_device.locations = ActiveValue::Set(Some(serde_json::to_value(locations)?));
+
+    // Update the device model in the database
+    match active_device.update(&ctx.db).await {
+        Ok(_) => Ok((StatusCode::OK, Json(json!({ "success": true }))).into_response()), // Respond with success
+        Err(e) => {
+            tracing::error!("Failed to update device locations. DB Error {}", e);
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to update location" }))).into_response())
+        }
+    }
+}
+
+async fn get_locations(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    //axum::Extension(shared_state): axum::Extension<reqwest::Client>,
+) -> Result<Response> {
+    if let Some(device_model) = auth.device_model {
+        let locations = device_model.locations.unwrap_or_default();
+        return Ok((StatusCode::OK, Json(locations)).into_response());
+    } else if let Some(user_model) = auth.user_model {
+        let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        if !user_model.superuser {
+            enforce_ownership_rule!(
+                user_model.id, 
+                device_model.owner_id, 
+                "Can only see owned devices location!"
+            ); // early return if not owned
+        }
+        let locations = device_model.locations.unwrap_or_default();
+        return Ok((StatusCode::OK, Json(locations)).into_response());
+    } else {
+        return Ok((StatusCode::NO_CONTENT, format::json("")).into_response());
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DeleteLocation {
+    id: String,
+}
+
+async fn delete_location(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Json(payload): Json<DeleteLocation>,
+) -> Result<Response, loco_rs::Error> {
+    let mut active_device;
+
+    if let Some(device_model) = auth.device_model {
+        active_device = device_model.into_active_model();
+    } else if let Some(user_model) = auth.user_model {
+        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        if !user_model.superuser {
+            enforce_ownership_rule!(
+                user_model.id, 
+                device_model.owner_id, 
+                "Can only edit owned devices locations!"
+            ); // early return if not owned
+        }
+        active_device = device_model.into_active_model();
+    } else {
+        return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+
+    // Deserialize the current locations
+    let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
+        serde_json::from_value(locations_json.clone()).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Find and remove the location with the matching id
+    let original_len = locations.len();
+    locations.retain(|loc| loc.id.to_string() != payload.id);
+
+    if locations.len() == original_len {
+        // If no location was removed, respond with an error
+        return Ok((StatusCode::NOT_FOUND, Json(json!({ "error": "Location not found" }))).into_response());
+    }
+
+    // Serialize the updated locations back to JSON
+    active_device.locations = ActiveValue::Set(Some(serde_json::to_value(locations)?));
+
+    // Update the device model in the database
+    match active_device.update(&ctx.db).await {
+        Ok(_) => Ok((StatusCode::OK, Json(json!({ "success": true }))).into_response()),
+        Err(e) => {
+            tracing::error!("Failed to update device locations after deletion. DB Error {}", e);
+            Ok((StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to delete location" }))).into_response())
+        }
+    }
+}
 
 
 pub fn routes() -> Routes {
@@ -597,5 +874,7 @@ pub fn routes() -> Routes {
         .add(".1/devices/:dongle_id/stats", get(device_stats))
         .add("/devices/:dongle_id/users", get(device_users))
         .add(".1/devices/:dongle_id", get(device_info))
-        //.add("/navigation/:dongle_id/set_destination", post(set_destination))
+        .add("/navigation/:dongle_id/set_destination", post(set_destination))
+        .add("/navigation/:dongle_id/locations", get(get_locations).put(put_locations).delete(delete_location))
+        .add("/navigation/:dongle_id/next", get(get_next_destination))
     }
