@@ -1,7 +1,7 @@
 #![allow(clippy::unused_async)]
 use loco_rs::{ prelude::*};
 use axum::{
-    extract::{Path, Query, State}, Extension
+    extract::{Path, Query, State}, routing::patch, Extension
 };
 use reqwest::{StatusCode,Client};
 use serde_json::{json, Value};
@@ -516,20 +516,12 @@ async fn get_my_devices(
     for device_model in device_models {
         let device = DeviceResponse {
             alias: device_model.alias,
-            //athena_host: String,
             device_type: device_model.device_type,
             dongle_id: device_model.dongle_id,
             ignore_uploads: !device_model.uploads_allowed, // flip this
             is_owner: (device_model.owner_id == Some(user_model.id)),
             is_paired: device_model.owner_id.is_some(),
             last_athena_ping: device_model.last_athena_ping,
-            //last_gps_accuracy: device.
-            //last_gps_bearing: device.
-            //last_gps_lat: 0.0
-            //last_gps_lng: 0.0, //todo
-            //last_gps_speed: 0, // todo
-            //last_gps_time: device.last_athena_ping, //  Todo
-            //openpilot_version: device_model.openpilot_version,
             prime: true,
             prime_type: 4,
             public_key: device_model.public_key,
@@ -560,6 +552,50 @@ async fn get_me(
        superuser: user_model.superuser,
        username: user_model.name, // TODO change the usermode names to match comma api to simplify this
     })
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+struct AliasJson {
+    alias: String,
+}
+
+async fn update_device_alias(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Json(alias): Json<AliasJson>,
+) -> impl IntoResponse {
+    if auth.user_model.is_none() {
+        return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+    let user_model = auth.user_model.unwrap();
+    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    if !user_model.superuser {
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id, 
+            "Can only edit owned devices alias!"
+        ); // early return if not owned
+    }
+    let mut active_device_model = device_model.into_active_model();
+    active_device_model.alias = ActiveValue::Set(alias.alias);
+    active_device_model.update(&ctx.db).await;
+    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    format::json(
+        DeviceInfoResponse {
+            dongle_id: device_model.dongle_id,
+            alias: device_model.alias,
+            serial: device_model.serial,
+            last_athena_ping: device_model.last_athena_ping,
+            ignore_uploads: !device_model.uploads_allowed,
+            is_paired: device_model.owner_id.is_some(),
+            public_key: device_model.public_key,
+            prime: device_model.prime,
+            prime_type: device_model.prime_type,
+            sim_id: device_model.sim_id,
+            ..Default::default()
+        }
+    )
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
@@ -922,6 +958,7 @@ pub fn routes() -> Routes {
         .add("/devices/:dongle_id/location", get(device_location))
         .add(".1/devices/:dongle_id/stats", get(device_stats))
         .add("/devices/:dongle_id/users", get(device_users))
+        .add("/devices/:dongle_id", patch(update_device_alias))
         .add(".1/devices/:dongle_id", get(device_info))
         .add("/navigation/:dongle_id/set_destination", post(set_destination))
         .add("/navigation/:dongle_id/locations", get(get_locations).put(put_locations).delete(delete_location))
