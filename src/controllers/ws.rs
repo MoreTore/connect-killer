@@ -19,17 +19,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{
     enforce_ownership_rule, 
     models::_entities::{
-        devices, 
-        users
+        self, devices, users
     }
 };
 
 #[derive(Deserialize, Serialize)]
-struct JsonRpcRequest {
-    method: String,
-    params: Option<serde_json::Value>,
-    jsonrpc: String,
-    id: u64,
+pub struct JsonRpcRequest {
+    pub method: String,
+    pub params: Option<serde_json::Value>,
+    pub jsonrpc: String,
+    pub id: u64,
+}
+
+impl Default for JsonRpcRequest {
+    fn default() -> Self {
+        Self {
+            method: "".to_string(),
+            params: None,
+            jsonrpc: "2.0".to_string(),
+            id: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -43,8 +53,8 @@ struct JsonRpcResponse {
 }
 
 pub struct ConnectionManager {
-    devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
-    clients: Mutex<HashMap<u64, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
+    pub devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
+    pub clients: Mutex<HashMap<u64, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
 }
 
 impl ConnectionManager {
@@ -263,14 +273,25 @@ async fn handle_device_ws(
     }))
 }
 
-pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>) {
+pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>, db: &DatabaseConnection) {
     let mut devices = manager.devices.lock().await;
-    for (id, sender) in devices.iter_mut() {
-        tracing::trace!("Sending ping to {}", &id);
+    for (dongle_id, sender) in devices.iter_mut() {
+        tracing::trace!("Sending ping to {}", &dongle_id);
         if let Err(e) = sender.send(Message::Ping(Vec::new())).await {
-            tracing::trace!("Failed to send ping to device {}: {}", id, e);
+            tracing::trace!("Failed to send ping to device {}: {}", dongle_id, e);
         }
     }
+    for (dongle_id, sender) in devices.iter_mut() {
+        if let Ok(Some(latest_msg)) = _entities::device_msg_queues::Model::find_latest_msg(db, &dongle_id).await {
+            if let Err(e) = sender.send(Message::Text(latest_msg.json_rpc_request.to_string())).await {
+                tracing::error!("Failed to send jsonrpc msg to device {}: {}", dongle_id, e);
+            }
+            if _entities::device_msg_queues::Entity::delete_by_id(latest_msg.id).exec(db).await.is_err() {
+                tracing::error!("Failed to delete msg in queue {}", dongle_id);
+            }
+        }
+    }
+
 }
 
 pub async fn send_reset( // called from crate::middleware::auth

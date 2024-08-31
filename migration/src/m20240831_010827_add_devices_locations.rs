@@ -7,6 +7,7 @@ pub struct Migration;
 enum Devices {
     Table,
     Locations,
+    
 }
 
 #[async_trait::async_trait]
@@ -20,6 +21,7 @@ impl MigrationTrait for Migration {
                 Table::alter()
                     .table(Devices::Table)
                     .add_column_if_not_exists(json_null(Devices::Locations))
+                    //.add_column_if_not_exists(column_def)
                     .to_owned(),
             )
             .await

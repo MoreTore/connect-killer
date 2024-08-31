@@ -35,6 +35,8 @@ pub enum Relation {
     Bootlogs,
     #[sea_orm(has_many = "super::routes::Entity")]
     Routes,
+    #[sea_orm(has_many = "super::device_msg_queues::Entity")]
+    DeviceMsgQueues,
     #[sea_orm(
         belongs_to = "super::users::Entity",
         from = "Column::OwnerId",
@@ -60,6 +62,12 @@ impl Related<super::bootlogs::Entity> for Entity {
 impl Related<super::routes::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Routes.def()
+    }
+}
+
+impl Related<super::device_msg_queues::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::DeviceMsgQueues.def()
     }
 }
 

@@ -147,15 +147,18 @@ impl Hooks for App {
             Err(e) => tracing::error!("Failed to Reset all devices to offline: {e}"),
         };
 
-        let manager: Arc<ConnectionManager> = ConnectionManager::new();
-        let ping_manager = manager.clone();
+        let connection_manager: Arc<ConnectionManager> = ConnectionManager::new();
+        let ping_manager: Arc<ConnectionManager> = connection_manager.clone();
+        let db_clone: DatabaseConnection = ctx.db.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(time::Duration::from_secs(10)); // Ping every 10 seconds
             loop {
                 interval.tick().await;
-                crate::controllers::ws::send_ping_to_all_devices(ping_manager.clone()).await; 
+                crate::controllers::ws::send_ping_to_all_devices(ping_manager.clone(), &db_clone.clone()).await;
             }
         });
+
+
 
         //let (command_sender, _command_receiver) = mpsc::channel(100);
         // let shared_state: Arc<RwLock<App>> = Arc::new(RwLock::new(App {
@@ -167,7 +170,7 @@ impl Hooks for App {
 
         let router = router
             .layer(Extension(client))
-            .layer(Extension(manager));
+            .layer(Extension(connection_manager));
             //.layer(Extension(shared_state));
 
         Ok(router)

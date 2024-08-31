@@ -562,7 +562,7 @@ async fn get_me(
     })
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 struct Destination {
     latitude: f64,
     longitude: f64,
@@ -574,8 +574,11 @@ async fn set_destination(
     auth: crate::middleware::auth::MyJWT,   
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
-    Json(destination): Json<Destination>
+    Json(destination): Json<Destination>,
+    //axum::Extension(connection_manager): axum::Extension<std::sync::Arc<crate::controllers::ws::ConnectionManager>>
 ) -> impl IntoResponse {
+    use crate::controllers::ws::JsonRpcRequest;
+
     let mut active_device;
     let mut is_online = false;
     if let Some(device_model) = auth.device_model {
@@ -594,7 +597,12 @@ async fn set_destination(
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
     }
 
-
+    let msg = JsonRpcRequest{
+        method: "setNavDestination".to_string(),
+        params: Some(serde_json::to_value(destination.clone())?),
+        ..Default::default()
+    };
+    _entities::device_msg_queues::Model::insert_msg(&ctx.db, &dongle_id, msg).await?;
 
     // Deserialize the current locations
     let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
@@ -626,7 +634,7 @@ async fn set_destination(
             id: uuid::Uuid::new_v4(),
             dongle_id: dongle_id.clone(),
             place_name: destination.place_name.clone(),
-            place_details: destination.place_details.clone(),
+            place_details: destination.place_details,
             latitude: destination.latitude,
             longitude: destination.longitude,
             save_type: "recent".to_string(),
@@ -670,7 +678,44 @@ async fn get_next_destination(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> impl IntoResponse {
+    if let Some(mut device_model) = auth.device_model {
+        // Deserialize the current locations from the device model
+        if let Some(locations_json) = device_model.locations.as_ref() {
+            let mut locations: Vec<SavedLocation> =
+                serde_json::from_value(locations_json.clone()).unwrap_or_default();
 
+            // Find the next location and clone it
+            if let Some(next_location) = locations.iter_mut().find(|loc| loc.next) {
+                let cloned_location = next_location.clone();
+                // Clear the next flag in the location
+                next_location.next = false;
+
+                // Convert the device model to an active model
+                let mut active_device_model = device_model.into_active_model();
+
+                // Update the device model with the modified locations
+                active_device_model.locations = ActiveValue::Set(Some(serde_json::to_value(&locations).unwrap()));
+
+                // Save the updated device model
+                if let Err(e) = active_device_model.update(&ctx.db).await {
+                    tracing::error!("Failed to update device locations. DB Error: {}", e);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, format::json(serde_json::Value::Null)).into_response();
+                }
+
+                // Return the next location as the response
+                return Json(json!({
+                    "place_name": cloned_location.place_name,
+                    "place_details": cloned_location.place_details,
+                    "latitude": cloned_location.latitude,
+                    "longitude": cloned_location.longitude
+                }))
+                .into_response();
+            }
+        }
+    }
+
+    // Return null if no next location is found
+    format::json(serde_json::Value::Null).into_response()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
