@@ -594,7 +594,7 @@ async fn set_destination(
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
     }
 
-    
+
 
     // Deserialize the current locations
     let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
@@ -612,7 +612,7 @@ async fn set_destination(
             loc.place_details = destination.place_details.clone();
             loc.latitude = destination.latitude;
             loc.longitude = destination.longitude;
-            loc.save_type = "recent".to_string();
+            //loc.save_type = "recent".to_string();
             loc.modified = chrono::Utc::now().timestamp_millis().to_string();
             loc.next = !is_online;
             location_found = true;
@@ -623,7 +623,7 @@ async fn set_destination(
     if !location_found {
         // Create a new SavedLocation entry
         let new_location = SavedLocation {
-            id: locations.len() as i32 + 1,  // Generating an ID, this might need to be replaced by a proper ID generator
+            id: uuid::Uuid::new_v4(),
             dongle_id: dongle_id.clone(),
             place_name: destination.place_name.clone(),
             place_details: destination.place_details.clone(),
@@ -676,7 +676,7 @@ async fn get_next_destination(
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct SavedLocation {
     next: bool,
-    id: i32,
+    id: uuid::Uuid,
     dongle_id: String,
     place_name: String,
     place_details: String,
@@ -745,14 +745,18 @@ async fn put_locations(
     if !location_found {
         // Create a new SavedLocation entry
         let new_location = SavedLocation {
-            id: locations.len() as i32 + 1,  // Generating an ID, this might need to be replaced by a proper ID generator
+            id: uuid::Uuid::new_v4(),
             dongle_id: dongle_id.clone(),
             place_name: destination.place_name.clone(),
             place_details: destination.place_details.clone(),
             latitude: destination.latitude,
             longitude: destination.longitude,
             save_type: destination.save_type.clone(),
-            label: destination.label.clone(),
+            label: if destination.label.is_none() {
+                Some(destination.place_name.clone())
+            } else {
+                destination.label.clone()
+            },            
             modified: chrono::Utc::now().timestamp_millis().to_string(),
             next: false,
         };
