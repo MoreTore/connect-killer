@@ -9,7 +9,7 @@ from database import PostgresDB
 from helpers import *
 
 
-def files_from_device(db, dongle_id):
+def files_from_device(db, dongle_id, filters):
     upload_files = []
     upload_queue = get_upload_queue(dongle_id)
     if not isinstance(upload_queue, list) or upload_queue:  # don't request more if there are uploads queued
@@ -34,8 +34,14 @@ def files_from_device(db, dongle_id):
         for file in log_dir:
             canonical_name = f"{dongle_id}|{file.split('/')[0]}"
             segment = segments_dict.get(canonical_name)
-            if segment and segment['rlog_url'] == "":
-                upload_files.append(file)
+            if not segment:
+                continue
+
+            for file_type in filters:
+                if file_type in file and segment[f'{file_type}_url'] == "":
+                    upload_files.append(file)
+                    break
+                    
 
     return upload_files
 
@@ -44,7 +50,7 @@ def main():
     parser.add_argument(
         "-f", "--filters",
         nargs="+",  # Accepts multiple filters as a list
-        default=["rlog", "qlog", "ecam", "dcam", "fcam"],  # Default filters if none are provided
+        default=["rlog", "qlog", "ecam", "dcam", "fcam", "qcam"],  # Default filters if none are provided
         help="List of substrings to filter files (e.g., -f rlog ecamera)"
     )
     
@@ -66,7 +72,7 @@ def main():
         for device in devices:
             dongle_id = device["dongle_id"]
             if device["online"]:
-                log_dir = files_from_device(db, dongle_id)
+                log_dir = files_from_device(db, dongle_id, args.filters)
                 filtered_files = list(filter(lambda file: any(sub in file for sub in args.filters), log_dir))
                 uploads_dict.append({"dongle_id": dongle_id, "files": filtered_files})
         for upload_dict in uploads_dict:

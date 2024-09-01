@@ -335,25 +335,14 @@ async fn device_info(
             dongle_id: device.dongle_id,
             alias: device.alias,
             serial: device.serial,
-            //athena_host: device.
             last_athena_ping: device.last_athena_ping,
             ignore_uploads: !device.uploads_allowed,
             is_paired: device.owner_id.is_some(),
-            //is_owner: device.
             public_key: device.public_key,
             prime: device.prime,
             prime_type: device.prime_type,
             trial_claimed: true,
-            //device_type: device.
-            //last_gps_time: device.
-            //last_gps_lat: device.
-            //last_gps_lng: device.
-            //last_gps_accur: device.
-            //last_gps_speed: device.
-            //last_gps_bearing: device.
-            //openpilot_version: device.
             sim_id: device.sim_id,
-
             ..Default::default()
         }
     )

@@ -187,6 +187,46 @@
           }
         }
       </script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log('DOM fully loaded and parsed');
+          
+          document.querySelectorAll('a').forEach(link => {
+            console.log('Processing link:', link.href);  // Debugging output
+              if (link.href.includes('/connectdata/') && !link.href.includes('unlog')) {
+                link.addEventListener('click', function(event) {
+                  event.preventDefault();
+                  const url = link.href;
+                  
+                  console.log('Link clicked, URL:', url);  // Debugging output
+            
+                  fetch(url, {
+                    method: 'GET',
+                    credentials: 'include' // This sends the JWT cookie with the request
+                  })
+                  .then(response => {
+                    console.log('Response status:', response.status);  // Debugging output
+            
+                    if (!response.ok) {
+                      throw new Error('Authorization failed.');
+                    }
+                    return response.blob();
+                  })
+                  .then(blob => {
+                    const downloadUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = url.split('/connectdata/').pop();
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  })
+                  .catch(error => console.error('Error:', error));  // Debugging output
+                });
+              }
+          });
+        });
+      </script>
         <title>{{ onebox }} - comma useradmin</title>
       </head>
 <body>

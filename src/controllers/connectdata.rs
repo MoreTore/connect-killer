@@ -67,6 +67,7 @@ pub async fn file_stream(
 
 // used for useradmin browser download
 pub async fn file_download(
+    auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
@@ -162,12 +163,18 @@ pub async fn bootlog_file_download(
 
 // a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19/12/sprite.jpg
 pub async fn thumbnail_download(
-    Path((_dongle_id, canonical_route_name, segment, file)): Path<(String, String, String, String)>,
+    auth: crate::middleware::auth::MyJWT,
+    Path((dongle_id, route_name, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let lookup_key = format!("{canonical_route_name}--{segment}--{file}");
+
+    let lookup_key = match file.as_str() {
+        "sprite.jpg" | "coords.json" => format!("{route_name}--{segment}--{file}"), // route_name already has the dongle_id in this case
+        _ => format!("{dongle_id}_{route_name}--{segment}--{file}")
+    };
+
     let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
 
     // Prepare a request to fetch the file from storage

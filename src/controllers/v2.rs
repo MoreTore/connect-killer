@@ -284,7 +284,7 @@ async fn get_auth( // use for useradmin
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
-        format!("jwt={}; Path=/; HttpOnly; Secure", token).parse().unwrap(),
+        format!("jwt={}; Path=/; HttpOnly; Secure; Domain=.springerelectronics.com;", token).parse().unwrap(),
     );
 
     // Construct the redirect response manually

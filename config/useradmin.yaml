@@ -46,18 +46,18 @@ server:
       # Duration time in milliseconds.
       timeout: 5000
     cors:
-      enable: true
-      # Set the value of the [`Access-Control-Allow-Origin`][mdn] header
-      # allow_origins:
-      #   - https://loco.rs
-      # Set the value of the [`Access-Control-Allow-Headers`][mdn] header
-      # allow_headers:
-      # - Content-Type
-      # Set the value of the [`Access-Control-Allow-Methods`][mdn] header
-      # allow_methods:
-      #   - POST
-      # Set the value of the [`Access-Control-Max-Age`][mdn] header in seconds
-      # max_age: 3600
+      enable: false
+      allow_origins:
+        - https://useradmin.springerelectronics.com
+      allow_headers:
+        - Authorization
+        - Content-Type
+        - X-Requested-With
+      allow_methods:
+        - GET
+        - POST
+        - OPTIONS
+      max_age: 3600
 
     # server-side static assets config
     # for use with the view_engine in initializers/view_engine.rs
