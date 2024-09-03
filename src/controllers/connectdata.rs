@@ -13,13 +13,18 @@ use crate::common;
 // used for comma tools
 pub async fn file_stream(
     //auth: crate::middleware::auth::MyJWT,
-    Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
+    Path((dongle_id, route_name, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
     headers: HeaderMap, // Include headers from the incoming request
   ) -> impl IntoResponse {
-    let lookup_key = format!("{dongle_id}_{timestamp}--{segment}--{file}");
+    let lookup_key = match file.as_str() {
+        "sprite.jpg" | "coords.json" => format!("{route_name}--{segment}--{file}"), // route_name already has the dongle_id in this case
+        _ => format!("{dongle_id}_{route_name}--{segment}--{file}")
+    };
     let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
+
+    // Prepare a request to fetch the file from storage
     let mut request_builder = client.get(&internal_file_url);
     
     // Check for range header and forward it if present
@@ -67,7 +72,7 @@ pub async fn file_stream(
 
 // used for useradmin browser download
 pub async fn file_download(
-    auth: crate::middleware::auth::MyJWT,
+    //auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, timestamp, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
@@ -163,7 +168,7 @@ pub async fn bootlog_file_download(
 
 // a2a0ccea32023010/e8d8f1d92f2945750e031414a701cca9_2023-07-27--13-01-19/12/sprite.jpg
 pub async fn thumbnail_download(
-    auth: crate::middleware::auth::MyJWT,
+    //auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, route_name, segment, file)): Path<(String, String, String, String)>,
     State(_ctx): State<AppContext>,
     axum::Extension(client): axum::Extension<reqwest::Client>,
@@ -250,8 +255,8 @@ pub async fn render_segment_ulog(
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
-        //.add("/:dongle_id/:timestamp/:segment/:file", get(file_stream))
-        .add("/:dongle_id/:route_name/:segment/:file", get(thumbnail_download))
+        .add("/:dongle_id/:timestamp/:segment/:file", get(file_stream))
+        //.add("/:dongle_id/:route_name/:segment/:file", get(thumbnail_download))
         //https://commadata2.blob.core.windows.net/qlog/164080f7933651c4/2024-04-07--11-04-32/0/qlog.bz2
         .add("/qlog/:dongle_id/:timestamp/:segment/:file", get(file_download))
         .add("/rlog/:dongle_id/:timestamp/:segment/:file", get(file_download))

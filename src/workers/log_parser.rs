@@ -144,7 +144,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
 
         // check if the device is in the database
-        let _device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+        let device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
             Err(e) => {
                 tracing::info!("Recieved file from an unregistered device. {} or DB Error: {}", &args.dongle_id, e.to_string());
@@ -235,6 +235,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 
         let mut seg = segment.into_active_model();
         let mut ignore_uploads = None;
+        let mut qlog_result: Option<QLogResult> = None;
         match args.file.as_str() {
             "rlog.bz2" =>  {
                 seg.rlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/rlog/{}/{}/{}/{}",
@@ -248,10 +249,10 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 }
             }
             "qlog.bz2" =>  {
-                    match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
-                        Ok(_) => (),
+                    qlog_result = match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
+                        Ok(qlog_result) => Some(qlog_result),
                         Err(e) => return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string())),
-                    }
+                    };
                 }
             "qcamera.ts" => {
                 match get_qcam_duration(response).await {
@@ -292,6 +293,9 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             }
         };
         let mut active_route_model = route_model.into_active_model();
+        if let Some(log) = qlog_result {
+            active_route_model.platform = ActiveValue::Set(log.car_fingerprint);
+        }
         //let mut active_device_model = device_model.into_active_model();
         update_route_info(&self.ctx, &mut active_route_model, &segment_models).await?;
         //update_device_info(&self.ctx, &mut active_device_model, &active_route_model, &ignore_uploads).await?;
@@ -311,15 +315,6 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
     }
 }
 
-// async fn update_device_info(
-//     ctx: &AppContext,
-//     active_device_model: &mut devices::ActiveModel,
-//     active_route_model: &routes::ActiveModel,
-//     ignore_uploads: &Option<bool>,
-// ) -> worker::Result<()> {
-
-//     return Ok(());
-//}
 
 async fn update_route_info(
     _ctx: &AppContext,
@@ -397,26 +392,25 @@ async fn handle_qlog(
     args: &LogSegmentWorkerArgs,
     ctx: &AppContext,
     client: &Client
-) -> worker::Result<()> {
+) -> worker::Result<QLogResult> {
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(bytes_stream);
     let mut bz2_decoder = BzDecoder::new(stream_reader);
 
     let mut decompressed_data = Vec::new();
+
     match bz2_decoder.read_to_end(&mut decompressed_data).await {
         Ok(_)=> (),
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
-    // Prepare route and segment parameters
-    let writer = match parse_qlog(&client, seg, decompressed_data, args, ctx).await {
-        Ok(writer) => writer,
-        Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
-    };
-    // Upload the processed data
-    match upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog"), writer).await {
-        Ok(()) => return Ok(()),
-        Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
-    };
+
+    Ok(parse_qlog(&client, seg, decompressed_data, args, ctx).await?)
+}
+
+struct QLogResult {
+    car_fingerprint: String,
+    start_time: i64,
+    end_time: i64,
 }
 
 async fn parse_qlog(
@@ -425,7 +419,7 @@ async fn parse_qlog(
     decompressed_data: Vec<u8>,
     args: &LogSegmentWorkerArgs,
     _ctx: &AppContext
-) -> worker::Result<Vec<u8>> {
+) -> worker::Result<QLogResult> {
     let api_endpoint = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     seg.ulog_url = ActiveValue::Set(
         format!(
@@ -441,7 +435,7 @@ async fn parse_qlog(
         ));
     seg.qlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
 
-    let mut writer = Vec::new();
+    let mut unlog_data = Vec::new();
     let mut cursor = Cursor::new(decompressed_data);
     let mut onroad_mono_time: Option<u64> = None;
     let mut gps_seen = false;
@@ -452,6 +446,7 @@ async fn parse_qlog(
     let mut coordinates: Vec<serde_json::Value> = Vec::new();
     let mut start_time: i64= -1;
     let mut end_time: i64 = -1;
+    let mut car_fingerprint: String = "mock".to_string();
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
@@ -461,7 +456,7 @@ async fn parse_qlog(
                 let log_mono_time = event.get_log_mono_time();
                 if let Ok(gps) = gps {
                     let gps_ts = gps.get_unix_timestamp_millis();
-                    if (gps.get_flags() % 2) == 1 { // has fix
+                    if (gps.get_flags() % 2 == 1) || gps.get_has_fix() { // has fix
                         let lat = gps.get_latitude();
                         let lng = gps.get_longitude();
                         let speed = gps.get_speed();
@@ -503,7 +498,7 @@ async fn parse_qlog(
                         seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
                     }
                 }
-                writeln!(writer, "{:#?}", event).map_err(Box::from)?;
+                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
             }
             LogEvent::DeviceState(device_state) => {
                 if let Ok(device_state) = device_state {
@@ -512,7 +507,7 @@ async fn parse_qlog(
                         onroad_mono_time = Some(device_state.get_started_mono_time());
                     }
                 }
-                writeln!(writer, "{:#?}", event).map_err(Box::from)?
+                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
             }
 
             LogEvent::Thumbnail(thumbnail) => {
@@ -525,34 +520,41 @@ async fn parse_qlog(
                     thumbnails.push(image_data.to_vec());
                 }
             }
-            LogEvent::InitData(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::PandaStates(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::Can(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::Sendcan(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::ErrorLogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LogMessage(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LiveParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LiveTorqueParameters(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::CarParams(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::ManagerState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::NavInstruction(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::OnroadEvents(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::UploaderState(_) => writeln!(writer, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::CarParams(car_params) => {
+                car_fingerprint = car_params
+                    .ok()
+                    .and_then(|params| params.get_car_fingerprint().ok())
+                    .map_or_else(String::new, |fp| fp.to_string().unwrap_or_default());
+                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+            }
+            LogEvent::InitData(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::ErrorLogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LiveParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::LiveTorqueParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::ManagerState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::NavInstruction(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::OnroadEvents(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::UploaderState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::QcomGnss(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
             _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
         }
     }
+
     if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
         seg.end_lat = ActiveValue::Set(last_lat);
         seg.end_lng = ActiveValue::Set(last_lng);
         seg.miles = ActiveValue::Set((total_meters_traveled*0.000621371) as f32);
     }
-    // Convert coordinates to JSON
-    let json_coordinates = serde_json::to_vec(&coordinates).map_err(Box::from)?;
 
     let json_url = common::mkv_helpers::get_mkv_file_url(
         &format!("{}_{}--{}--coords.json", args.dongle_id, args.timestamp, args.segment)
     );
-    upload_data(client, &json_url, json_coordinates).await?;
+    upload_data(client, &json_url, serde_json::to_vec(&coordinates).map_err(Box::from)?).await?;
+    upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog"), unlog_data).await?;
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
         // Downscale each thumbnail in parallel
@@ -595,7 +597,7 @@ async fn parse_qlog(
         tracing::trace!("Image proc took: {:?}", img_proc_start.elapsed());
         upload_data(client, &sprite_url, img_bytes).await?;
     }
-    Ok(writer)
+    Ok(QLogResult{ car_fingerprint, start_time, end_time})
 }
 
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {

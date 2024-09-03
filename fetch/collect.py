@@ -83,7 +83,7 @@ def main():
                 request_upload(dongle_id, paths, upload_urls)
         db.close()
         print("DATA COLLECTION PROCESS CLOSED CONNECTION TO DATABASE AND GOING TO SLEEP!")
-        time.sleep(3600)
+        time.sleep(600)
 
 if __name__ == "__main__":
     print("Starting data collection script")
@@ -93,4 +93,4 @@ if __name__ == "__main__":
         except Exception as e:
             print("Exception occurred:")
             print(traceback.format_exc())
-            time.sleep(3600)
+            time.sleep(600)
