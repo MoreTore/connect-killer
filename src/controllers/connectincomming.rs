@@ -1,5 +1,5 @@
 #![allow(clippy::unused_async)]
-use futures::{StreamExt};
+use futures::StreamExt;
 use loco_rs::prelude::*;
 use bytes::BytesMut;
 use axum::{
@@ -252,7 +252,6 @@ pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectincoming")
         .add("/:dongle_id/:timestamp/:segment/:file", put(upload_driving_logs))
-        //.add("/:dongle_id/:category/:file", put(upload_other))
         .add("/:dongle_id/crash/:log_id/:commit/:name", put(upload_crash))
         .add("/:dongle_id/boot/:file", put(upload_bootlogs))
 }

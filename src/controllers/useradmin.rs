@@ -92,8 +92,6 @@ pub async fn onebox_handler(
     }
     let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     let ws_endpoint: String = env::var("WS_ENDPOINT").expect("WS_ENDPOINT env variable not set");
-    //let api_host = ctx.config.server.full_url().replace("http", "https");
-    //let ws_host = api_host.replace("3112", "3223");
 
     let mut master_template = MasterTemplate {
         dongle_id: dongle_id.clone().unwrap_or_default(),

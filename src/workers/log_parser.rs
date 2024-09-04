@@ -1,61 +1,35 @@
-// Apology for the Messy Code
-/*
-I apologize for the messiness and potential lack of clarity in this code.
-It evolved organically over time with various additions and modifications to handle multiple aspects
-of the log processing. This includes handling database interactions, HTTP requests, image processing,
-and video duration extraction, among other tasks. As a result, the code may appear disjointed and less organized than ideal.
-
-I recognize that there are areas that could benefit from refactoring and clearer documentation to improve
-readability and maintainability. Specifically, there are opportunities to modularize the code further, improve
-error handling consistency, and enhance the overall structure.
-
-Your understanding and patience are greatly appreciated. I am committed to improving this codebase and
-welcome any suggestions you may have for making it cleaner and more efficient.
-
-Sincerely,
-Ryleymcc
-*/
-
-
-
-use image::{codecs::jpeg::JpegEncoder, DynamicImage, GenericImageView, ImageBuffer, Rgba};
-use serde::{Deserialize, Serialize};
-use loco_rs::prelude::*;
-use capnp::message::ReaderOptions;
-use std::env;
-
-use std::io::{Write, Cursor};
-use crate::common;
-use crate::cereal::{log_capnp, car_capnp};
-use log_capnp::event as LogEvent;
-use capnp::serialize::{read_message, write_message};
-use crate::models::_entities::{devices, routes, segments, anonlogs};
+use std::{
+    env,
+    time::Instant,
+    sync::Arc,
+    collections::HashMap,
+    io::{Write, Cursor}
+};
+use tokio_util::io::StreamReader;
+use tokio::{
+    io::{AsyncWriteExt, AsyncReadExt},
+    sync::{Mutex, Notify},
+};
 use reqwest::{Client, Response};
-
-
-use std::time::Instant;
-//use crate::models::{ segments::SegmentParams, _entities::segments, _entities::routes, routes::RouteParams};
-
-use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
-
-
 use rayon::prelude::*;
 use ffmpeg_next::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
 use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
 use futures_util::StreamExt;
-use tokio_util::io::StreamReader;
-use tokio::{
-    io::{AsyncWriteExt, AsyncReadExt},
-    process::Command,
-    sync::{Mutex, Notify},
+use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
+use once_cell::sync::Lazy;
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, ImageBuffer, Rgba};
+use serde::{Deserialize, Serialize};
+use loco_rs::prelude::*;
+use capnp::{
+    message::ReaderOptions,
+    serialize::{read_message, write_message}
 };
 
-
-use std::collections::HashMap;
-
-use std::sync::Arc;
-use once_cell::sync::Lazy;
+use log_capnp::event as LogEvent;
+use crate::common;
+use crate::cereal::log_capnp;
+use crate::models::_entities::{devices, routes, segments};
 
 pub struct LogSegmentWorker {
     pub ctx: AppContext,
@@ -72,7 +46,7 @@ pub struct LogSegmentWorkerArgs {
     pub create_time      : i64, // This is the time the call was made to the worker.
 }
 
-use sea_orm::{DatabaseConnection, DbErr, Statement};
+use sea_orm::{DatabaseConnection, DbErr};
 use async_trait::async_trait;
 
 pub struct LockManager {
@@ -88,7 +62,7 @@ impl LockManager {
         }
     }
 
-    pub async fn acquire_advisory_lock(&self, db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
+    pub async fn acquire_advisory_lock(&self, _db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
         // This is the local server lock
         let mut keys = self.keys.lock().await;
         while keys.contains_key(&key) {
@@ -100,6 +74,7 @@ impl LockManager {
 
         // Insert the key to indicate it is locked
         keys.insert(key, true);
+        /// TODO: Fix the global locking
         // This is the global lock (literally for servers around the globe accessing the same db)
         // tracing::trace!("Attempting to acquire advisory lock with key: {}", key);
         // let sql = format!("SELECT pg_advisory_lock({})", key);
@@ -110,7 +85,7 @@ impl LockManager {
         Ok(())
     }
 
-    pub async fn release_advisory_lock(&self, db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
+    pub async fn release_advisory_lock(&self, _db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
         let mut keys = self.keys.lock().await;
         if keys.remove(&key).is_some() {
             // Notify all waiting threads that a key has been removed
@@ -144,7 +119,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
 
         // check if the device is in the database
-        let device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
+        let _device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
             Err(e) => {
                 tracing::info!("Recieved file from an unregistered device. {} or DB Error: {}", &args.dongle_id, e.to_string());
@@ -283,7 +258,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             }
         }
         let segment_models = match segments::Model::find_segments_by_route(&self.ctx.db, &route_model.fullname).await {
-            Ok(mut segments) => {
+            Ok(segments) => {
                 //segments.retain(|segment| segment.qlog_url != ""); // exclude ones wher the qlog is missing
                 segments
             }
@@ -645,12 +620,12 @@ const MAX_FILE_COUNT: usize = 10;
 macro_rules! reader_to_builder {
     ($set_fn:ident, $event_variant:ident, $event:expr, $event_builder:expr) => {
         if let Ok(reader) = $event {
-            $event_builder.$set_fn(reader);
+            let _ = $event_builder.$set_fn(reader);
         }
     };
 }
 
-async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, args: &LogSegmentWorkerArgs) -> Result<(), Error> {
+async fn anonamize_rlog(_ctx: &AppContext, response: Response, _client: &Client, args: &LogSegmentWorkerArgs) -> Result<(), Error> {
     let start_time = Instant::now();
 
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
@@ -757,7 +732,7 @@ async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, a
         }
     }
     let temp_path = persistent_dir.join(format!("{}--{}--{}", &args.timestamp, &args.segment, &args.file));
-    let mut temp_file = tokio::fs::File::create(&temp_path).await?;
+    let temp_file = tokio::fs::File::create(&temp_path).await?;
     let mut async_writer = tokio::io::BufWriter::new(temp_file);
     let mut async_bz_encoder = BzEncoder::with_quality(&mut async_writer, async_compression::Level::Default);
 
@@ -770,7 +745,7 @@ async fn anonamize_rlog(ctx: &AppContext, response: Response, client: &Client, a
 
     if folder_size >= MAX_FOLDER_SIZE || file_count >= MAX_FILE_COUNT {
         let repo_path = format!("{}/{}", &platform, &args.dongle_id);
-        upload_folder_to_huggingface(&prefix, &repo_path).await; // Upload everything
+        let _ = upload_folder_to_huggingface(&prefix, &repo_path).await; // Upload everything
         clear_directory(persistent_dir)?; // only delete the dongle_id path to avoid a race
     }
 
