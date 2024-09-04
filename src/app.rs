@@ -1,69 +1,43 @@
-use std::collections::HashMap;
-
-use std::path::Path;
-use std::env;
-
-use std::sync::{Arc, Mutex};
-use tokio::time::{self};
+use std::{
+    env,
+    path::Path,
+    sync::Arc,
+    {net::SocketAddr, path::PathBuf}
+};
+use tokio::time;
 use async_trait::async_trait;
-use loco_rs::{
-    app::{AppContext, Hooks, Initializer},
-    boot::{create_app, BootResult, StartMode},
-    controller::AppRoutes,
-    db::{self, truncate_table},
-    environment::Environment,
-    task::Tasks,
-    worker::{AppWorker, Processor},
-    Result,
-};
-use migration::{Migrator};
+use migration::Migrator;
 use sea_orm::DatabaseConnection;
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    controllers, initializers,
-    models::_entities::{devices, notes, users},
-    tasks,
-};
-
-use reqwest::{Client};
+use reqwest::Client;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
-use tokio::sync::{mpsc, oneshot, RwLock};
-
+use axum_server::tls_rustls::RustlsConfig;
 use axum::{
     extract::Host,
     handler::HandlerWithoutStateExt,
     http::{StatusCode, Uri},
     response::Redirect, Extension,
 };
-use axum_server::tls_rustls::RustlsConfig;
-use std::{net::SocketAddr, path::PathBuf};
+use loco_rs::{
+    app::{AppContext, Hooks, Initializer},
+    boot::{create_app, BootResult, StartMode},
+    controller::AppRoutes,
+    db::truncate_table,
+    environment::Environment,
+    task::Tasks,
+    worker::{AppWorker, Processor},
+    Result,
+};
 
+use crate::{
+    tasks,
+    controllers,
+    initializers,
+    controllers::ws::ConnectionManager, 
+    models::_entities::{devices, users},
+};
 
-#[derive(Serialize, Deserialize, Clone)]
-struct JsonRpcCommand {
-    id: String,
-    method: String,
-    params: serde_json::Value,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct JsonRpcResponse {
-    id: String,
-    result: Option<serde_json::Value>,
-    error: Option<serde_json::Value>,
-}
-
-type SharedState = Arc<RwLock<App>>;
-
-use crate::controllers::ws::ConnectionManager;
-
-pub struct App {
-    // command_sender: mpsc::Sender<JsonRpcCommand>,
-    // pending_commands: Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>,
-    // offline_queues: Arc<Mutex<HashMap<String, Vec<JsonRpcCommand>>>>, // offline queue for each device
-}
+pub struct App {}
 #[async_trait]
 impl Hooks for App {
     fn app_name() -> &'static str {
@@ -123,14 +97,13 @@ impl Hooks for App {
 
     async fn truncate(db: &DatabaseConnection) -> Result<()> {
         truncate_table(db, users::Entity).await?;
-        truncate_table(db, notes::Entity).await?;
         Ok(())
     }
 
-    async fn seed(db: &DatabaseConnection, base: &Path) -> Result<()> {
-        db::seed::<users::ActiveModel>(db, &base.join("users.yaml").display().to_string()).await?;
+    async fn seed(_db: &DatabaseConnection, _base: &Path) -> Result<()> {
+        //db::seed::<users::ActiveModel>(db, &base.join("users.yaml").display().to_string()).await?;
         //db::seed::<notes::ActiveModel>(db, &base.join("notes.yaml").display().to_string()).await?;
-        db::seed::<devices::ActiveModel>(db, &base.join("devices.yaml").display().to_string()).await?;
+        //db::seed::<devices::ActiveModel>(db, &base.join("devices.yaml").display().to_string()).await?;
         //db::seed::<routes::ActiveModel>(db, &base.join("routes.yaml").display().to_string()).await?;
         //db::seed::<segments::ActiveModel>(db, &base.join("segments.yaml").display().to_string()).await?;
         Ok(())
@@ -159,20 +132,10 @@ impl Hooks for App {
             }
         });
 
-
-
-        //let (command_sender, _command_receiver) = mpsc::channel(100);
-        // let shared_state: Arc<RwLock<App>> = Arc::new(RwLock::new(App {
-        //      command_sender,
-        //      pending_commands: Arc::new(Mutex::new(HashMap::new())),
-        //      offline_queues: Arc::new(Mutex::new(HashMap::new())),
-        // }));
         let client = Client::new();
-
         let router = router
             .layer(Extension(client))
             .layer(Extension(connection_manager));
-            //.layer(Extension(shared_state));
 
         Ok(router)
     }
@@ -241,6 +204,7 @@ struct MyServerConfig {
     binding: String
 }
 
+/*
 async fn redirect_http_to_https(my_server_config: MyServerConfig) {
     let config_clone = my_server_config.clone(); // Clone the config for the closure
 
@@ -275,3 +239,4 @@ async fn redirect_http_to_https(my_server_config: MyServerConfig) {
         .await
         .unwrap();
 }
+*/

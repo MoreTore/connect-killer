@@ -5,7 +5,6 @@ pub use super::authorized_users::Entity as AuthorizedUsers;
 pub use super::bootlogs::Entity as Bootlogs;
 pub use super::device_msg_queues::Entity as DeviceMsgQueues;
 pub use super::devices::Entity as Devices;
-pub use super::notes::Entity as Notes;
 pub use super::routes::Entity as Routes;
 pub use super::segments::Entity as Segments;
 pub use super::users::Entity as Users;

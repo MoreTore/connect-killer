@@ -7,7 +7,6 @@ pub mod authorized_users;
 pub mod bootlogs;
 pub mod device_msg_queues;
 pub mod devices;
-pub mod notes;
 pub mod routes;
 pub mod segments;
 pub mod users;
