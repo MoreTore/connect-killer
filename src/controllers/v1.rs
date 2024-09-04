@@ -1,4 +1,4 @@
-#![allow(clippy::unused_async)]
+
 use loco_rs::{ prelude::*};
 use axum::{
     extract::{Path, Query, State}, routing::patch, Extension
@@ -6,11 +6,19 @@ use axum::{
 use reqwest::{StatusCode,Client};
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::fmt::Write as FmtWrite;
-use std::env;
+use std::{env, error::Error};
 
-use crate::{common, enforce_ownership_rule, middleware::jwt, models::{_entities}};
+use crate::{common, 
+    enforce_ownership_rule, 
+    middleware::jwt, 
+    models::{
+        devices::DM,
+        segments::SM,
+        routes::RM,
+        users::UM,
+        device_msg_queues::Model as DMQM,
+    }
+};
 use super::v1_responses::*;
 
 #[derive(Deserialize)]
@@ -90,7 +98,7 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
     Path(canonical_route_name): Path<String>,
 ) -> Result<Response> {
 
-    let mut segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
+    let mut segment_models = SM::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
     segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
 
@@ -99,7 +107,7 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(
         &exp,
-        auth.claims.identity.to_string()).unwrap();
+        auth.claims.identity.to_string()).unwrap_or_default();
     
     for seg in segment_models.iter_mut() {
         seg.qcam_url = format!("{}?exp={}&sig={}",seg.qcam_url, exp, token)
@@ -137,33 +145,28 @@ async fn get_links_for_route(
     client: &Client,
     jwt: &str
 ) -> Result<(StatusCode, FilesResponse), Box<dyn Error>> {
-    // Assuming common::mkv_helpers::list_keys_starting_with is an async function
     let key = common::mkv_helpers::list_keys_starting_with(&route_id.replace("|", "_"));
-    
     // Fetch data from the URL
     let response = client.get(&key).send().await?;
     let code = response.status();
-    
     // Parse the JSON response
     let data: Value = response.json().await?;
-    
     // Ensure "keys" is an array and handle potential errors
-    //let keys = data.get("keys").and_then(Value::as_array).ok_or("Missing or invalid 'keys' field");
-    let keys = data["keys"].as_array().unwrap();
+    let keys = data["keys"].as_array();
     // Process keys to construct URLs
     let mut urls = Vec::new();
-    for key in keys {
-        if let Some(key_str) = key.as_str() {
-            let parts: Vec<&str> = key_str.split('_').collect();
-            if parts.len() == 2 {
+
+    if let Some(keys) = keys {
+        keys.iter().filter_map(|key| key.as_str()).for_each(|key_str| {
+            if let [prefix, route] = key_str.split('_').collect::<Vec<_>>()[..] {
                 urls.push(format!("{}/connectdata{}/{}?sig={}",
                     env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
-                    parts[0],
-                    transform_route_string(parts[1]),
+                    prefix,
+                    transform_route_string(route),
                     jwt
                 ));
             }
-        }
+        });
     }
     
     // Assuming sort_keys_to_response is an async function that takes a Vec<String> and returns a FilesResponse
@@ -319,8 +322,8 @@ async fn unpair(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser {
         enforce_ownership_rule!(
             user_model.id, 
@@ -341,7 +344,7 @@ async fn device_info(
 ) -> Result<Response> {
     let device = match auth.device_model {
         Some(device) => device,
-        None => _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?,
+        None => DM::find_device(&ctx.db, &dongle_id).await?,
     };
     format::json(
         DeviceInfoResponse {
@@ -366,8 +369,8 @@ async fn device_location(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser {
         enforce_ownership_rule!(
             user_model.id, 
@@ -376,7 +379,7 @@ async fn device_location(
         );
     }
     // get most recent route with gps
-    let (lat, lng, time) = _entities::routes::Model::find_latest_pos(&ctx.db, &dongle_id).await?;
+    let (lat, lng, time) = RM::find_latest_pos(&ctx.db, &dongle_id).await?;
     let response = DeviceLocationResponse {
         dongle_id,
         lat,
@@ -405,7 +408,7 @@ async fn device_stats(
     let one_week_ago_millis = utc_time_now_millis - Duration::from_secs(7 * 24 * 60 * 60).as_millis() as i64;
 
     // Get total stats
-    let (total_length, route_count) = _entities::routes::Model::total_length_and_count_time_filtered(
+    let (total_length, route_count) = RM::total_length_and_count_time_filtered(
         &ctx.db,
         &dongle_id,
         None, // No time filter for total stats
@@ -413,7 +416,7 @@ async fn device_stats(
     ).await?;
 
     // Get stats for the past week
-    let (week_length, week_count) = _entities::routes::Model::total_length_and_count_time_filtered(
+    let (week_length, week_count) = RM::total_length_and_count_time_filtered(
         &ctx.db,
         &dongle_id,
         Some(one_week_ago_millis), // From one week ago
@@ -461,17 +464,17 @@ async fn route_segment(
         if user_model.superuser {
 
         } else {
-            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+            let _ = DM::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
         }
     }
-    let mut route_models = _entities::routes::Model::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
+    let mut route_models = RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
     let exp = (3600 * 24 as u64);
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(
         &exp,
-        auth.claims.identity.to_string()).unwrap();
+        auth.claims.identity.to_string()).unwrap_or_default();
         
     for route in route_models.iter_mut() {
         route.share_sig = token.clone();
@@ -487,12 +490,16 @@ async fn route_info(
     State(ctx): State<AppContext>,
     Path(fullname): Path<String>,
 ) -> Result<Response> {
-    let route_model = _entities::routes::Model::find_route(&ctx.db, &fullname).await?;
+    let route_model = RM::find_route(&ctx.db, &fullname).await?;
     if let Some(user_model) = auth.user_model {
         if user_model.superuser {
 
         } else {
-            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &route_model.device_dongle_id).await?; // just error if not found
+            DM::find_user_device(
+                &ctx.db, 
+                user_model.id,
+                &route_model.device_dongle_id)
+                .await?; // just error if not found
         }
     }
     format::json(route_model)
@@ -508,10 +515,14 @@ async fn preserved_routes( // TODO
         if user_model.superuser {
 
         } else {
-            let _ = _entities::devices::Model::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+            DM::find_user_device(
+                &ctx.db, 
+                user_model.id, 
+                &dongle_id)
+            .await?; // just error if not found
         }
     }
-    let route_models = _entities::routes::Model::find_device_routes(&ctx.db, &dongle_id).await?;
+    let route_models = RM::find_device_routes(&ctx.db, &dongle_id).await?;
     format::json(route_models)
 }
 
@@ -521,11 +532,11 @@ async fn get_my_devices(
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
     // TODO: implement authorized devices!
-    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
     let device_models = if user_model.superuser {
-        _entities::devices::Model::find_all_devices(&ctx.db).await
+        DM::find_all_devices(&ctx.db).await
     } else {
-        _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await
+        DM::find_user_devices(&ctx.db, user_model.id).await
     };
     let mut devices = vec![];
     for device_model in device_models {
@@ -558,7 +569,7 @@ async fn get_me(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
-    let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
     format::json(MeResponse {
        email: user_model.email,
        id: String::from(user_model.identity),
@@ -584,7 +595,7 @@ async fn update_device_alias(
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
     }
     let user_model = auth.user_model.unwrap();
-    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
     if !user_model.superuser {
         enforce_ownership_rule!(
             user_model.id, 
@@ -594,8 +605,8 @@ async fn update_device_alias(
     }
     let mut active_device_model = device_model.into_active_model();
     active_device_model.alias = ActiveValue::Set(alias.alias);
-    active_device_model.update(&ctx.db).await;
-    let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+    active_device_model.update(&ctx.db).await?;
+    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
     format::json(
         DeviceInfoResponse {
             dongle_id: device_model.dongle_id,
@@ -636,7 +647,7 @@ async fn set_destination(
         is_online = device_model.online;
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
         is_online = device_model.online;
         enforce_ownership_rule!(
             user_model.id, 
@@ -653,7 +664,7 @@ async fn set_destination(
         params: Some(serde_json::to_value(destination.clone())?),
         ..Default::default()
     };
-    _entities::device_msg_queues::Model::insert_msg(&ctx.db, &dongle_id, msg).await?;
+    DMQM::insert_msg(&ctx.db, &dongle_id, msg).await?;
 
     // Deserialize the current locations
     let mut locations: Vec<SavedLocation> = if let Some(locations_json) = active_device.locations.as_ref() {
@@ -727,8 +738,12 @@ async fn set_destination(
 async fn get_next_destination(
     auth: crate::middleware::auth::MyJWT,   
     State(ctx): State<AppContext>,
-    Path(dongle_id): Path<String>,
+    //Path(dongle_id): Path<String>,
 ) -> impl IntoResponse {
+    if auth.device_model.is_none() {
+        return (StatusCode::BAD_REQUEST, format::json("Only devices can use this endpoint.")).into_response();
+    }
+
     if let Some(mut device_model) = auth.device_model {
         // Deserialize the current locations from the device model
         if let Some(locations_json) = device_model.locations.as_ref() {
@@ -804,7 +819,7 @@ async fn put_locations(
     if let Some(device_model) = auth.device_model {
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
         enforce_ownership_rule!(
             user_model.id, 
             device_model.owner_id, 
@@ -839,7 +854,6 @@ async fn put_locations(
     }
 
     if !location_found {
-        // Create a new SavedLocation entry
         let new_location = SavedLocation {
             id: uuid::Uuid::new_v4(),
             dongle_id: dongle_id.clone(),
@@ -876,13 +890,12 @@ async fn get_locations(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
-    //axum::Extension(shared_state): axum::Extension<reqwest::Client>,
 ) -> Result<Response> {
     if let Some(device_model) = auth.device_model {
         let locations = device_model.locations.unwrap_or_default();
         return Ok((StatusCode::OK, Json(locations)).into_response());
     } else if let Some(user_model) = auth.user_model {
-        let device_model =  _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
         if !user_model.superuser {
             enforce_ownership_rule!(
                 user_model.id, 
@@ -890,7 +903,7 @@ async fn get_locations(
                 "Can only see owned devices location!"
             ); // early return if not owned
         }
-        let locations = device_model.locations.unwrap_or_default();
+        let locations: Value = device_model.locations.unwrap_or_default();
         return Ok((StatusCode::OK, Json(locations)).into_response());
     } else {
         return Ok((StatusCode::NO_CONTENT, format::json("")).into_response());
@@ -913,7 +926,7 @@ async fn delete_location(
     if let Some(device_model) = auth.device_model {
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = _entities::devices::Model::find_device(&ctx.db, &dongle_id).await?;
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
         if !user_model.superuser {
             enforce_ownership_rule!(
                 user_model.id, 
@@ -934,8 +947,8 @@ async fn delete_location(
     };
 
     // Find and remove the location with the matching id
-    let original_len = locations.len();
-    locations.retain(|loc| loc.id.to_string() != payload.id);
+    let original_len: usize = locations.len();
+    locations.retain(|loc: &SavedLocation| loc.id.to_string() != payload.id);
 
     if locations.len() == original_len {
         // If no location was removed, respond with an error

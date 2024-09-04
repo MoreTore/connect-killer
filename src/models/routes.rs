@@ -1,16 +1,15 @@
+use chrono::prelude::Utc;
 use loco_rs::model::{ModelError, ModelResult};
 use loco_rs::prelude::*;
 use sea_orm::{ActiveValue, TransactionTrait, QuerySelect, DeleteResult, QueryOrder};
-use super::_entities::routes::{self, ActiveModel, Entity, Model};
+pub use super::_entities::routes::{self, ActiveModel, Entity, Model as RM, Column};
 
 
 
-
-use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
-    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -28,7 +27,7 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 /// Implementation of the `Model` struct for routes.
-impl super::_entities::routes::Model {
+impl RM {
     /// Adds a route to the database.
     ///
     /// # Arguments
@@ -44,8 +43,8 @@ impl super::_entities::routes::Model {
         db: &DatabaseConnection,
     ) -> ModelResult<Self> {
         let txn = db.begin().await?;
-        if routes::Entity::find()
-            .filter(routes::Column::Fullname.eq(&self.fullname))
+        if Entity::find()
+            .filter(Column::Fullname.eq(&self.fullname))
             .one(&txn)
             .await?
             .is_some()
@@ -72,9 +71,9 @@ impl super::_entities::routes::Model {
     pub async fn find_route(
         db: &DatabaseConnection,
         fullname: &String,
-    ) -> ModelResult<Model> {
+    ) -> ModelResult<RM> {
         let route = Entity::find()
-            .filter(routes::Column::Fullname.eq(fullname))
+            .filter(Column::Fullname.eq(fullname))
             .one(db)
             .await;
         match route {
@@ -94,9 +93,9 @@ impl super::_entities::routes::Model {
         dongle_id: &str,
     ) -> ModelResult<(f64, f64, i64)> {
         let route = Entity::find()
-            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
-            .filter(routes::Column::Hpgps.eq(true))
-            .order_by_desc(routes::Column::EndTimeUtcMillis)
+            .filter(Column::DeviceDongleId.eq(dongle_id))
+            .filter(Column::Hpgps.eq(true))
+            .order_by_desc(Column::EndTimeUtcMillis)
             .one(db)
             .await?
             .unwrap_or_default();
@@ -112,26 +111,16 @@ impl super::_entities::routes::Model {
         from: Option<i64>,
         to: Option<i64>,
         limit: Option<u64>,
-    ) -> ModelResult<Vec<routes::Model>> {
-        let routes = routes::Entity::find()
-            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
-            .filter(routes::Column::StartTimeUtcMillis.gte(from))
-            .filter(routes::Column::StartTimeUtcMillis.lte(to))
-            .order_by_desc(routes::Column::CreatedAt)
+    ) -> ModelResult<Vec<RM>> {
+        let routes = Entity::find()
+            .filter(Column::DeviceDongleId.eq(dongle_id))
+            .filter(Column::StartTimeUtcMillis.gte(from))
+            .filter(Column::StartTimeUtcMillis.lte(to))
+            .order_by_desc(Column::CreatedAt)
             .limit(limit)
             .all(db).await?;
         Ok(routes)
     }
-
-    // pub async fn find_all_routes(
-    //     db: &DatabaseConnection,
-    // ) -> ModelResult<Vec<Model>> {
-    //     let routes = routes::Entity::find()
-    //         .all(db)
-    //         .await?;
-    //     Ok(routes)
-    // }
-        //route.ok_or_else(|| ModelError::EntityNotFound)
 
     /// Finds all routes associated with a device.
     ///
@@ -146,10 +135,10 @@ impl super::_entities::routes::Model {
     pub async fn find_device_routes(
         db: &DatabaseConnection,
         dongle_id: &String,
-    ) -> ModelResult<Vec<Model>> {
-        let routes = routes::Entity::find()
-            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
-            .order_by_desc(routes::Column::CreatedAt)
+    ) -> ModelResult<Vec<RM>> {
+        let routes = Entity::find()
+            .filter(Column::DeviceDongleId.eq(dongle_id))
+            .order_by_desc(Column::CreatedAt)
             .all(db)
             .await?;
         Ok(routes)
@@ -162,10 +151,10 @@ impl super::_entities::routes::Model {
         use sea_orm::prelude::*;
         use sea_orm::QuerySelect;
 
-        let routes: Vec<f32> = routes::Entity::find()
-            .filter(routes::Column::DeviceDongleId.eq(dongle_id))
+        let routes: Vec<f32> = Entity::find()
+            .filter(Column::DeviceDongleId.eq(dongle_id))
             .select_only()
-            .column(routes::Column::Length)
+            .column(Column::Length)
             .into_tuple::<f32>() // Use f32 to match the SQL type
             .all(db)
             .await?;
@@ -187,20 +176,20 @@ impl super::_entities::routes::Model {
         use sea_orm::Condition;
     
         let mut condition = Condition::all()
-            .add(routes::Column::DeviceDongleId.eq(dongle_id));
+            .add(Column::DeviceDongleId.eq(dongle_id));
     
         if let Some(from) = from {
-            condition = condition.add(routes::Column::StartTimeUtcMillis.gte(from));
+            condition = condition.add(Column::StartTimeUtcMillis.gte(from));
         }
     
         if let Some(to) = to {
-            condition = condition.add(routes::Column::StartTimeUtcMillis.lte(to));
+            condition = condition.add(Column::StartTimeUtcMillis.lte(to));
         }
     
-        let routes: Vec<f32> = routes::Entity::find()
+        let routes: Vec<f32> = Entity::find()
             .filter(condition)
             .select_only()
-            .column(routes::Column::Length)
+            .column(Column::Length)
             .into_tuple::<f32>() // Use f32 to match the SQL type
             .all(db)
             .await?;
@@ -226,7 +215,7 @@ impl super::_entities::routes::Model {
         db: &DatabaseConnection,
         canonical_route_name: &String,
     ) -> ModelResult<DeleteResult> {
-        Ok(routes::Entity::delete_by_id(canonical_route_name).exec(db).await?)
+        Ok(Entity::delete_by_id(canonical_route_name).exec(db).await?)
     }
 
     /// Deletes all routes associated with a device.
@@ -243,13 +232,13 @@ impl super::_entities::routes::Model {
         db: &DatabaseConnection,
         device_dongle_id: &String,
     ) -> ModelResult<DeleteResult> {
-        Ok(routes::Entity::delete_many()
-            .filter(routes::Column::DeviceDongleId.eq(device_dongle_id))
+        Ok(Entity::delete_many()
+            .filter(Column::DeviceDongleId.eq(device_dongle_id))
             .exec(db)
             .await?)
     }
 }
 
-impl super::_entities::routes::ActiveModel {
+impl ActiveModel {
 
 }

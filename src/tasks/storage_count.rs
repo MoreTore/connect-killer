@@ -96,7 +96,7 @@ impl Task for StorageCount {
         println!("Storage used by each DONGLE_ID (in GB):");
         for (dongle_id, storage) in &storage_by_dongle {
             let storage_gb = *storage as f64 / 1_000_000_000.0;
-            if let Ok(device_model) = devices::Model::find_device(&ctx.db, dongle_id).await {
+            if let Ok(device_model) = devices::DM::find_device(&ctx.db, dongle_id).await {
                 let mut active_device_model = device_model.into_active_model();
                 active_device_model.server_storage = ActiveValue::Set(*storage as i64);
                 if active_device_model.update(&ctx.db).await.is_err() {

@@ -1,24 +1,15 @@
+use chrono::prelude::Utc;
 use sea_orm::entity::prelude::*;
-pub use super::_entities::devices::{self, ActiveModel, Entity, Model};
 use sea_orm::{ActiveValue, TransactionTrait, QueryOrder};
-use loco_rs::{prelude::*};
-
+use loco_rs::prelude::*;
+pub use super::_entities::devices::{self, ActiveModel, Entity, Model as DM, Column};
 use crate::controllers::v2::DeviceRegistrationParams;
 
-// #[derive(Debug, Deserialize, Serialize)]
-// pub struct DeviceRegistrationParams {
-//     pub id: i32,
-//     pub dongle_id: String,
-//     pub serial_number: String,
-//     pub user_id: i32,
-//     pub sim_id: String,
-// }
 
-use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
-    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -35,7 +26,7 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-impl super::_entities::devices::Model {
+impl DM {
 
     pub async fn register_device(
         db: &DatabaseConnection,
@@ -43,12 +34,12 @@ impl super::_entities::devices::Model {
         dongle_id: &String,
     ) -> ModelResult<()> {
         // Check if the device is registered already
-        match devices::Model::find_device(db, dongle_id).await {
+        match DM::find_device(db, dongle_id).await {
             Ok(_) => Ok(()),
             Err(_e) => {
                 // Add device to db
                 let txn = db.begin().await?;
-                let device = devices::Model {
+                let device = DM {
                     dongle_id: dongle_id.clone(),
                     public_key: params.public_key,
                     imei: params.imei,
@@ -71,11 +62,11 @@ impl super::_entities::devices::Model {
     pub async fn find_user_devices(
         db: &DatabaseConnection,
         user_id: i32,
-    ) -> Vec<devices::Model> {
-        devices::Entity::find()
-            .filter(devices::Column::OwnerId.eq(user_id))
-            .order_by_desc(devices::Column::Online)
-            .order_by_desc(devices::Column::LastAthenaPing)
+    ) -> Vec<DM> {
+        Entity::find()
+            .filter(Column::OwnerId.eq(user_id))
+            .order_by_desc(Column::Online)
+            .order_by_desc(Column::LastAthenaPing)
             .all(db)
             .await
             .expect("Database query failed")
@@ -85,20 +76,20 @@ impl super::_entities::devices::Model {
         db: &DatabaseConnection,
         user_id: i32,
         dongle_id: &str
-    ) -> Result<Option<Model>, DbErr> {
-        devices::Entity::find()
-            .filter(devices::Column::OwnerId.eq(user_id))
-            .filter(devices::Column::DongleId.eq(dongle_id))
+    ) -> Result<Option<DM>, DbErr> {
+        Entity::find()
+            .filter(Column::OwnerId.eq(user_id))
+            .filter(Column::DongleId.eq(dongle_id))
             .one(db)
             .await
     }
 
     pub async fn find_all_devices(
         db: &DatabaseConnection,
-    ) -> Vec<Model> {
+    ) -> Vec<DM> {
         Entity::find()
-            .order_by_desc(devices::Column::Online)
-            .order_by_desc(devices::Column::LastAthenaPing)
+            .order_by_desc(Column::Online)
+            .order_by_desc(Column::LastAthenaPing)
             .all(db)
             .await
             .expect("Database query failed")
@@ -107,9 +98,9 @@ impl super::_entities::devices::Model {
     pub async fn find_device(
         db: &DatabaseConnection,
         dongle_id: &str,
-    ) -> ModelResult<Model> {
+    ) -> ModelResult<DM> {
         let device = Entity::find()
-            .filter(devices::Column::DongleId.eq(dongle_id))
+            .filter(Column::DongleId.eq(dongle_id))
             .one(db)
             .await?;
         device.ok_or_else(|| ModelError::EntityNotFound)
@@ -120,7 +111,7 @@ impl super::_entities::devices::Model {
     ) -> Result<(), DbErr> {
         // Update all devices to set `Online` to `false`
         Entity::update_many()
-            .col_expr(devices::Column::Online, Expr::value(false))
+            .col_expr(Column::Online, Expr::value(false))
             .exec(db)
             .await?;
             
@@ -132,31 +123,12 @@ impl super::_entities::devices::Model {
         dongle_id: &str,
     ) -> ModelResult<Option<serde_json::Value>> {
         let device = Entity::find()
-            .filter(devices::Column::DongleId.eq(dongle_id))
+            .filter(Column::DongleId.eq(dongle_id))
             .one(db)
             .await?;
         let device = device.ok_or(ModelError::EntityNotFound)?;
         // Return the optional JSON data stored in the locations field
         Ok(device.locations)
     }
-
-    // pub async fn add_own_device(
-    //     &self, 
-    //     db: &DatabaseConnection, 
-    //     params: &DeviceRegistrationParams) -> ModelResult<Model> {
-    //     let txn = db.begin().await?;
-
-    //     let device = devices::ActiveModel {
-    //         dongle_id: ActiveValue::Set(params.dongle_id.to_string()),   
-    //         //owner_id: ActiveValue::Set(self.owner_id),
-    //         ..Default::default()
-    //     }
-    //     .insert(&txn)
-    //     .await?;
-
-    //     txn.commit().await?;
-
-    //     Ok(device)
-    // }
 
 }

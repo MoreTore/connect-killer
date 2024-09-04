@@ -1,12 +1,12 @@
+use chrono::prelude::Utc;
 use loco_rs::model::ModelResult;
 use sea_orm::{entity::prelude::*, ActiveValue, TransactionTrait};
-use super::_entities::bootlogs::{self, ActiveModel, Model};
+use super::_entities::bootlogs::{self, ActiveModel, Model, Entity, Column};
 
-use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
-    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -25,7 +25,13 @@ impl ActiveModelBehavior for ActiveModel {
 
 /// Implementation of the `Model` struct for routes.
 impl super::_entities::bootlogs::Model {
-    pub async fn add_bootlog(db: &DatabaseConnection, dongle_id: &String, bootlog_download_url: &String, unlog_url: &String, date_time: &String)  -> ModelResult<Self> {
+    pub async fn add_bootlog(
+        db: &DatabaseConnection, 
+        dongle_id: &String, 
+        bootlog_download_url: &String, 
+        unlog_url: &String, 
+        date_time: &String
+    )  -> ModelResult<Self> {
         let txn = match db.begin().await {
             Ok(txn) => {
                 tracing::debug!("Transaction began");
@@ -36,7 +42,7 @@ impl super::_entities::bootlogs::Model {
                 return Err(e.into());
             }
         };
-        let bootlog = bootlogs::ActiveModel {
+        let bootlog = ActiveModel {
             dongle_id: ActiveValue::Set(dongle_id.clone()),
             bootlog_url: ActiveValue::Set(bootlog_download_url.clone()),
             unlog_url: ActiveValue::Set(unlog_url.clone()),
@@ -63,8 +69,8 @@ impl super::_entities::bootlogs::Model {
         db: &DatabaseConnection,
         dongle_id: &String,
     ) -> ModelResult<Vec<Model>> {
-        let routes = bootlogs::Entity::find()
-            .filter(bootlogs::Column::DongleId.eq(dongle_id))
+        let routes = Entity::find()
+            .filter(Column::DongleId.eq(dongle_id))
             .all(db)
             .await?;
         Ok(routes)

@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use loco_rs::{prelude::*};
 use sea_orm::DeleteResult;
-pub use super::_entities::authorized_users::{self, ActiveModel, Entity, Model};
+pub use super::_entities::authorized_users::{self, ActiveModel, Entity, Model, Column};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AuthorizeParams {
@@ -14,7 +14,7 @@ use chrono::prelude::{Utc};
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
-    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -43,8 +43,8 @@ impl super::_entities::authorized_users::Model {
         params: &AuthorizeParams
     ) -> bool {
         let permission = authorized_users::Entity::find()
-            .filter(authorized_users::Column::UserId.eq(params.user_id))
-            .filter(authorized_users::Column::DeviceDongleId.eq(params.device_dongle_id.to_string()))
+            .filter(Column::UserId.eq(params.user_id))
+            .filter(Column::DeviceDongleId.eq(params.device_dongle_id.to_string()))
             .one(db)
             .await
             .expect("Database query failed");
@@ -58,7 +58,7 @@ impl super::_entities::authorized_users::Model {
     ) -> ModelResult<Self> {
         let txn = db.begin().await?;
 
-        let permission = authorized_users::ActiveModel {
+        let permission = ActiveModel {
             user_id: ActiveValue::Set(params.user_id),
             device_dongle_id: ActiveValue::Set(params.device_dongle_id.to_string()),
             ..Default::default()
@@ -77,9 +77,9 @@ impl super::_entities::authorized_users::Model {
         let txn = db.begin().await?;
     
         // Use DeleteMany for deleting multiple records based on a condition
-        let rows = authorized_users::Entity::delete_many()
-            .filter(authorized_users::Column::UserId.eq(params.user_id))
-            .filter(authorized_users::Column::DeviceDongleId.eq(params.device_dongle_id.to_string()))
+        let rows = Entity::delete_many()
+            .filter(Column::UserId.eq(params.user_id))
+            .filter(Column::DeviceDongleId.eq(params.device_dongle_id.to_string()))
             .exec(&txn)
             .await?;
     

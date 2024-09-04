@@ -1,15 +1,15 @@
-use sea_orm::entity::prelude::*;
+use chrono::prelude::Utc;
+//use sea_orm::entity::prelude::*;
+use loco_rs::prelude::*;
+use sea_orm::{ActiveValue, QueryOrder, QuerySelect};
 pub use super::_entities::device_msg_queues::{self, ActiveModel, Entity, Model, Column};
-use sea_orm::{ActiveValue, TransactionTrait, QueryOrder, QuerySelect};
 use crate::controllers::ws::JsonRpcRequest;
-use loco_rs::{prelude::*};
 
-use chrono::prelude::{Utc};
 
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     // extend activemodel below (keep comment for generators)
-    async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
+    async fn before_save<C>(self, _db: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {
@@ -27,7 +27,7 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 
-impl super::_entities::device_msg_queues::Model {
+impl Model {
 
     pub async fn get_latest_msg(
         db: &DatabaseConnection,

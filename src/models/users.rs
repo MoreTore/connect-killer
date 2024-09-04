@@ -4,7 +4,7 @@ use loco_rs::{prelude::*};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::middleware::jwt;
-pub use super::_entities::users::{self, ActiveModel, Entity, Model};
+pub use super::_entities::users::{self, ActiveModel, Entity, Model as UM};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginParams {
@@ -65,66 +65,11 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
 }
 
 
-// #[async_trait]
-// impl Authenticable for super::_entities::users::Model {
-//     // async fn find_by_api_key(db: &DatabaseConnection, api_key: &str) -> ModelResult<Self> {
-//     //     let user = users::Entity::find()
-//     //         .filter(users::Column::ApiKey.eq(api_key))
-//     //         .one(db)
-//     //         .await?;
-//     //     user.ok_or_else(|| ModelError::EntityNotFound)
-//     // }
-
-//     // async fn find_by_claims_key(db: &DatabaseConnection, claims_key: &str) -> ModelResult<Self> {
-//     //     Self::find_by_pid(db, claims_key).await
-//     // }
-// }
 
 impl super::_entities::users::Model {
-    /// finds a user by the provided email
-    ///
-    /// # Errors
-    ///
-    /// When could not find user by the given token or DB query error
-    // pub async fn find_by_email(db: &DatabaseConnection, email: &str) -> ModelResult<Self> {
-    //     let user = users::Entity::find()
-    //         .filter(users::Column::Email.eq(email))
-    //         .one(db)
-    //         .await?;
-    //     user.ok_or_else(|| ModelError::EntityNotFound)
-    // }
-
-    /// finds a user by the provided verification token
-    ///
-    /// # Errors
-    ///
-    /// When could not find user by the given token or DB query error
-    // pub async fn find_by_verification_token(
-    //     db: &DatabaseConnection,
-    //     token: &str,
-    // ) -> ModelResult<Self> {
-    //     let user = users::Entity::find()
-    //         .filter(users::Column::EmailVerificationToken.eq(token))
-    //         .one(db)
-    //         .await?;
-    //     user.ok_or_else(|| ModelError::EntityNotFound)
-    // }
-
-    /// /// finds a user by the provided reset token
-    ///
-    /// # Errors
-    ///
-    /// When could not find user by the given token or DB query error
-    // pub async fn find_by_reset_token(db: &DatabaseConnection, token: &str) -> ModelResult<Self> {
-    //     let user = users::Entity::find()
-    //         .filter(users::Column::ResetToken.eq(token))
-    //         .one(db)
-    //         .await?;
-    //     user.ok_or_else(|| ModelError::EntityNotFound)
-    // }
     pub async fn find_all_users(
         db: &DatabaseConnection,
-    ) -> Vec<Model> {
+    ) -> Vec<UM> {
         Entity::find()
             .all(db)
             .await
@@ -160,66 +105,6 @@ impl super::_entities::users::Model {
         user.ok_or_else(|| ModelError::EntityNotFound)
     }
 
-
-    /// finds a user by the provided api key
-    ///
-    /// # Errors
-    ///
-    /// When could not find user by the given token or DB query error
-    // pub async fn find_by_api_key(db: &DatabaseConnection, api_key: &str) -> ModelResult<Self> {
-    //     let user = users::Entity::find()
-    //         .filter(users::Column::ApiKey.eq(api_key))
-    //         .one(db)
-    //         .await?;
-    //     user.ok_or_else(|| ModelError::EntityNotFound)
-    // }
-
-    /// Verifies whether the provided plain password matches the hashed password
-    ///
-    /// # Errors
-    ///
-    /// when could not verify password
-    // #[must_use]
-    // pub fn verify_password(&self, password: &str) -> bool {
-    //     hash::verify_password(password, &self.password)
-    // }
-
-    /// Asynchronously creates a user with a password and saves it to the
-    /// database.
-    ///
-    /// # Errors
-    ///
-    /// When could not save the user into the DB
-    // pub async fn create_with_password(
-    //     db: &DatabaseConnection,
-    //     params: &RegisterParams,
-    // ) -> ModelResult<Self> {
-    //     let txn = db.begin().await?;
-
-    //     if users::Entity::find()
-    //         .filter(users::Column::Email.eq(&params.email))
-    //         .one(&txn)
-    //         .await?
-    //         .is_some()
-    //     {
-    //         return Err(ModelError::EntityAlreadyExists {});
-    //     }
-
-    //     let password_hash =
-    //         hash::hash_password(&params.password).map_err(|e| ModelError::Any(e.into()))?;
-    //     let user = users::ActiveModel {
-    //         email: ActiveValue::set(params.email.to_string()),
-    //         password: ActiveValue::set(password_hash),
-    //         name: ActiveValue::set(params.name.to_string()),
-    //         ..Default::default()
-    //     }
-    //     .insert(&txn)
-    //     .await?;
-
-    //     txn.commit().await?;
-
-    //     Ok(user)
-    // }
     pub async fn with_oauth(
         db: &DatabaseConnection,
         params: &OAuthUserParams,
@@ -249,7 +134,6 @@ impl super::_entities::users::Model {
                 txn.commit().await?;
         
                 Ok(user)
-
             } 
         }
     }
@@ -266,6 +150,6 @@ impl super::_entities::users::Model {
     }
 }
 
-impl super::_entities::users::ActiveModel {
+impl ActiveModel {
 
 }

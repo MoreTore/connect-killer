@@ -166,9 +166,7 @@ async fn pilotpair(
         if first_pair { // only pair if it wasn't already
             let mut active_device_model = device_model.into_active_model();
             active_device_model.owner_id = ActiveValue::Set(Some(user_model.id));
-            //let txn = ctx.db.begin().await?;
             active_device_model.update(&ctx.db).await?;
-            //txn.commit().await?;
         }
         format::json(DevicePairResponse { first_pair: first_pair})
     } else {
