@@ -154,7 +154,7 @@ async fn pilotpair(
         Ok(claims) => claims,
         Err(e) => {
             tracing::error!("Got and invalid pair token: {}", e);
-            return format::json("Got an invalid pair token");//(StatusCode::BAD_REQUEST, format::json("Bad Token"));
+            return format::json("Got an invalid pair token");
         }
     };
 

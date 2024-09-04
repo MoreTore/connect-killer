@@ -85,7 +85,7 @@ pub async fn get_route_files(
 }
 
 async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for security
-    //_auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(canonical_route_name): Path<String>,
 ) -> Result<Response> {
@@ -93,6 +93,17 @@ async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for 
     let mut segment_models = _entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
     segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
+
+    let exp = (3600 * 24 as u64);
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    let token = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(
+        &exp,
+        auth.claims.identity.to_string()).unwrap();
+    
+    for seg in segment_models.iter_mut() {
+        seg.qcam_url = format!("{}?exp={}&sig={}",seg.qcam_url, exp, token)
+    }
 
     let mut response = String::new();
     response.push_str("#EXTM3U\n");
@@ -246,11 +257,13 @@ async fn upload_urls_handler(
 ) -> Result<Response> {
     data.validate_expiry();
     let jwt_secret = ctx.config.get_jwt_config()?;
-    if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
-    .generate_token(
-        &(3600 * 24 as u64), 
-        auth.claims.identity.to_string()) {
-        let urls = data.paths.iter().map(|path| {
+    let token = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(
+        &(3600 * 24 as u64),
+        auth.claims.identity.to_string());
+
+    if let Ok(token) = token {
+        let urls: Vec<UrlResponse> = data.paths.iter().map(|path: &String| {
             UrlResponse {
                 url: format!("{}/connectincoming/{dongle_id}/{}?sig={token}",
                     env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
@@ -453,6 +466,19 @@ async fn route_segment(
     }
     let mut route_models = _entities::routes::Model::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
+    let exp = (3600 * 24 as u64);
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    let token = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(
+        &exp,
+        auth.claims.identity.to_string()).unwrap();
+        
+    for route in route_models.iter_mut() {
+        route.share_sig = token.clone();
+        route.share_exp = exp.to_string();
+    }
+
+
     format::json(route_models)
 }
 
