@@ -16,7 +16,6 @@ pub struct Model {
     pub name: String,
     pub points: i64,
     pub superuser: bool,
-    //pub locations: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

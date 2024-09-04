@@ -1,8 +1,7 @@
 use chrono::prelude::Utc;
-//use sea_orm::entity::prelude::*;
 use loco_rs::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder, QuerySelect};
-pub use super::_entities::device_msg_queues::{self, ActiveModel, Entity, Model, Column};
+pub use super::_entities::device_msg_queues::{self, ActiveModel, Entity, Model as DMQM, Column};
 use crate::controllers::ws::JsonRpcRequest;
 
 
@@ -27,7 +26,7 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 
-impl Model {
+impl DMQM {
 
     pub async fn get_latest_msg(
         db: &DatabaseConnection,
@@ -54,7 +53,7 @@ impl Model {
     pub async fn find_latest_msg(
         db: &DatabaseConnection,
         dongle_id: &str,
-    ) -> Result<Option<Model>, DbErr> {
+    ) -> Result<Option<DMQM>, DbErr> {
         let msg = Entity::find()
             .filter(Column::DongleId.eq(dongle_id))
             .order_by_desc(Column::CreatedAt)

@@ -14,7 +14,10 @@ use jsonwebtoken::{
     decode, Algorithm, DecodingKey, TokenData, Validation,
 };
 
-use crate::models::_entities;
+use crate::models::{
+        devices::DM,
+        users::UM,
+};
 use crate::models::users::OAuthUserParams;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -93,7 +96,7 @@ pub async fn pilotauth(
     let _token = decode_register_token(&params).await;
     let dongle_id = params.generate_dongle_id();
     // TODO Add blacklist or whitelist here. Maybe a db table
-    let result = _entities::devices::Model::register_device(&ctx.db, params, &dongle_id).await;
+    let result = DM::register_device(&ctx.db, params, &dongle_id).await;
     match result {
         Ok(_) => (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()})),
         Err(result) => (StatusCode::INTERNAL_SERVER_ERROR, Err(loco_rs::Error::Model(result))),
@@ -129,7 +132,7 @@ async fn decode_pair_token(ctx: &AppContext, jwt: &str) -> Result<DevicePairClai
         Err(e) => return Err(e),
     };
     
-    let device = match _entities::devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
+    let device = match DM::find_device(&ctx.db, &token_data.claims.identity).await {
         Ok(device) => device,
         Err(_e) => return Ok(token_data.claims),
     };
@@ -159,8 +162,8 @@ async fn pilotpair(
     };
 
     if claims.pair {
-        let user_model = _entities::users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-        let device_model =  _entities::devices::Model::find_device(&ctx.db, &claims.identity).await?;
+        let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+        let device_model =  DM::find_device(&ctx.db, &claims.identity).await?;
         let first_pair = device_model.owner_id.is_none();
         
         if first_pair { // only pair if it wasn't already
@@ -270,7 +273,7 @@ async fn get_auth( // use for useradmin
         }
     };
         
-    let user = _entities::users::Model::with_oauth(
+    let user = UM::with_oauth(
         &ctx.db, 
         &OAuthUserParams {
             name: format!("github_{}", github_user.id),
@@ -352,7 +355,7 @@ async fn post_auth( // used for portal
         }
     };
         
-    let user = _entities::users::Model::with_oauth(
+    let user = UM::with_oauth(
         &ctx.db, 
         &OAuthUserParams {
             name: format!("github_{}", github_user.id),

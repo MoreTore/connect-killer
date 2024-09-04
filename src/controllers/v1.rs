@@ -1,5 +1,5 @@
 
-use loco_rs::{ prelude::*};
+use loco_rs::prelude::*;
 use axum::{
     extract::{Path, Query, State}, routing::patch, Extension
 };
@@ -16,7 +16,7 @@ use crate::{common,
         segments::SM,
         routes::RM,
         users::UM,
-        device_msg_queues::Model as DMQM,
+        device_msg_queues::DMQM,
     }
 };
 use super::v1_responses::*;

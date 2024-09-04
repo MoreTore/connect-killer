@@ -29,15 +29,12 @@ pub struct OAuthUserParams {
 pub struct Validator {
     #[validate(length(min = 2, message = "Name must be at least 2 characters long."))]
     pub name: String,
-    // #[validate(custom = "validation::is_valid_email")]
-    // pub email: String,
 }
 
 impl Validatable for super::_entities::users::ActiveModel {
     fn validator(&self) -> Box<dyn Validate> {
         Box::new(Validator {
             name: self.name.as_ref().to_owned(),
-            //email: self.email.as_ref().to_owned(),
         })
     }
 }
@@ -55,7 +52,6 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
             this.identity = ActiveValue::Set(Uuid::new_v4());
             this.created_at = ActiveValue::Set(Utc::now().naive_utc());
             this.updated_at = ActiveValue::Set(Utc::now().naive_utc());
-            //this.api_key = ActiveValue::Set(format!("lo-{}", Uuid::new_v4()));
             Ok(this)
         } else {
             this.updated_at = ActiveValue::Set(Utc::now().naive_utc());

@@ -1,10 +1,15 @@
 #![allow(clippy::unused_async)]
 use loco_rs::prelude::*;
 use axum::{
-    extract::{ws::{Message, 
+    extract::{
+        ws::{Message, 
                    WebSocket, 
                    WebSocketUpgrade}, Path 
-             }, http::HeaderMap, response::IntoResponse, routing::get, Extension 
+        }, 
+        http::HeaderMap, 
+        response::IntoResponse, 
+        routing::get, 
+        Extension 
 };
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
@@ -18,9 +23,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     enforce_ownership_rule, 
-    models::_entities::{
-        self, devices, users
-    }
+    models::{
+        _entities,
+        devices::DM,
+        users::UM,
+        device_msg_queues::DMQM,
+    },
 };
 
 #[derive(Deserialize, Serialize)]
@@ -74,8 +82,8 @@ async fn handle_jsonrpc_request(
     Extension(manager): Extension<Arc<ConnectionManager>>,
     Json(mut payload): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
-    let user_model = users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_model = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await?;
+    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+    let device_model = DM::find_device(&ctx.db, &endpoint_dongle_id).await?;
     if !user_model.superuser {
         enforce_ownership_rule!(
             user_model.id, 
@@ -143,7 +151,7 @@ async fn exit_handler(
         let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
         connections.remove(&endpoint_dongle_id);
     } // unlock
-    let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
+    let device = match  DM::find_device(&ctx.db, &endpoint_dongle_id).await {
         Ok(device) => device,
         Err(_) => return,
     };
@@ -184,7 +192,7 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let _is_registered = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
+    let _is_registered = DM::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
 
     let (sender, mut receiver) = socket.split();
 
@@ -208,7 +216,7 @@ async fn handle_socket(
             Message::Pong(_) => {
                 tracing::trace!("Pong: {jwt_identity}");
                 // update last_athena_ping time here
-                let device = match  devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await {
+                let device = match  DM::find_device(&ctx.db, &endpoint_dongle_id).await {
                     Ok(device) => device,
                     Err(_e) => break,
                 };
@@ -255,8 +263,8 @@ async fn handle_device_ws(
     Extension(manager): Extension<Arc<ConnectionManager>>,
 ) -> impl IntoResponse {
     if auth.device_model.is_none() { // if a user is trying to make a websocket connection they need to be device owner or superuser
-        let user_model = users::Model::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-        let device_model = devices::Model::find_device(&ctx.db, &endpoint_dongle_id).await?;
+        let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+        let device_model = DM::find_device(&ctx.db, &endpoint_dongle_id).await?;
         if !user_model.superuser {
             enforce_ownership_rule!(
                 user_model.id, 
@@ -282,7 +290,7 @@ pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>, db: &Data
         }
     }
     for (dongle_id, sender) in devices.iter_mut() {
-        if let Ok(Some(latest_msg)) = _entities::device_msg_queues::Model::find_latest_msg(db, &dongle_id).await {
+        if let Ok(Some(latest_msg)) = DMQM::find_latest_msg(db, &dongle_id).await {
             if let Err(e) = sender.send(Message::Text(latest_msg.json_rpc_request.to_string())).await {
                 tracing::error!("Failed to send jsonrpc msg to device {}: {}", dongle_id, e);
             }
