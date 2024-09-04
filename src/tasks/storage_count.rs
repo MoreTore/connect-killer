@@ -3,10 +3,11 @@ use reqwest::Client;
 use serde_json::{Value, from_str};
 use regex::Regex;
 use std::collections::HashMap;
-
 use loco_rs::prelude::*;
+
 use crate::common::mkv_helpers;
 use crate::common::re::*;
+use crate::models::devices;
 
 pub struct StorageCount;
 #[async_trait]
@@ -17,7 +18,7 @@ impl Task for StorageCount {
             detail: "Task generator".to_string(),
         }
     }
-    async fn run(&self, _app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
+    async fn run(&self, ctx: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
         println!("Task StorageCount generated");
         let client = Client::new();
         // Get all keys from the MKV server
@@ -95,6 +96,13 @@ impl Task for StorageCount {
         println!("Storage used by each DONGLE_ID (in GB):");
         for (dongle_id, storage) in &storage_by_dongle {
             let storage_gb = *storage as f64 / 1_000_000_000.0;
+            if let Ok(device_model) = devices::Model::find_device(&ctx.db, dongle_id).await {
+                let mut active_device_model = device_model.into_active_model();
+                active_device_model.server_storage = ActiveValue::Set(*storage as i64);
+                if active_device_model.update(&ctx.db).await.is_err() {
+                    tracing::error!("Failed to update server_storage for {}", dongle_id);
+                }
+            }
             println!("DONGLE_ID: {}, Storage Used: {:.2} GB", dongle_id, storage_gb);
         }
 
