@@ -1,4 +1,7 @@
 This is an open-source alternative to openpilot connect for use with openpilot software.
+To see the server in action, go to: https://portal.springerelectronics.com/
+
+Thank you https://springerelectronics.com for hosting!
 
 To get started, inspect the docker compose yaml to adjsut the volume mount points.
 https://github.com/MoreTore/connect-killer/blob/4b9be8252688df5672448b1139da4b4a71c554dc/docker-compose.yml#L3-L53
