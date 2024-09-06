@@ -112,6 +112,7 @@ struct DevicePairParams {
 #[derive(Debug, Deserialize, Serialize)]
 struct DevicePairResponse {
     first_pair: bool,
+    dongle_id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -152,12 +153,12 @@ async fn pilotpair(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Form(params): Form<DevicePairParams>
-) -> Result<Response> {
+) -> impl IntoResponse {
     let claims = match decode_pair_token(&ctx, &params.pair_token).await {
         Ok(claims) => claims,
         Err(e) => {
             tracing::error!("Got and invalid pair token: {}", e);
-            return format::json("Got an invalid pair token");
+            return Ok((StatusCode::BAD_REQUEST, "Got an invalid pair token").into_response());
         }
     };
 
@@ -165,15 +166,17 @@ async fn pilotpair(
         let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
         let device_model =  DM::find_device(&ctx.db, &claims.identity).await?;
         let first_pair = device_model.owner_id.is_none();
+        let dongle_id = device_model.dongle_id.clone();
         
         if first_pair { // only pair if it wasn't already
             let mut active_device_model = device_model.into_active_model();
             active_device_model.owner_id = ActiveValue::Set(Some(user_model.id));
             active_device_model.update(&ctx.db).await?;
+            return format::json(DevicePairResponse {first_pair, dongle_id});
         }
-        format::json(DevicePairResponse { first_pair: first_pair})
+        return Ok((StatusCode::FORBIDDEN, "This device is already paired").into_response()); 
     } else {
-        return format::json("If you want to pair, 'pair' should be true!");
+        return Ok((StatusCode::BAD_REQUEST, "If you want to pair, 'pair' should be true!").into_response());
     } 
 }
 
