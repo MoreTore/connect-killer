@@ -84,7 +84,8 @@ async fn handle_jsonrpc_request(
 ) -> impl IntoResponse {
     let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
     let device_model = DM::find_device(&ctx.db, &endpoint_dongle_id).await?;
-    if !user_model.superuser {
+    let is_sensitive_method = payload.method == "takeSnapshot".to_string(); // even superuser cant do this
+    if !user_model.superuser || is_sensitive_method {
         enforce_ownership_rule!(
             user_model.id, 
             device_model.owner_id,
@@ -262,16 +263,16 @@ async fn handle_device_ws(
     axum::extract::Path(endpoint_dongle_id): axum::extract::Path<String>,
     Extension(manager): Extension<Arc<ConnectionManager>>,
 ) -> impl IntoResponse {
-    if auth.device_model.is_none() { // if a user is trying to make a websocket connection they need to be device owner or superuser
+    if auth.device_model.is_none() { // if a user is trying to make a websocket connection they need to be device owner
         let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
         let device_model = DM::find_device(&ctx.db, &endpoint_dongle_id).await?;
-        if !user_model.superuser {
-            enforce_ownership_rule!(
-                user_model.id, 
-                device_model.owner_id,
-                "Can only communicate with your own device!"
-            )
-        }
+        //if !user_model.superuser {
+        enforce_ownership_rule!(
+            user_model.id, 
+            device_model.owner_id,
+            "Can only communicate with your own device!"
+        )
+        //}
     } else if auth.claims.identity != endpoint_dongle_id{ // if a device is trying to connect to another device
         tracing::error!("Someone is trying to make illegal access: from {} to {endpoint_dongle_id}", auth.claims.identity);
         return unauthorized("Devices shouldn't talk to eachother!");
