@@ -228,3 +228,8 @@ pub struct FilesResponse {
     pub qcameras: Vec<String>,
     pub qlogs: Vec<String>,
 }
+
+#[derive(Serialize, Debug, Default)]
+pub struct UnPairResponse {
+    pub success: bool,
+}

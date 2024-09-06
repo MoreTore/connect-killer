@@ -334,7 +334,7 @@ async fn unpair(
     let mut active_device_model = device_model.into_active_model();
     active_device_model.owner_id = ActiveValue::Set(None);
     active_device_model.update(&ctx.db).await?;
-    format::json(r#"{"success": 1}"#)
+    format::json(UnPairResponse {success: true})
 }
 
 async fn device_info(
