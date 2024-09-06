@@ -18,7 +18,7 @@ impl Task for SeedFromMkv {
         }
     }
 
-    async fn run(&self, app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
+    async fn run(&self, app_context: &AppContext, _vars: &task::Vars) -> Result<()> {
         println!("Task SeedFromMkv generated");
 
         let client = Client::new();

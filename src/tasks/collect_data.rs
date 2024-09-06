@@ -99,7 +99,7 @@ impl Task for CollectData {
             detail: "Task generator".to_string(),
         }
     }
-    async fn run(&self, _app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
+    async fn run(&self, _app_context: &AppContext, _vars: &task::Vars) -> Result<()> {
         println!("Task CollectData generated");
         let server_url = "ws://localhost:3111/ws/v2"; // WebSocket server URL
         let dongle_id = "3b58edf884ab4eaf"; // Dongle ID to interact with

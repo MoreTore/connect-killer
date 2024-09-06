@@ -134,7 +134,7 @@ database:
   dangerously_recreate: false
 
 # Redis Configuration
-redis:
+queue:
   # Redis connection URI
   uri: {{get_env(name="REDIS_URL", default="redis://127.0.0.1")}}
   #uri: redis://127.0.0.1

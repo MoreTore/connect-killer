@@ -3,6 +3,6 @@ use connect::app::App;
 use migration::Migrator;
 
 #[tokio::main(worker_threads = 24)]
-async fn main() -> eyre::Result<()> {
+async fn main() -> loco_rs::Result<()> {
     cli::main::<App, Migrator>().await
 }

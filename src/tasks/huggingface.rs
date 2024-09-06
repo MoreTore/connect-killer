@@ -11,7 +11,7 @@ impl Task for Huggingface {
             detail: "Task generator".to_string(),
         }
     }
-    async fn run(&self, _app_context: &AppContext, _vars: &BTreeMap<String, String>) -> Result<()> {
+    async fn run(&self, _app_context: &AppContext, _vars: &task::Vars) -> Result<()> {
         println!("Task Huggingface generated");
 
 
