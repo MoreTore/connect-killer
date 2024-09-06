@@ -33,3 +33,12 @@ target/release/*
 log
 cereal
 src/cereal
+fetch/__pycache__/database.cpython-310.pyc
+fetch/__pycache__/database.cpython-312.pyc
+fetch/__pycache__/helpers.cpython-310.pyc
+fetch/__pycache__/helpers.cpython-312.pyc
+migration/Cargo.lock
+benchmark_drives.sh
+Cargo.lock
+connect_development_backup.sql
+users_devices_data.sql
