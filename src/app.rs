@@ -132,7 +132,12 @@ impl Hooks for App {
             }
         });
 
-        let client = Client::new();
+        //let client = Client::new();
+        let client = Client::builder()
+            .pool_max_idle_per_host(500)
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap();
         let router = router
             .layer(Extension(client))
             .layer(Extension(connection_manager));
