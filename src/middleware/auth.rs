@@ -15,7 +15,7 @@ use loco_rs::{app::AppContext, errors::Error, config::JWT as JWTConfig, prelude:
 use thiserror::Error;
 
 use super::jwt;
-use crate::models::_entities::{devices, users};
+use crate::models::{devices::DM, users::UM};
 // Define constants for token prefix and authorization header
 const QUERY_TOKEN_PREFIX: &str = "sig";
 const TOKEN_PREFIX: &str = "JWT ";
@@ -27,24 +27,24 @@ const AUTH_COOKIE_NAME: &str = "jwt";
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MyJWT {
     pub claims: jwt::UserClaims,
-    pub device_model: Option<devices::Model>,
-    pub user_model: Option<users::Model>,
+    pub device_model: Option<DM>,
+    pub user_model: Option<UM>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UnverifiedJWT {
     pub claims: jwt::UserClaims,
-    pub device_model: Option<devices::Model>,
-    pub user_model: Option<users::Model>,
+    pub device_model: Option<DM>,
+    pub user_model: Option<UM>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SuperUserJWT {
     pub claims: jwt::UserClaims,
-    pub device_model: Option<devices::Model>,
-    pub user_model: Option<users::Model>,
+    pub device_model: Option<DM>,
+    pub user_model: Option<UM>,
 }
 
-use jsonwebtoken::errors::ErrorKind;
+use jsonwebtoken::{errors::ErrorKind, Algorithm};
 
 #[derive(Serialize)]
 struct ErrorMessage {
@@ -104,75 +104,50 @@ where
 
         let jwt_secret = ctx.config.get_jwt_config().map_err(|_| AuthError::InternalError)?;
 
-        let mut jwt_processor = jwt::JWT::new(&jwt_secret.secret);
-
+        let mut jwt_processor = jwt::JWT::new(&jwt_secret.secret); // algo defaults to HS512 which we use for users
+        // extract the token data to get the algo
         let token_data = jwt_processor.parse_unverified(&token)
             .map_err(|e| handle_jwt_err(parts, e.kind()))?;
 
-        if let Ok(token_data) = jwt_processor.validate(&token) {
-            // Try to find the user model by identity
-            match users::Model::find_by_identity(&ctx.db, &token_data.claims.identity).await {
-                Ok(user_model) => {
-                    return Ok(Self {
-                        claims: token_data.claims,
-                        user_model: Some(user_model),
-                        device_model: None,
-                    });
-                }
-                Err(_) => {
-                    // If user model is not found, try to find the device model
-                    match devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
-                        Ok(device_model) => {
-                            return Ok(Self {
-                                claims: token_data.claims,
-                                user_model: None,
-                                device_model: Some(device_model),
-                            });
-                        }
-                        Err(e) => {
-                            // If neither user model nor device model is found, return an unauthorized error
-                            return Err(AuthError::Unauthorized("Unauthorized".to_string()));
-                        }
-                    }
-                }
-            }
-        }
-
-
+        let alg = token_data.header.alg;
         jwt_processor = jwt_processor.algorithm(token_data.header.alg);
-        let device = match devices::Model::find_device(&ctx.db, &token_data.claims.identity).await {
-            Ok(device) => device,
-            Err(e) => {
-                // match e {
-                //     ModelError::EntityNotFound => {
-                //         let uri = parts.uri.clone();
-                //         // if its a device trying to make a websocket connection, send dongle reset command thorugh athena.
-                //         if uri.path().contains("/ws/v2/") { 
-                //             let ws_upgrade = WebSocketUpgrade::from_request_parts(parts, state)
-                //                 .await
-                //                 .map_err(|e| handle_unauth(parts, e))?;
-                //             ws_upgrade.on_upgrade(|socket| async move {
-                //                 crate::controllers::ws::send_reset(&ctx, socket).await;
-                //             });
-                //             return Err(AuthError::ResetDone);
-                //         }
-                //     }
-                //     _ => () // db error other than not found
-                // }
-                tracing::info!("Could not find device {}. Unauthorizded", token_data.claims.identity);
-                return Err(AuthError::Unauthorized("Unauthorized".to_string()));
-            }
-        };
-        
-        if let Ok(token_data) = jwt_processor.validate_pem(&token, device.public_key.as_bytes()) {
-            return Ok(Self { claims: token_data.claims, device_model: Some(device), user_model: None });
-        }
+        let identity = &token_data.claims.identity; // this is the dongle_id if its a device or identity if user
+        let error_message = format!("identity: {} not registered", identity);
+        match alg {
+            Algorithm::RS256 | Algorithm::RS384 | Algorithm::RS512 => { // device can use these algos             
+                let device = DM::find_device(&ctx.db, identity)
+                    .await
+                    .map_err(|_| handle_unauth(parts, &error_message))?; // return here if not registered
 
-        match jwt_processor.validate_pem(&token, device.public_key.as_bytes()) {
-            Ok(token_data) => return Ok(Self { claims: token_data.claims, device_model: Some(device), user_model: None }),
-            Err(e) => {                
-                Err(handle_jwt_err(parts, e.kind()))
+                let valid_token_data = jwt_processor.validate_pem(&token, device.public_key.as_bytes())
+                    .map_err(|e| handle_unauth(parts, &format!("Got invalid token: {}", e.to_string())))?;
+
+                return Ok(Self { 
+                    claims: valid_token_data.claims, 
+                    device_model: Some(device), 
+                    user_model: None 
+                });
             }
+            Algorithm::HS256 | Algorithm::HS384 | Algorithm::HS512 => { // the server issues these to devices and users
+                let valid_token_data = jwt_processor.validate(&token)
+                    .map_err(|e| handle_unauth(parts, &format!("Got invalid token: {}", e.to_string())))?;
+
+                let user_model = UM::find_by_identity(&ctx.db, identity).await;
+                let device_model = DM::find_device(&ctx.db, identity).await;
+                
+                if user_model.is_err() && device_model.is_err() {
+                    return Err(handle_unauth(parts, &error_message));
+                } else if user_model.is_ok() && device_model.is_ok() {
+                    panic!(); // should never get here
+                }
+
+                return Ok(Self {
+                    claims: valid_token_data.claims,
+                    user_model: user_model.ok(),
+                    device_model: device_model.ok(),
+                });
+            }
+            _ => return Err(handle_unauth(parts, "Must use RS or HS jwt algorithm"))
         }
     }
 }

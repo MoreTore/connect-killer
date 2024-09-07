@@ -84,6 +84,19 @@ impl DM {
             .await
     }
 
+    pub async fn ensure_user_device(
+        db: &DatabaseConnection,
+        user_id: i32,
+        dongle_id: &str
+    ) -> Result<DM, DbErr> {
+        Entity::find()
+            .filter(Column::OwnerId.eq(user_id))
+            .filter(Column::DongleId.eq(dongle_id))
+            .one(db)
+            .await?
+            .ok_or_else(|| DbErr::RecordNotFound("Device not found for that owner".to_string()))
+    }
+
     pub async fn find_all_devices(
         db: &DatabaseConnection,
     ) -> Vec<DM> {

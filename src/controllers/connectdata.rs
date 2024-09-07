@@ -8,7 +8,20 @@ use axum::{
   
   };
 use serde::{Deserialize, Serialize};
-use crate::common;
+use crate::{
+    common::{
+        re::*,
+        mkv_helpers
+    },
+    enforce_ownership_rule,
+    models::{
+        devices::DM,
+        routes::RM,
+        segments::SM,
+        device_msg_queues::DMQM,
+        bootlogs::BM,
+    }
+};
 
 
 #[derive(Deserialize)]
@@ -25,13 +38,13 @@ pub async fn asset_download(
     lookup_key: String,
     client: &reqwest::Client,
     headers: HeaderMap,
-) -> impl IntoResponse {
+) -> Result<Response<reqwest::Body>,(StatusCode,&'static str)> {
     // Validate the lookup_key to allow only alphanumeric, '_', '-' and '.' characters
-    let valid_key_pattern = regex:: Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
+    let valid_key_pattern = regex::Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
     if !valid_key_pattern.is_match(&lookup_key) {
         return Err((StatusCode::BAD_REQUEST, "Invalid lookup key"));
     }
-    let internal_file_url = common::mkv_helpers::get_mkv_file_url(&lookup_key);
+    let internal_file_url = mkv_helpers::get_mkv_file_url(&lookup_key);
 
     // Prepare a request to fetch the file from storage
     let mut request_builder = client.get(&internal_file_url);
@@ -79,6 +92,27 @@ pub async fn asset_download(
     }
 }
 
+pub async fn ensure_user_is_owner(
+    auth: &crate::middleware::auth::MyJWT,
+    db: &DatabaseConnection,
+    dongle_id: &str
+) -> Result<(),(StatusCode,&'static str)> {
+    // If the request comes from a user, check their permissions
+    if let Some(user_model) = &auth.user_model {
+        if !user_model.superuser {
+            DM::ensure_user_device(
+                &db,
+                user_model.id,
+                &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::UNAUTHORIZED, "You are not the owner"))?;
+        }
+    } else {
+        return Err((StatusCode::FORBIDDEN, "Devices can't do this"));
+    }
+    Ok(())
+}
+
 pub async fn events_download(
     Path((dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
     State(_ctx): State<AppContext>,
@@ -86,7 +120,7 @@ pub async fn events_download(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let lookup_key = format!("{canonical_route_name}--{segment}--events.json");  // canonical_route_name include dongleid already
-    asset_download(lookup_key, &client, headers).await
+    return asset_download(lookup_key, &client, headers).await;
 }
 
 pub async fn coords_download(
@@ -96,7 +130,7 @@ pub async fn coords_download(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let lookup_key = format!("{canonical_route_name}--{segment}--coords.json");  // canonical_route_name include dongleid already
-    asset_download(lookup_key, &client, headers).await
+    return asset_download(lookup_key, &client, headers).await;
 }
 
 pub async fn sprite_download(
@@ -106,41 +140,59 @@ pub async fn sprite_download(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let lookup_key = format!("{canonical_route_name}--{segment}--sprite.jpg");  // canonical_route_name include dongleid already
-    asset_download(lookup_key, &client, headers).await
+    return asset_download(lookup_key, &client, headers).await;
 }
 
 pub async fn auth_file_download(
     auth: crate::middleware::auth::MyJWT,
     Path((dongle_id, route_name, segment, file)): Path<(String, String, String, String)>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     Extension(client): Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");  // Note that route_name does not include dongle_id
-    asset_download(lookup_key, &client, headers).await
+    ensure_user_is_owner(&auth, &ctx.db, &dongle_id).await?;
+    let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");
+    // Call asset_download with the lookup_key
+    return asset_download(lookup_key, &client, headers).await;
 }
 
 pub async fn bootlog_file_download(
     auth: crate::middleware::auth::MyJWT,
     Path(bootlog_file): Path<String>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     Extension(client): Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    // Note that bootlogs path is the lookup key
-    asset_download(bootlog_file, &client, headers).await
+    let bootlog_re_string = format!(r"({DONGLE_ID})_boot_{ROUTE_NAME}");
+    let re = regex::Regex::new(&bootlog_re_string).unwrap();
+
+    // Check if the bootlog_file contains the pattern using regex
+    if let Some(captures) = re.captures(&bootlog_file) {
+        // Extract the dongle_id from the captures
+        if let Some(dongle_id) = captures.get(1) {
+            let dongle_id = dongle_id.as_str();
+
+            // Pass the captured dongle_id to ensure_user_is_owner
+            ensure_user_is_owner(&auth, &ctx.db, dongle_id).await?;
+            return asset_download(bootlog_file, &client, headers).await;
+        }
+    }
+
+    // If the regex does not match or dongle_id is not captured, return an error
+    Err((StatusCode::BAD_REQUEST, "Invalid bootlog format"))
 }
 
 // TODO Migrate DB to remove the redundant file_type path
 pub async fn depreciated_auth_file_download(
     auth: crate::middleware::auth::MyJWT,
     Path((_file, dongle_id, route_name, segment, file)): Path<(String, String, String, String, String)>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     Extension(client): Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    ensure_user_is_owner(&auth, &ctx.db, &dongle_id).await?;
     let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");  // Note that route_name does not include dongle_id
-    asset_download(lookup_key, &client, headers).await
+    return asset_download(lookup_key, &client, headers).await;
 }
 
 pub async fn render_segment_ulog(
@@ -153,8 +205,8 @@ pub async fn render_segment_ulog(
     // Validate the lookup_key to allow only alphanumeric, '_', '-' and '.' characters
     let valid_key_pattern = regex::Regex::new(r"^(http://localhost:3000/|https://localhost:3000/)?([a-zA-Z0-9_.-]+)$").unwrap(); //TODO purge hardcoded url from db
     if let Some(captures) = valid_key_pattern.captures(&params.url) {
-        // Always use common::mkv_helpers::get_mkv_file_url with the second part (lookup key)
-        let internal_file_url = common::mkv_helpers::get_mkv_file_url(&captures[2]);
+        // Always use mkv_helpers::get_mkv_file_url with the second part (lookup key)
+        let internal_file_url = mkv_helpers::get_mkv_file_url(&captures[2]);
     
         // Proceed with the request using the `internal_file_url`
         let request = client.get(&internal_file_url);
@@ -182,6 +234,58 @@ pub async fn render_segment_ulog(
     }
 }
 
+pub async fn delete_data(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Extension(client): Extension<reqwest::Client>,
+) -> impl IntoResponse {
+
+    let dongle_id = if let Some(device_model) = auth.device_model {
+        device_model.dongle_id
+    } else {
+        dongle_id
+    };
+
+    if let Some(user_model) = auth.user_model {
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+        if !user_model.superuser {
+            enforce_ownership_rule!(
+                user_model.id, 
+                device_model.owner_id, 
+                "Can only delete your own devices data!"
+            );
+        }
+    }
+
+    let query = mkv_helpers::list_keys_starting_with(&dongle_id);
+    let response = client.get(&query).send().await.unwrap();
+    if !response.status().is_success() {
+        tracing::info!("Failed to get keys");
+        return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to get keys").into_response()); 
+    }
+    let body = response.text().await.unwrap();
+    let json: serde_json::Value = serde_json::from_str(&body)?; // Convert response text into JSON
+
+    let keys = json["keys"].as_array().unwrap();
+    tracing::info!("Deleting {} files", keys.len());
+
+    for key_value in keys {
+        let file_name = key_value.as_str().unwrap().trim_start_matches('/').to_string(); // Convert to string for independent ownership
+        let file_url = mkv_helpers::get_mkv_file_url(&file_name);
+
+        let _ = client
+            .delete(&file_url)
+            .send()
+            .await
+            .map_err(|e| 
+                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            );
+    }
+
+    return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response()); 
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
@@ -190,6 +294,7 @@ pub fn routes() -> Routes {
         .add("/:dongle_id/:timestamp/:segment/sprite.jpg", get(sprite_download))
         .add("/:dongle_id/:timestamp/:segment/:file", get(auth_file_download))
         .add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
+        .add("/detete/{dongle_id}", delete(delete_data))
         .add("/logs/", get(render_segment_ulog))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
 }

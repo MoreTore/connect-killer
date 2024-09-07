@@ -6,10 +6,16 @@ use axum::{
 use reqwest::{StatusCode,Client};
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
-use std::{env, error::Error};
+use std::{
+    env, 
+    time::{SystemTime,
+        UNIX_EPOCH,
+        Duration
+    },
+    error::Error
+};
 
 use crate::{common, 
-    enforce_ownership_rule, 
     middleware::jwt, 
     models::{
         devices::DM,
@@ -78,6 +84,7 @@ pub async fn get_route_files(
     Path(route_id): Path<String>,
     Extension(client): Extension<Client>
 ) -> impl IntoResponse {
+    // Do not need to check for data ownership because its done when you try to fetch the data
     let jwt_secret = ctx.config.get_jwt_config()?;
     if let Ok(token) = jwt::JWT::new(&jwt_secret.secret).generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string()) {
         println!("Fetching files for Route ID: {}", route_id);
@@ -92,12 +99,12 @@ pub async fn get_route_files(
 
 }
 
-async fn get_qcam_stream( // TODO figure out hashing/obfuscation of the url for security
+async fn get_qcam_stream(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(canonical_route_name): Path<String>,
 ) -> Result<Response> {
-
+    // Do not need to check for data ownership because its done when you try to fetch the data
     let mut segment_models = SM::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
     segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
@@ -222,34 +229,38 @@ async fn get_upload_url(
     Path(dongle_id): Path<String>,
     Query(mut params): Query<UploadUrlQuery>
 ) -> impl IntoResponse {
-    if let Some(device_model) = auth.device_model {
-        if !device_model.uploads_allowed {
-            return unauthorized("Uploads ignored");
-        }
-    } else {
-        return unauthorized("Only registered devices can upload");
+
+    let device_model = auth.device_model.ok_or_else(|| (StatusCode::BAD_REQUEST, "Only devices can upload"))?;
+    if !device_model.uploads_allowed {
+        return Err((StatusCode::FORBIDDEN, "Uploads ignored"));
     }
-    let upload_url = format!("{}/connectincoming/{dongle_id}/{}",
+    if device_model.dongle_id != dongle_id {
+        return Err((StatusCode::BAD_REQUEST, "dongle_id does not match identity"));
+    }
+
+    let upload_url = format!("{}/connectincoming/{}/{}",
         env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
+        device_model.dongle_id,
         transform_route_string(&params.path));
+    
     tracing::info!("Device will upload to {upload_url}");
     // curl http://host/v1.4/ccfab3437bea5257/upload_url/?path=2019-06-06--11-30-31--9/fcamera.hevc&expiry_days=1
     // Assuming default expiry is 1 day if not specified
     params.validate_expiry();
-    let jwt_secret = ctx.config.get_jwt_config()?;
-    if let Ok(token) = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(
-            &(3600 * 24 as u64), 
-            auth.claims.identity.to_string()) {
-        Ok(Json(json!({
-            //   "url": "http://host/commaincoming/239e82a1d3c855f2/2019-06-06--11-30-31/9/fcamera.hevc?sr=b&sp=c&sig=cMCrZt5fje7SDXlKcOIjHgA0wEVAol71FL6ac08Q2Iw%3D&sv=2018-03-28&se=2019-06-13T18%3A43%3A01Z"
-            "url": upload_url,
-            "headers": {"Content-Type": "application/octet-stream",
-                        "Authorization": format!("JWT {}", token)},
-        })))
-    } else {
-        return loco_rs::controller::bad_request("failed to generate token")
-    }
+
+    let jwt_secret = ctx.config
+        .get_jwt_config()
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secrete"))?;
+    let token = jwt::JWT::new(&jwt_secret.secret).generate_token(
+        &(3600 * 24 as u64), 
+        auth.claims.identity.to_string())
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "failed to generate token" ))?;
+
+    Ok(Json(json!({
+        "url": upload_url,
+        "headers": {"Content-Type": "application/octet-stream",
+                    "Authorization": format!("JWT {}", token)},
+    })))
 }
 
 async fn upload_urls_handler(
@@ -257,27 +268,33 @@ async fn upload_urls_handler(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
-) -> Result<Response> {
-    data.validate_expiry();
-    let jwt_secret = ctx.config.get_jwt_config()?;
-    let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(
-        &(3600 * 24 as u64),
-        auth.claims.identity.to_string());
-
-    if let Ok(token) = token {
-        let urls: Vec<UrlResponse> = data.paths.iter().map(|path: &String| {
-            UrlResponse {
-                url: format!("{}/connectincoming/{dongle_id}/{}?sig={token}",
-                    env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
-                    transform_route_string(path),
-                ),
-            }
-        }).collect::<Vec<_>>();
-        return format::json(urls)
-    } else {
-        return loco_rs::controller::bad_request("failed to generate token")
+) -> impl IntoResponse {
+    let device_model = auth.device_model.ok_or_else(|| (StatusCode::BAD_REQUEST, "Only devices can upload"))?;
+    if !device_model.uploads_allowed {
+        return Err((StatusCode::FORBIDDEN, "Uploads ignored"));
     }
+    if device_model.dongle_id != dongle_id {
+        return Err((StatusCode::BAD_REQUEST, "dongle_id does not match identity"));
+    }
+    let jwt_secret = ctx.config
+        .get_jwt_config()
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secrete"))?;
+    let token = jwt::JWT::new(&jwt_secret.secret).generate_token(
+        &(3600 * 24 as u64), 
+        auth.claims.identity.to_string())
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "failed to generate token" ))?;
+
+    data.validate_expiry();
+
+    let urls: Vec<UrlResponse> = data.paths.iter().map(|path: &String| {
+        UrlResponse {
+            url: format!("{}/connectincoming/{dongle_id}/{}?sig={token}",
+                env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set"),
+                transform_route_string(path),
+            ),
+        }
+    }).collect::<Vec<_>>();
+    return Ok(format::json(urls))
 }
 
 fn transform_route_string(input_string: &str) -> String {
@@ -322,19 +339,19 @@ async fn unpair(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
-    if !user_model.superuser {
-        enforce_ownership_rule!(
-            user_model.id, 
-            device_model.owner_id, 
-            "Can only unpair your own device!"
-        );
+    if let Some(user_model) = auth.user_model {
+        let device_model = if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await? // Returns error if not found
+        } else {
+            DM::find_device(&ctx.db, &dongle_id).await?
+        };
+        let mut active_device_model = device_model.into_active_model();
+        active_device_model.owner_id = ActiveValue::Set(None);
+        active_device_model.update(&ctx.db).await?;
+        format::json(UnPairResponse {success: true})
+    } else {
+        format::json(UnPairResponse {success: false})
     }
-    let mut active_device_model = device_model.into_active_model();
-    active_device_model.owner_id = ActiveValue::Set(None);
-    active_device_model.update(&ctx.db).await?;
-    format::json(UnPairResponse {success: true})
 }
 
 async fn device_info(
@@ -342,10 +359,16 @@ async fn device_info(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let device = match auth.device_model {
-        Some(device) => device,
-        None => DM::find_device(&ctx.db, &dongle_id).await?,
+    let device = if let Some(user_model) = auth.user_model {
+        if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await? // Returns error if not found
+        } else {
+            DM::find_device(&ctx.db, &dongle_id).await?
+        }
+    } else {
+        auth.device_model.unwrap()
     };
+
     format::json(
         DeviceInfoResponse {
             dongle_id: device.dongle_id,
@@ -369,35 +392,42 @@ async fn device_location(
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
-    let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
-    if !user_model.superuser {
-        enforce_ownership_rule!(
-            user_model.id, 
-            device_model.owner_id, 
-            "Can only locate owned devices!"
-        );
+    if let Some(user_model) = auth.user_model {
+        if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // Returns error if not found
+        }
+        // get most recent route with gps
+        let (lat, lng, time) = RM::find_latest_pos(&ctx.db, &dongle_id).await?;
+        let response = DeviceLocationResponse {
+            dongle_id,
+            lat,
+            lng,
+            time,
+            ..Default::default()
+        };
+    
+        format::json(response)
+    } else {
+        return loco_rs::controller::bad_request("Devices can't do this");
     }
-    // get most recent route with gps
-    let (lat, lng, time) = RM::find_latest_pos(&ctx.db, &dongle_id).await?;
-    let response = DeviceLocationResponse {
-        dongle_id,
-        lat,
-        lng,
-        time,
-        ..Default::default()
-    };
 
-    format::json(response)
+    
 }
 
 async fn device_stats(
-    _auth: crate::middleware::auth::MyJWT,
+    auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
-    use std::time::{SystemTime, UNIX_EPOCH, Duration};
-
+    if let Some(user_model) = auth.user_model {
+        if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // Returns error if not found
+        }
+    } else {
+        if auth.device_model.unwrap().dongle_id != dongle_id {
+            return loco_rs::controller::bad_request("identity does not match dongle_id in request")
+        }
+    }
     // Get the current time in milliseconds since the UNIX epoch
     let utc_time_now_millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -461,11 +491,11 @@ async fn route_segment(
     Query(params): Query<DeviceSegmentQuery>,
 ) -> Result<Response> {
     if let Some(user_model) = auth.user_model {
-        if user_model.superuser {
-
-        } else {
-            let _ = DM::find_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+        if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
         }
+    } else {
+        return loco_rs::controller::bad_request("devices can't do this")
     }
     let mut route_models = RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
@@ -530,9 +560,10 @@ async fn preserved_routes( // TODO
 async fn get_my_devices(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
-) -> Result<Response> {
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // TODO: implement authorized devices!
-    let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
+
+    let user_model = auth.user_model.ok_or_else(|| (StatusCode::BAD_REQUEST, ""))?;
     let device_models = if user_model.superuser {
         DM::find_all_devices(&ctx.db).await
     } else {
@@ -561,7 +592,7 @@ async fn get_my_devices(
         devices.push(device);
     }
 
-    format::json(devices)
+    Ok(format::json(devices))
 }
 
 
@@ -594,15 +625,14 @@ async fn update_device_alias(
     if auth.user_model.is_none() {
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
     }
+
     let user_model = auth.user_model.unwrap();
-    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
-    if !user_model.superuser {
-        enforce_ownership_rule!(
-            user_model.id, 
-            device_model.owner_id, 
-            "Can only edit owned devices alias!"
-        ); // early return if not owned
-    }
+    let device_model = if user_model.superuser {
+        DM::find_device(&ctx.db, &dongle_id).await?
+    } else {
+        DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?
+    };
+
     let mut active_device_model = device_model.into_active_model();
     active_device_model.alias = ActiveValue::Set(alias.alias);
     active_device_model.update(&ctx.db).await?;
@@ -647,13 +677,8 @@ async fn set_destination(
         is_online = device_model.online;
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+        let device_model = DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?;
         is_online = device_model.online;
-        enforce_ownership_rule!(
-            user_model.id, 
-            device_model.owner_id, 
-            "Can only edit owned devices locations!"
-        ); // early return if not owned
         active_device = device_model.into_active_model();
     } else {
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
@@ -819,12 +844,7 @@ async fn put_locations(
     if let Some(device_model) = auth.device_model {
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
-        enforce_ownership_rule!(
-            user_model.id, 
-            device_model.owner_id, 
-            "Can only edit owned devices locations!"
-        ); // early return if not owned
+        let device_model = DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?;
         active_device = device_model.into_active_model();
     } else {
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
@@ -895,14 +915,12 @@ async fn get_locations(
         let locations = device_model.locations.unwrap_or_default();
         return Ok((StatusCode::OK, Json(locations)).into_response());
     } else if let Some(user_model) = auth.user_model {
-        let device_model =  DM::find_device(&ctx.db, &dongle_id).await?;
-        if !user_model.superuser {
-            enforce_ownership_rule!(
-                user_model.id, 
-                device_model.owner_id, 
-                "Can only see owned devices location!"
-            ); // early return if not owned
-        }
+        let device_model = if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?
+        } else {
+            DM::find_device(&ctx.db,  &dongle_id).await?
+        };
+       
         let locations: Value = device_model.locations.unwrap_or_default();
         return Ok((StatusCode::OK, Json(locations)).into_response());
     } else {
@@ -926,14 +944,11 @@ async fn delete_location(
     if let Some(device_model) = auth.device_model {
         active_device = device_model.into_active_model();
     } else if let Some(user_model) = auth.user_model {
-        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
-        if !user_model.superuser {
-            enforce_ownership_rule!(
-                user_model.id, 
-                device_model.owner_id, 
-                "Can only edit owned devices locations!"
-            ); // early return if not owned
-        }
+        let device_model = if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?
+        } else {
+            DM::find_device(&ctx.db,  &dongle_id).await?
+        };
         active_device = device_model.into_active_model();
     } else {
         return Ok((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());

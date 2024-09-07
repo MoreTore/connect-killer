@@ -46,8 +46,8 @@ RUN pip3 install --no-cache-dir -r fetch/requirements.txt
 # Load NVM and install Node.js
 RUN /bin/bash -c "./install_deps.sh"
 # Build the application with necessary features
-RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=33554432 && cargo install loco-cli cargo-insta sea-orm-cli"
-RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=33554432 && cargo build --release"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=67108864 && cargo install loco-cli cargo-insta sea-orm-cli"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=67108864 && cargo build --release"
 
 # Setup cronjob for deleting old files
 RUN echo "0 * * * * cd /usr/src/connect && ./target/release/connect-cli task deleter >> /var/log/cron.log 2>&1" > /etc/cron.d/connect-cron
