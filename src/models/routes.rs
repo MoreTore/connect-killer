@@ -165,39 +165,41 @@ impl RM {
         Ok((total_length, route_count))
     }
 
-    pub async fn total_length_and_count_time_filtered(
+    pub async fn total_length_count_and_time_filtered(
         db: &DatabaseConnection,
         dongle_id: &str,
         from: Option<i64>,
         to: Option<i64>,
-    ) -> ModelResult<(f32, u32)> {
+    ) -> ModelResult<(f32, u32, i64)> {
         use sea_orm::prelude::*;
-        use sea_orm::QuerySelect;
-        use sea_orm::Condition;
-    
+        use sea_orm::{QuerySelect, Condition};
+        
         let mut condition = Condition::all()
-            .add(Column::DeviceDongleId.eq(dongle_id));
-    
+            .add(Column::DeviceDongleId.eq(dongle_id))
+            .add(Column::Length.gt(0.1))
+            .add(Expr::col(Column::StartTimeUtcMillis).lt(Expr::col(Column::EndTimeUtcMillis)));
+                
         if let Some(from) = from {
             condition = condition.add(Column::StartTimeUtcMillis.gte(from));
         }
-    
+        
         if let Some(to) = to {
             condition = condition.add(Column::StartTimeUtcMillis.lte(to));
         }
-    
-        let routes: Vec<f32> = Entity::find()
+        
+        let routes: Vec<(f32, i64, i64)> = Entity::find()
             .filter(condition)
             .select_only()
-            .column(Column::Length)
-            .into_tuple::<f32>() // Use f32 to match the SQL type
+            .columns([Column::Length, Column::StartTimeUtcMillis, Column::EndTimeUtcMillis])
+            .into_tuple::<(f32, i64, i64)>()  // Fetch length, start, and end times
             .all(db)
             .await?;
-    
-        let total_length: f32 = routes.iter().sum(); // Sum all the lengths
+        
+        let total_length: f32 = routes.iter().map(|(length, _, _)| length).sum(); // Sum all the lengths
+        let total_route_time: i64 = routes.iter().map(|(_, start, end)| end - start).sum(); // Sum total time (end - start) for each route
         let route_count = routes.len() as u32; // Count the number of routes
-    
-        Ok((total_length, route_count))
+        
+        Ok((total_length, route_count, total_route_time))
     }
 
 

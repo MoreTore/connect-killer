@@ -386,6 +386,7 @@ struct QLogResult {
     car_fingerprint: String,
     start_time: i64,
     end_time: i64,
+    total_time: i64,
 }
 
 async fn parse_qlog(
@@ -572,7 +573,14 @@ async fn parse_qlog(
         tracing::trace!("Image proc took: {:?}", img_proc_start.elapsed());
         upload_data(client, &sprite_url, img_bytes).await?;
     }
-    Ok(QLogResult{ car_fingerprint, start_time, end_time})
+
+    let total_time = coordinates
+        .last()
+        .and_then(|last_coordinate| last_coordinate.get("t"))
+        .and_then(|t| t.as_i64())  // Convert to i64 if it's a number
+        .unwrap_or(0);  // Default to 0 in case of any error
+
+    Ok(QLogResult{ car_fingerprint, start_time, end_time, total_time})
 }
 
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {

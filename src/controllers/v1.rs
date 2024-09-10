@@ -229,8 +229,22 @@ async fn get_upload_url(
     Path(dongle_id): Path<String>,
     Query(mut params): Query<UploadUrlQuery>
 ) -> impl IntoResponse {
-
-    let device_model = auth.device_model.ok_or_else(|| (StatusCode::BAD_REQUEST, "Only devices can upload"))?;
+    let device_model = if let Some(device_model) = auth.device_model{
+        device_model
+    } else if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
+            DM::find_device(&ctx.db, &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "no device model"))?
+        } else {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "no device model"))?
+        }
+    } else {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "no device or user model"));
+    };    
+    
     if !device_model.uploads_allowed {
         return Err((StatusCode::FORBIDDEN, "Uploads ignored"));
     }
@@ -269,13 +283,29 @@ async fn upload_urls_handler(
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
 ) -> impl IntoResponse {
-    let device_model = auth.device_model.ok_or_else(|| (StatusCode::BAD_REQUEST, "Only devices can upload"))?;
+    let device_model = if let Some(device_model) = auth.device_model{
+        device_model
+    } else if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
+            DM::find_device(&ctx.db, &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "no device model"))?
+        } else {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "no device model"))?
+        }
+    } else {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "no device or user model"));
+    };
+    
     if !device_model.uploads_allowed {
         return Err((StatusCode::FORBIDDEN, "Uploads ignored"));
     }
     if device_model.dongle_id != dongle_id {
         return Err((StatusCode::BAD_REQUEST, "dongle_id does not match identity"));
     }
+    
     let jwt_secret = ctx.config
         .get_jwt_config()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secrete"))?;
@@ -438,7 +468,7 @@ async fn device_stats(
     let one_week_ago_millis = utc_time_now_millis - Duration::from_secs(7 * 24 * 60 * 60).as_millis() as i64;
 
     // Get total stats
-    let (total_length, route_count) = RM::total_length_and_count_time_filtered(
+    let (total_length, route_count, total_millis) = RM::total_length_count_and_time_filtered(
         &ctx.db,
         &dongle_id,
         None, // No time filter for total stats
@@ -446,23 +476,24 @@ async fn device_stats(
     ).await?;
 
     // Get stats for the past week
-    let (week_length, week_count) = RM::total_length_and_count_time_filtered(
+    let (week_length, week_count, week_millis) = RM::total_length_count_and_time_filtered(
         &ctx.db,
         &dongle_id,
         Some(one_week_ago_millis), // From one week ago
         Some(utc_time_now_millis), // To now
     ).await?;
 
+
     let ret = DeviceStatsResponse{
         all: DeviceStats {
             distance: total_length,
             routes: route_count,
-            ..Default::default()
+            minutes: (total_millis/(1000*60)) as i32
         },
         week: DeviceStats {
             distance: week_length,
             routes: week_count,
-            ..Default::default()
+            minutes: (week_millis/(1000*60)) as i32
         },
     };
 

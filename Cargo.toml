@@ -91,4 +91,7 @@ capnp = { git = "https://github.com/moretore/capnproto-rust.git", branch = "form
 # release with optimizations and no debug info
 [profile.release]
 opt-level = 3
+codegen-units = 1
+lto = "fat"
+
 debug = false
