@@ -1,4 +1,6 @@
-use std::collections::BTreeMap;
+use rand::rngs::StdRng;
+use rand::{SeedableRng, Rng};
+use rand::seq::SliceRandom; // For the `shuffle` method
 use std::thread;
 use std::time::Duration;
 use reqwest::Client;
@@ -35,9 +37,10 @@ impl Task for SeedFromMkv {
         let json: Value = from_str(&body).unwrap(); // Convert response text into JSON
 
         // Extract keys from the JSON object
-        let keys = json["keys"].as_array().unwrap(); // Safely extract as an array
+        let mut keys= json["keys"].as_array().unwrap().clone(); // Safely extract as an array
 
-
+        let mut rng = StdRng::from_entropy();
+        keys.shuffle(&mut rng);
         // Define regex pattern for key parsing
         let segment_file_regex_string = format!(
             r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)"
@@ -53,7 +56,7 @@ impl Task for SeedFromMkv {
                     let segment = caps[3].to_string();
                     let file_type = caps[4].to_string();
 
-                    if file_type != "qlog.bz2" {
+                    if (file_type != "qlog.bz2") && (file_type != "qlog.zst") {
                         continue;
                     }
 
@@ -63,18 +66,18 @@ impl Task for SeedFromMkv {
                         // skip this file 
                         continue
                     
-                    } else if file_type.to_string().ends_with("qlog.bz2") {
+                    } else if (file_type.to_string().ends_with("qlog.bz2")) || (file_type.to_string().ends_with("qlog.zst")) {
                         // delete the unlog file from mkv
-                        let unlog_file_name = file_name.replace(".bz2", ".unlog");
+                        let unlog_file_name = file_name.replace(".bz2", ".unlog").replace(".zst", ".unlog");
                         let internal_unlog_url = common::mkv_helpers::get_mkv_file_url(&unlog_file_name);
                         tracing::trace!("Deleting: {internal_unlog_url}");
                         let response = client.delete(&internal_unlog_url).send().await.unwrap();
                         // delete the sprite file from mkv
-                        let sprite_file_name = file_name.replace("qlog.bz2", "sprite.jpg");
+                        let sprite_file_name = file_name.replace("qlog.bz2", "sprite.jpg").replace("qlog.zst", "sprite.jpg");
                         let internal_sprite_url = common::mkv_helpers::get_mkv_file_url(&sprite_file_name);
                         tracing::trace!("Deleting: {internal_sprite_url}");
                         let response = client.delete(&internal_sprite_url).send().await.unwrap();
-                        let coords_file_name = file_name.replace("qlog.bz2", "coords.json");
+                        let coords_file_name = file_name.replace("qlog.bz2", "coords.json").replace("qlog.zst", "coords.json");
                         let internal_coords_url = common::mkv_helpers::get_mkv_file_url(&coords_file_name);
                         tracing::trace!("Deleting: {internal_coords_url}");
                         let response = client.delete(&internal_coords_url).send().await.unwrap();

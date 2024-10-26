@@ -26,7 +26,7 @@ sea-orm = { version = "1.0.0-rc.1", features = [
   "runtime-tokio-rustls",
   "macros",
 ] }
-
+rand = "0.8.4"
 axum = {version = "0.7.1", features = ["multipart", "ws"]}
 axum-extra = { version = "0.9", features = ["cookie"] }
 hyper = "1.3.1"
@@ -44,7 +44,7 @@ capnp = "0.19.3"
 capnpc = "0.19.0"
 bzip2 = "0.4.3"
 futures = "0.3.30"
-async-compression = { version = "0.4.8", features = ["tokio", "bzip2"] }
+async-compression = { version = "0.4.8", features = ["tokio", "bzip2", "zstd"] }
 tokio-util = "0.7.10"
 rusty-sidekiq = {version = "0.8.2", default-features = false}
 url = "2.5.0"

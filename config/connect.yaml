@@ -46,7 +46,7 @@ server:
       # Duration time in milliseconds.
       timeout: 5000
     cors:
-      enable: true
+      enable: false
       # Set the value of the [`Access-Control-Allow-Origin`][mdn] header
       # allow_origins:
       #   - https://loco.rs

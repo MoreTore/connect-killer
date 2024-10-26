@@ -87,7 +87,7 @@ pub async fn upload_bootlogs(
                         }
                     }
                 }
-                _ => {tracing::error!("Unhandled status. File not uploaded."); return Ok((status, "Unhandled status. File not uploaded."));}
+                _ => {tracing::error!("Unhandled status {}. File not uploaded.", status); return Ok((status, "Unhandled status. File not uploaded."));}
             }
         },
         Err(e) => {

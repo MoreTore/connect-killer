@@ -43,7 +43,7 @@ impl Task for Deleter {
     }
     async fn run(&self, ctx: &AppContext, _vars: &task::Vars) -> Result<()> {
         println!("Task Deleter generated");
-        let _re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.bz2$)").unwrap();
+        let _re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.(?:bz2|zst)$)").unwrap();
         let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)--(.+)$").unwrap();
 
         let client = Client::new();

@@ -10,4 +10,4 @@ pub const ROUTE_NAME: &str = r"[0-9a-f]{8}--[0-9a-f]{10}|[0-9]{4}-[0-9]{2}-[0-9]
 pub const NUMBER: &str = r"[0-9]+";
 /// Any file name
 pub const ANY_FILENAME: &str = r".+";
-pub const ALLOWED_FILENAME: &str = r"(rlog\.bz2|qlog\.bz2|qcamera\.ts|fcamera\.hevc|dcamera\.hevc|ecamera\.hevc|qlog\.unlog|sprite\.jpg|coords\.json|events\.json)";
+pub const ALLOWED_FILENAME: &str = r"(rlog\.(?:bz2|zst)|qlog\.(?:bz2|zst)|qcamera\.ts|fcamera\.hevc|dcamera\.hevc|ecamera\.hevc|qlog\.unlog|sprite\.jpg|coords\.json|events\.json)";

@@ -14,7 +14,7 @@ use reqwest::{Client, Response};
 use rayon::prelude::*;
 use ffmpeg_next::{format as ffmpeg_format, Error as FfmpegError};
 use tempfile::NamedTempFile;
-use async_compression::tokio::{bufread::BzDecoder, write::BzEncoder};
+use async_compression::tokio::{bufread, write::BzEncoder};
 use futures_util::StreamExt;
 use futures::stream::TryStreamExt; // for stream::TryStreamExt to use try_next
 use once_cell::sync::Lazy;
@@ -212,7 +212,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let mut ignore_uploads = None;
         let mut qlog_result: Option<QLogResult> = None;
         match args.file.as_str() {
-            "rlog.bz2" =>  {
+            "rlog.bz2" | "rlog.zst" =>  {
                 seg.rlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/rlog/{}/{}/{}/{}",
                     args.dongle_id,
                     args.timestamp,
@@ -223,10 +223,13 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     Err(e) => return Err(sidekiq::Error::Message("Failed to anonamize rlog: ".to_string() + &e.to_string())),
                 }
             }
-            "qlog.bz2" =>  {
+            "qlog.bz2" | "qlog.zst" =>  {
                     qlog_result = match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
                         Ok(qlog_result) => Some(qlog_result),
-                        Err(e) => return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string())),
+                        Err(e) => {
+                            tracing::error!("Failed to handle qlog: {}", &e.to_string());
+                            return Err(sidekiq::Error::Message("Failed to handle qlog: ".to_string() + &e.to_string()))
+                        },
                     };
                 }
             "qcamera.ts" => {
@@ -370,11 +373,17 @@ async fn handle_qlog(
 ) -> worker::Result<QLogResult> {
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(bytes_stream);
-    let mut bz2_decoder = BzDecoder::new(stream_reader);
+    let mut decoder: std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> = if args.file.ends_with(".bz2") {
+        Box::pin(bufread::BzDecoder::new(stream_reader))
+    } else if args.file.ends_with(".zst") {
+        Box::pin(bufread::ZstdDecoder::new(stream_reader))
+    } else {
+        return Err(sidekiq::Error::Message("Invalid file type".to_string()));
+    };
 
     let mut decompressed_data = Vec::new();
 
-    match bz2_decoder.read_to_end(&mut decompressed_data).await {
+    match decoder.read_to_end(&mut decompressed_data).await {
         Ok(_)=> (),
         Err(e) => return Err(sidekiq::Error::Message(e.to_string()))
     };
@@ -384,9 +393,30 @@ async fn handle_qlog(
 
 struct QLogResult {
     car_fingerprint: String,
+    git_branch: String,
+    git_remote: String,
+    git_commit: String,
+    openpilot_version: String,
+    device_type: crate::cereal::log_capnp::init_data::DeviceType,
     start_time: i64,
     end_time: i64,
     total_time: i64,
+}
+
+impl Default for QLogResult {
+    fn default() -> Self {
+        Self {
+            car_fingerprint: "mock".to_string(),
+            git_branch: "".to_string(),
+            git_remote: "".to_string(),
+            git_commit: "".to_string(),
+            openpilot_version: "".to_string(),
+            device_type: crate::cereal::log_capnp::init_data::DeviceType::Unknown,
+            start_time: -1,
+            end_time: -1,
+            total_time: 0,
+        }
+    }
 }
 
 async fn parse_qlog(
@@ -405,7 +435,7 @@ async fn parse_qlog(
                         args.dongle_id,
                         args.timestamp,
                         args.segment,
-                        args.file.replace("bz2", "unlog")
+                        args.file.replace("bz2", "unlog").replace(".zst", ".unlog")
                     )
             )
         ));
@@ -420,9 +450,7 @@ async fn parse_qlog(
     let mut last_lat = None;
     let mut last_lng = None;
     let mut coordinates: Vec<serde_json::Value> = Vec::new();
-    let mut start_time: i64= -1;
-    let mut end_time: i64 = -1;
-    let mut car_fingerprint: String = "mock".to_string();
+    let mut qlog_result = QLogResult{..Default::default()};
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
@@ -465,12 +493,12 @@ async fn parse_qlog(
                         last_lat = Some(lat);
                         last_lng = Some(lng);
 
-                    } else if start_time == -1{
-                        start_time = gps_ts;
-                        seg.start_time_utc_millis = ActiveValue::Set(start_time);
+                    } else if qlog_result.start_time == -1{
+                        qlog_result.start_time = gps_ts;
+                        seg.start_time_utc_millis = ActiveValue::Set(qlog_result.start_time);
                     }
-                    if end_time < gps_ts {
-                        end_time = gps_ts;
+                    if qlog_result.end_time < gps_ts {
+                        qlog_result.end_time = gps_ts;
                         seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
                     }
                 }
@@ -485,7 +513,6 @@ async fn parse_qlog(
                 }
                 writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
             }
-
             LogEvent::Thumbnail(thumbnail) => {
                 // take the jpg and add it to the array of the other jpgs.
                 // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
@@ -497,13 +524,33 @@ async fn parse_qlog(
                 }
             }
             LogEvent::CarParams(car_params) => {
-                car_fingerprint = car_params
+                qlog_result.car_fingerprint = car_params
                     .ok()
                     .and_then(|params| params.get_car_fingerprint().ok())
                     .map_or_else(String::new, |fp| fp.to_string().unwrap_or_default());
                 writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
             }
-            LogEvent::InitData(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+            LogEvent::InitData(init_data) => {
+                if let Ok(init_data) = init_data {
+                    qlog_result.git_branch = init_data
+                        .get_git_branch().ok()
+                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                    qlog_result.git_commit = init_data
+                        .get_git_commit().ok()
+                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                    qlog_result.git_remote = init_data
+                        .get_git_remote().ok()
+                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                    qlog_result.openpilot_version = init_data
+                        .get_version().ok()
+                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                    qlog_result.device_type = init_data
+                        .get_device_type().ok()
+                        .map_or(crate::cereal::log_capnp::init_data::DeviceType::Unknown, |d| d);
+                }
+
+                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+            },
             LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
             LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
             LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
@@ -530,7 +577,7 @@ async fn parse_qlog(
         &format!("{}_{}--{}--coords.json", args.dongle_id, args.timestamp, args.segment)
     );
     upload_data(client, &json_url, serde_json::to_vec(&coordinates).map_err(Box::from)?).await?;
-    upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog"), unlog_data).await?;
+    upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog").replace(".zst", ".unlog"), unlog_data).await?;
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
         // Downscale each thumbnail in parallel
@@ -574,13 +621,13 @@ async fn parse_qlog(
         upload_data(client, &sprite_url, img_bytes).await?;
     }
 
-    let total_time = coordinates
+    qlog_result.total_time = coordinates
         .last()
         .and_then(|last_coordinate| last_coordinate.get("t"))
         .and_then(|t| t.as_i64())  // Convert to i64 if it's a number
         .unwrap_or(0);  // Default to 0 in case of any error
 
-    Ok(QLogResult{ car_fingerprint, start_time, end_time, total_time})
+    Ok(qlog_result)
 }
 
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {
@@ -638,10 +685,16 @@ async fn anonamize_rlog(_ctx: &AppContext, response: Response, _client: &Client,
 
     let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(bytes_stream);
-    let mut bz2_decoder = BzDecoder::new(stream_reader);
+    let mut decoder: std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> = if args.file.ends_with(".bz2") {
+        Box::pin(bufread::BzDecoder::new(stream_reader))
+    } else if args.file.ends_with(".zst") {
+        Box::pin(bufread::ZstdDecoder::new(stream_reader))
+    } else {
+        return Err(Error::Message("Invalid File Compression".to_string()));
+    };
 
     let mut decompressed_data = Vec::new();
-    match bz2_decoder.read_to_end(&mut decompressed_data).await {
+    match decoder.read_to_end(&mut decompressed_data).await {
         Ok(_) => (),
         Err(e) => return Err(Error::Message(e.to_string())),
     };

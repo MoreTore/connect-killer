@@ -107,13 +107,22 @@ def get_upload_urls(dongle_id, paths):
         if 'qlog' in path:
             paths[i] = path + ".bz2"
         if 'qcam' in path:
-            paths[i] = path + ".ts"
+            if not ".ts" in path:
+                path = path + ".ts"
+            paths[i] = path
         if 'fcam' in path:
-            paths[i] = path + ".hevc"
+            if not ".hevc" in path:
+                path = path + ".hevc"
+            paths[i] = path
         if 'dcam' in path:
-            paths[i] = path + ".hevc"
+            if not '.hevc' in path:
+                path = path + ".hevc"
+            paths[i] = path
+            print(paths[i])
         if 'ecam' in path:
-            paths[i] = path + ".hevc"
+            if not ".hevc" in path:
+                path = path + ".hevc"
+            paths[i] = path
 
     payload = {
         "paths": paths,

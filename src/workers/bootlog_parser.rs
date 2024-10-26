@@ -82,7 +82,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
                 common::mkv_helpers::get_mkv_file_url(
                     &format!("{}_{}",
                         &args.dongle_id,
-                        &args.file_name.replace(".bz2", ".unlog")
+                        &args.file_name.replace(".bz2", ".unlog").replace(".zst", ".unlog")
                     )
                 )
             ),
@@ -96,7 +96,7 @@ impl worker::Worker<BootlogParserWorkerArgs> for BootlogParserWorker {
             }
         }
 
-        match upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog"), parsed_log.data).await {
+        match upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog").replace(".zst", ".unlog"), parsed_log.data).await {
             Ok(()) => {tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start.elapsed()); return Ok(())},
             Err(e) => return Err(sidekiq::Error::Message(e.to_string())),
         };

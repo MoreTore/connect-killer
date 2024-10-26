@@ -65,6 +65,7 @@
       "name": "Seed from mkv",
       "program": "${workspaceFolder}/target/debug/connect-cli",
       "preLaunchTask": "build_project",
+      "envFile": ".env",
       "args": [
         
         "task",

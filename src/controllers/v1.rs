@@ -333,7 +333,7 @@ fn transform_route_string(input_string: &str) -> String {
         r"^({ROUTE_NAME})--({NUMBER})(?:--|/)({ALLOWED_FILENAME}$)"
     );
     let boot_file_regex_string = format!(
-        r"^boot/({ROUTE_NAME}).bz2$"
+        r"^boot/({ROUTE_NAME}).(?:bz2|zst)$"
     );
     let crash_file_regex_string = format!(
         r"^crash/({ROUTE_NAME})_([0-9a-f]{{8}})_(.+)$"
@@ -360,6 +360,7 @@ fn transform_route_string(input_string: &str) -> String {
     } else if re_boot_log.is_match(input_string) {
         input_string.to_owned()
     } else {
+        tracing::error!("Got Invalid input string: {input_string}");
         "Invalid".to_string()
     }
 }
