@@ -218,10 +218,11 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     args.timestamp,
                     args.segment,
                     args.file));
-                match anonamize_rlog(&self.ctx, response, &client, &args).await {
-                    Ok(_) => (),
-                    Err(e) => return Err(sidekiq::Error::Message("Failed to anonamize rlog: ".to_string() + &e.to_string())),
-                }
+                // match anonamize_rlog(&self.ctx, response, &client, &args).await {
+                //     Ok(_) => (),
+                //     Err(e) => return Err(sidekiq::Error::Message("Failed to anonamize rlog: ".to_string() + &e.to_string())),
+                // }
+                
             }
             "qlog.bz2" | "qlog.zst" =>  {
                     qlog_result = match handle_qlog(&mut seg, response, &args, &self.ctx, &client).await {
@@ -455,115 +456,123 @@ async fn parse_qlog(
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
         let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
 
-        match event.which().map_err(Box::from)? {
-            LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
-                let log_mono_time = event.get_log_mono_time();
-                if let Ok(gps) = gps {
-                    let gps_ts = gps.get_unix_timestamp_millis();
-                    if (gps.get_flags() % 2 == 1) || gps.get_has_fix() { // has fix
-                        let lat = gps.get_latitude();
-                        let lng = gps.get_longitude();
-                        let speed = gps.get_speed();
-                        if !gps_seen { // gps_seen is false the first time
-                            gps_seen = true;
-                            seg.hpgps = ActiveValue::Set(true);
-                            seg.start_time_utc_millis = ActiveValue::Set(gps_ts);
-                            seg.start_lat = ActiveValue::Set(lat);
-                            seg.start_lng = ActiveValue::Set(lng);
-                        }
-
-                        // Calculate distance if we have previous coordinates
-                        if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
-                            let meters = super::log_helpers::haversine_distance(last_lat, last_lng, lat, lng);
-                            total_meters_traveled += meters;
-
-                            if let Some(onroad_mono_time) = onroad_mono_time{
-                                let route_time = (log_mono_time - onroad_mono_time) / 1000000000; // time since the start of route
-                                coordinates.push(serde_json::json!({
-                                    "t": route_time,
-                                    "lat": lat,
-                                    "lng": lng,
-                                    "speed": speed,
-                                    "dist": meters,
-                                }));
+        match event.which() {
+            Err(e) => {
+                tracing::warn!("Event type not in schema: {:?}", e);
+                continue; // Skip this iteration if matching fails
+            }
+            Ok(event_type) => {
+                match event_type {
+                    LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
+                        let log_mono_time = event.get_log_mono_time();
+                        if let Ok(gps) = gps {
+                            let gps_ts = gps.get_unix_timestamp_millis();
+                            if (gps.get_flags() % 2 == 1) || gps.get_has_fix() { // has fix
+                                let lat = gps.get_latitude();
+                                let lng = gps.get_longitude();
+                                let speed = gps.get_speed();
+                                if !gps_seen { // gps_seen is false the first time
+                                    gps_seen = true;
+                                    seg.hpgps = ActiveValue::Set(true);
+                                    seg.start_time_utc_millis = ActiveValue::Set(gps_ts);
+                                    seg.start_lat = ActiveValue::Set(lat);
+                                    seg.start_lng = ActiveValue::Set(lng);
+                                }
+        
+                                // Calculate distance if we have previous coordinates
+                                if let (Some(last_lat), Some(last_lng)) = (last_lat, last_lng) {
+                                    let meters = super::log_helpers::haversine_distance(last_lat, last_lng, lat, lng);
+                                    total_meters_traveled += meters;
+        
+                                    if let Some(onroad_mono_time) = onroad_mono_time{
+                                        let route_time = (log_mono_time - onroad_mono_time) / 1000000000; // time since the start of route
+                                        coordinates.push(serde_json::json!({
+                                            "t": route_time,
+                                            "lat": lat,
+                                            "lng": lng,
+                                            "speed": speed,
+                                            "dist": meters,
+                                        }));
+                                    }
+                                }
+        
+                                // Update last coordinates
+                                last_lat = Some(lat);
+                                last_lng = Some(lng);
+        
+                            } else if qlog_result.start_time == -1{
+                                qlog_result.start_time = gps_ts;
+                                seg.start_time_utc_millis = ActiveValue::Set(qlog_result.start_time);
+                            }
+                            if qlog_result.end_time < gps_ts {
+                                qlog_result.end_time = gps_ts;
+                                seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
                             }
                         }
-
-                        // Update last coordinates
-                        last_lat = Some(lat);
-                        last_lng = Some(lng);
-
-                    } else if qlog_result.start_time == -1{
-                        qlog_result.start_time = gps_ts;
-                        seg.start_time_utc_millis = ActiveValue::Set(qlog_result.start_time);
+                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
                     }
-                    if qlog_result.end_time < gps_ts {
-                        qlog_result.end_time = gps_ts;
-                        seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
+                    LogEvent::DeviceState(device_state) => {
+                        if let Ok(device_state) = device_state {
+        
+                            if device_state.get_started() {
+                                onroad_mono_time = Some(device_state.get_started_mono_time());
+                            }
+                        }
+                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
                     }
-                }
-                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
-            }
-            LogEvent::DeviceState(device_state) => {
-                if let Ok(device_state) = device_state {
-
-                    if device_state.get_started() {
-                        onroad_mono_time = Some(device_state.get_started_mono_time());
+                    LogEvent::Thumbnail(thumbnail) => {
+                        // take the jpg and add it to the array of the other jpgs.
+                        // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
+                        if let Ok(thumbnail) = thumbnail {
+                            // Assuming the thumbnail data is a JPEG image
+                            let image_data = thumbnail.get_thumbnail().map_err(Box::from)?; // len is 9682
+                            //let img = image::load_from_memory(image_data).map_err(Box::from)?; // len is 436692
+                            thumbnails.push(image_data.to_vec());
+                        }
                     }
+                    LogEvent::CarParams(car_params) => {
+                        qlog_result.car_fingerprint = car_params
+                            .ok()
+                            .and_then(|params| params.get_car_fingerprint().ok())
+                            .map_or_else(String::new, |fp| fp.to_string().unwrap_or_default());
+                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+                    }
+                    LogEvent::InitData(init_data) => {
+                        if let Ok(init_data) = init_data {
+                            qlog_result.git_branch = init_data
+                                .get_git_branch().ok()
+                                .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                            qlog_result.git_commit = init_data
+                                .get_git_commit().ok()
+                                .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                            qlog_result.git_remote = init_data
+                                .get_git_remote().ok()
+                                .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                            qlog_result.openpilot_version = init_data
+                                .get_version().ok()
+                                .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
+                            qlog_result.device_type = init_data
+                                .get_device_type().ok()
+                                .map_or(crate::cereal::log_capnp::init_data::DeviceType::Unknown, |d| d);
+                        }
+        
+                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+                    },
+                    LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::ErrorLogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::LogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::LiveParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::LiveTorqueParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::ManagerState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::NavInstruction(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::OnroadEvents(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::UploaderState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::QcomGnss(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
                 }
-                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
             }
-            LogEvent::Thumbnail(thumbnail) => {
-                // take the jpg and add it to the array of the other jpgs.
-                // after we get all the jpgs, put them together into a 1x12 jpg and downscale to 1280x96
-                if let Ok(thumbnail) = thumbnail {
-                    // Assuming the thumbnail data is a JPEG image
-                    let image_data = thumbnail.get_thumbnail().map_err(Box::from)?; // len is 9682
-                    //let img = image::load_from_memory(image_data).map_err(Box::from)?; // len is 436692
-                    thumbnails.push(image_data.to_vec());
-                }
-            }
-            LogEvent::CarParams(car_params) => {
-                qlog_result.car_fingerprint = car_params
-                    .ok()
-                    .and_then(|params| params.get_car_fingerprint().ok())
-                    .map_or_else(String::new, |fp| fp.to_string().unwrap_or_default());
-                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
-            }
-            LogEvent::InitData(init_data) => {
-                if let Ok(init_data) = init_data {
-                    qlog_result.git_branch = init_data
-                        .get_git_branch().ok()
-                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
-                    qlog_result.git_commit = init_data
-                        .get_git_commit().ok()
-                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
-                    qlog_result.git_remote = init_data
-                        .get_git_remote().ok()
-                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
-                    qlog_result.openpilot_version = init_data
-                        .get_version().ok()
-                        .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
-                    qlog_result.device_type = init_data
-                        .get_device_type().ok()
-                        .map_or(crate::cereal::log_capnp::init_data::DeviceType::Unknown, |d| d);
-                }
-
-                writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
-            },
-            LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::ErrorLogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LiveParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::LiveTorqueParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::ManagerState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::NavInstruction(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::OnroadEvents(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::UploaderState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            LogEvent::QcomGnss(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-            _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
         }
     }
 
