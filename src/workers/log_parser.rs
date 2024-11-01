@@ -311,7 +311,12 @@ async fn update_route_info(
         return Err(sidekiq::Error::Message("segment_models is empty!".to_string()))
     }
     // last segment in route
-    if let Some(last_seg) = segment_models.last() {
+    if let Some(mut last_seg) = segment_models.last(){
+        last_seg = if last_seg.end_time_utc_millis == 0 && segment_models.len() > 1 {
+            &segment_models[segment_models.len() - 2] // Sometimes the last seg is too short to have gps
+        } else {
+            last_seg
+        };
         active_route_model.end_time = ActiveValue::Set(DateTime::from_timestamp_millis(last_seg.end_time_utc_millis));
         active_route_model.end_time_utc_millis = ActiveValue::Set(last_seg.end_time_utc_millis);
         active_route_model.end_lat = ActiveValue::Set(last_seg.end_lat);
@@ -322,21 +327,30 @@ async fn update_route_info(
     let mut segment_end_times = vec![];
     let mut segment_numbers = vec![];
     let mut miles = 0.0;
-    let mut hpgps = false;
+    let mut calculated_start_time = 0;
 
+    let mut gps_seen = false;
     for segment_model in segment_models {
-        miles += segment_model.miles;
-        segment_start_times.push(segment_model.start_time_utc_millis);
-        segment_end_times.push(segment_model.end_time_utc_millis);
         segment_numbers.push(segment_model.number);
-
-        if segment_model.hpgps { // if this segment has accurate timestamp
-            let calculated_start_time = (segment_model.start_time_utc_millis - (segment_model.number as i64 * 60000));
-            active_route_model.start_time_utc_millis = ActiveValue::Set(calculated_start_time);
-            active_route_model.start_time =  ActiveValue::Set(DateTime::from_timestamp_millis(calculated_start_time));
+    
+        if segment_model.hpgps {
+            miles += segment_model.miles;
+            if !gps_seen {
+                gps_seen = true;
+                active_route_model.hpgps = ActiveValue::Set(true);
+                calculated_start_time = segment_model.start_time_utc_millis - (segment_model.number as i64 * 60000);
+                active_route_model.start_time_utc_millis = ActiveValue::Set(calculated_start_time);
+                active_route_model.start_time =  ActiveValue::Set(DateTime::from_timestamp_millis(calculated_start_time));
+                active_route_model.start_lat = ActiveValue::Set(segment_model.start_lat);
+                active_route_model.start_lng = ActiveValue::Set(segment_model.start_lng);
+            }
+            
+            active_route_model.end_time = ActiveValue::Set(DateTime::from_timestamp_millis(segment_model.end_time_utc_millis));
+            active_route_model.end_time_utc_millis = ActiveValue::Set(segment_model.end_time_utc_millis);
+            active_route_model.end_lat = ActiveValue::Set(segment_model.end_lat);
+            active_route_model.end_lng = ActiveValue::Set(segment_model.end_lng);
         }
 
-        hpgps |= segment_model.hpgps;
         if segment_model.qlog_url != "" {
             active_route_model.maxqlog = ActiveValue::Set(segment_model.number as i32);
         }
@@ -357,11 +371,22 @@ async fn update_route_info(
         }
     }
 
+    for segment_model in segment_models {
+        let (seg_start_time, seg_end_time) = if segment_model.hpgps {
+            (segment_model.start_time_utc_millis, segment_model.start_time_utc_millis)
+        } else {
+            let base_time = calculated_start_time + (segment_model.number as i64 * 60000);
+            (base_time, base_time + 60000)
+        };
+
+        segment_start_times.push(seg_start_time);
+        segment_end_times.push(seg_end_time);
+    }
+
     active_route_model.length = ActiveValue::Set(miles);
     active_route_model.segment_start_times = ActiveValue::Set(segment_start_times.into());
     active_route_model.segment_end_times = ActiveValue::Set(segment_end_times.into());
     active_route_model.segment_numbers = ActiveValue::Set(segment_numbers.into());
-    active_route_model.hpgps = ActiveValue::Set(hpgps);
     return Ok(());
 }
 
@@ -647,7 +672,7 @@ async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Resul
 
     if !response.status().is_success() {
         tracing::debug!("Response status: {}", response.status());
-        return Err(sidekiq::Error::Message(format!("Failed to upload data to {}", url)));
+        return Err(sidekiq::Error::Message(format!("Failed to upload data to {}. Status code {}", url, response.status())));
     }
     tracing::debug!("Uploaded {url} Response status: {}", response.status());
     Ok(())

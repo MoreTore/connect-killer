@@ -1,6 +1,8 @@
 use rand::rngs::StdRng;
 use rand::{SeedableRng, Rng};
-use rand::seq::SliceRandom; // For the `shuffle` method
+use rand::seq::SliceRandom;
+use time::serde::timestamp; use std::env::vars;
+// For the `shuffle` method
 use std::thread;
 use std::time::Duration;
 use reqwest::Client;
@@ -20,12 +22,23 @@ impl Task for SeedFromMkv {
         }
     }
 
-    async fn run(&self, app_context: &AppContext, _vars: &task::Vars) -> Result<()> {
+    async fn run(&self, app_context: &AppContext, vars: &task::Vars) -> Result<()> {
         println!("Task SeedFromMkv generated");
+        let dongle_id_filter = vars
+            .cli_arg("dongle_id")
+            .ok();
+        let timestamp_filter = vars
+            .cli_arg("timestamp")
+            .ok();
 
         let client = Client::new();
         // Get all keys from the MKV server
-        let query = common::mkv_helpers::list_keys_starting_with("");
+        let query = if let Some(dongle_id_filter) = dongle_id_filter {
+            common::mkv_helpers::list_keys_starting_with(&format!("{}", dongle_id_filter))
+        } else {
+            common::mkv_helpers::list_keys_starting_with("")
+        };
+        //let query = common::mkv_helpers::list_keys_starting_with("");
         let response = client.get(&query).send().await.unwrap();
 
         if !response.status().is_success() {
@@ -57,6 +70,10 @@ impl Task for SeedFromMkv {
                     let file_type = caps[4].to_string();
 
                     if (file_type != "qlog.bz2") && (file_type != "qlog.zst") {
+                        continue;
+                    }
+
+                    if timestamp_filter.map_or(false, |filter| filter != &timestamp) {
                         continue;
                     }
 

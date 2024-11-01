@@ -106,7 +106,8 @@ async fn get_qcam_stream(
 ) -> Result<Response> {
     // Do not need to check for data ownership because its done when you try to fetch the data
     let mut segment_models = SM::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
-    segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones wher the qlog is missing
+    segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones where the qlog is missing
+    segment_models.retain(|segment| segment.qcam_url != ""); // exclude ones where the qcam is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
 
     let exp = (3600 * 24 as u64);

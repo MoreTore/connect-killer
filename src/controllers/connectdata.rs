@@ -256,7 +256,12 @@ pub async fn delete_data(
                 "Can only delete your own devices data!"
             );
         }
+        let mut active_device_model = device_model.into_active_model();
+        active_device_model.server_storage = ActiveValue::Set(0);
+        active_device_model.update(&ctx.db).await?;
     }
+
+    RM::delete_device_routes(&ctx.db, &dongle_id).await?; // should cascade to segments
 
     let query = mkv_helpers::list_keys_starting_with(&dongle_id);
     let response = client.get(&query).send().await.unwrap();
@@ -268,7 +273,7 @@ pub async fn delete_data(
     let json: serde_json::Value = serde_json::from_str(&body)?; // Convert response text into JSON
 
     let keys = json["keys"].as_array().unwrap();
-    tracing::info!("Deleting {} files", keys.len());
+    tracing::info!("Deleting {} files from kv store", keys.len());
 
     for key_value in keys {
         let file_name = key_value.as_str().unwrap().trim_start_matches('/').to_string(); // Convert to string for independent ownership
@@ -294,7 +299,7 @@ pub fn routes() -> Routes {
         .add("/:dongle_id/:timestamp/:segment/sprite.jpg", get(sprite_download))
         .add("/:dongle_id/:timestamp/:segment/:file", get(auth_file_download))
         .add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
-        .add("/detete/{dongle_id}", delete(delete_data))
+        .add("/delete/:dongle_id", delete(delete_data))
         .add("/logs/", get(render_segment_ulog))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
 }
