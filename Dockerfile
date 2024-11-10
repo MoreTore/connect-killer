@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- --default-toolchain 1.80.1 -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- --default-toolchain 1.82.0 -y
 
 # Ensure that the Rust environment is available in the current session
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -46,8 +46,8 @@ RUN pip3 install --no-cache-dir -r fetch/requirements.txt
 # Load NVM and install Node.js
 RUN /bin/bash -c "./install_deps.sh"
 # Build the application with necessary features
-RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=67108864 && cargo install loco-cli cargo-insta sea-orm-cli"
-RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=67108864 && cargo build --release"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=134217728 && cargo install loco-cli cargo-insta sea-orm-cli"
+RUN /bin/bash -c "source $HOME/.cargo/env && export RUST_MIN_STACK=134217728 && cargo build --release"
 
 # Setup cronjob for deleting old files
 RUN echo "0 * * * * cd /usr/src/connect && ./target/release/connect-cli task deleter >> /var/log/cron.log 2>&1" > /etc/cron.d/connect-cron
