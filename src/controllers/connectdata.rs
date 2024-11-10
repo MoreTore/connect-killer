@@ -234,7 +234,60 @@ pub async fn render_segment_ulog(
     }
 }
 
-pub async fn delete_data(
+async fn delete_route(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path((dongle_id, timestamp)): Path<(String, String)>,
+    Extension(client): Extension<reqwest::Client>,
+) -> impl IntoResponse {
+    let dongle_id = if let Some(device_model) = auth.device_model {
+        device_model.dongle_id
+    } else {
+        dongle_id
+    };
+
+    if let Some(user_model) = auth.user_model {
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+        if !user_model.superuser {
+            enforce_ownership_rule!(
+                user_model.id, 
+                device_model.owner_id, 
+                "Can only delete your own devices data!"
+            );
+        }
+    }
+    let canonical_route_name = format!("{}|{}", &dongle_id, &timestamp);
+    RM::delete_route(&ctx.db, &canonical_route_name).await?; // should cascade to segments
+
+    let query = mkv_helpers::list_keys_starting_with(&canonical_route_name.replace("|", "_"));
+    let response = client.get(&query).send().await.unwrap();
+    if !response.status().is_success() {
+        tracing::info!("Failed to get keys");
+        return Ok((StatusCode::INTERNAL_SERVER_ERROR, "Failed to get keys").into_response()); 
+    }
+    let body = response.text().await.unwrap();
+    let json: serde_json::Value = serde_json::from_str(&body)?; // Convert response text into JSON
+
+    let keys = json["keys"].as_array().unwrap();
+    tracing::info!("Deleting {} files from kv store", keys.len());
+
+    for key_value in keys {
+        let file_name = key_value.as_str().unwrap().trim_start_matches('/').to_string(); // Convert to string for independent ownership
+        let file_url = mkv_helpers::get_mkv_file_url(&file_name);
+
+        let _ = client
+            .delete(&file_url)
+            .send()
+            .await
+            .map_err(|e| 
+                return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            );
+    }
+
+    return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response()); 
+}
+
+async fn delete_data(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
@@ -300,6 +353,7 @@ pub fn routes() -> Routes {
         .add("/:dongle_id/:timestamp/:segment/:file", get(auth_file_download))
         .add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
         .add("/delete/:dongle_id", delete(delete_data))
+        .add("/delete/:dongle_id/:timestamp", delete(delete_route))
         .add("/logs/", get(render_segment_ulog))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
 }

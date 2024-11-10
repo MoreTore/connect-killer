@@ -188,6 +188,62 @@
         }
       </script>
       <script>
+        function deleteRoute(fullname) {
+          const formattedFullname = fullname.replace('|', '/');
+          
+          fetch(`https://api.springerelectronics.com/connectdata/delete/${formattedFullname}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          })
+          
+          .then(response => {
+            if (response.ok) {
+              return response.json();
+            }
+            throw new Error('Network response was not ok.');
+          })
+          .then(data => {
+            console.log('Request successful', data);
+          })
+          .catch(error => {
+            console.error('There was a problem with the fetch operation:', error);
+          });
+        }
+      </script>
+      <script>
+        function deleteDevice(dongle_id) {
+          // Show a confirmation popup
+          const userConfirmed = confirm("Are you sure you want to delete this device?");
+          
+          if (userConfirmed) {
+            fetch(`https://api.springerelectronics.com/connectdata/delete/${dongle_id}`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              credentials: 'include'
+            })
+            .then(response => {
+              if (response.ok) {
+                  return response.text();
+              }
+              throw new Error('Network response was not ok.');
+            })
+            .then(data => {
+              console.log('Request successful', data);
+              alert(data.message || data); // Show success message
+            })
+            .catch(error => {
+              console.error('There was a problem with the fetch operation:', error);
+              alert("Failed to delete the device."); // Error message for user
+            });
+          }
+        }
+      </script>
+      <script>
         document.addEventListener('DOMContentLoaded', function() {
           console.log('DOM fully loaded and parsed');
           
@@ -274,6 +330,7 @@
   <table id="table_devices">
     <tbody>
       <tr>
+        <td style="white-space: nowrap"></td>
         <td style="white-space: nowrap">dongle_id</td>
         <td style="white-space: nowrap">serial</td>
         <td style="white-space: nowrap">device_type</td>
@@ -287,6 +344,12 @@
       </tr>
       {% for device in devices.devices %}
       <tr>
+        <td style="white-space: nowrap">
+          <button onclick="deleteDevice('{{ device.dongle_id }}')">
+            Delete Device Data
+          </button>
+        </td>
+        <td style="white-space: nowrap">dongle_id</td>
         <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
         <td style="white-space: nowrap">{{ device.serial }}</td>
         <td style="white-space: nowrap">{{ device.device_type }}</td> 
@@ -423,6 +486,7 @@
   <table id="table_routes">
     <tbody>
       <tr>
+        <td style="white-space: nowrap"></td>
         <td style="white-space: nowrap">start_time</td>
         <td style="white-space: nowrap">route_name</td>
         <td style="white-space: nowrap">connect</td>
@@ -437,6 +501,11 @@
       </tr>
       {% for route in routes.routes %}
       <tr>
+        <td style="white-space: nowrap">
+          <button onclick="deleteRoute('{{ route.fullname }}')">
+            Delete Route
+          </button>
+        </td>
         <td style="white-space: nowrap">{{ route.start_time }}</td>
         <td style="white-space: nowrap">
           <a href="/?onebox={{ route.fullname }}">
