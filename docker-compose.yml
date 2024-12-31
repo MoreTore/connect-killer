@@ -13,18 +13,12 @@ services:
     env_file:
       - .env
     # entrypoint: ["sh", "/pgvector/init_pgvector.sh"]
-  redis:
-    image: redis:latest
-    restart: unless-stopped
-    ports:
-      - 6379:6379
-    network_mode: "host"
   minikeyvalue:
     build:
       context: ./minikeyvalue
       dockerfile: Dockerfile
     volumes:
-      - /mnt/raid5/kvstore:/tmp
+      - /mnt/raid5/kvstore1:/tmp
     ports:
       - "3000-3005:3000-3005"
     network_mode: "host"

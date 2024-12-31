@@ -314,8 +314,6 @@ async fn delete_data(
         active_device_model.update(&ctx.db).await?;
     }
 
-    RM::delete_device_routes(&ctx.db, &dongle_id).await?; // should cascade to segments
-
     let query = mkv_helpers::list_keys_starting_with(&dongle_id);
     let response = client.get(&query).send().await.unwrap();
     if !response.status().is_success() {
@@ -340,6 +338,9 @@ async fn delete_data(
                 return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             );
     }
+    // Do this last in case the above fails for some reason
+    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+    device_model.delete(&ctx.db).await?; // should cascade to all related data
 
     return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response()); 
 }

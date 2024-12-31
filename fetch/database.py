@@ -55,7 +55,7 @@ class PostgresDB:
 if __name__ == "__main__":
     # Example usage
     db = PostgresDB(
-        host="154.38.175.6",
+        host="localhost",
         port="5432",
         dbname="connect_development",
         user="loco",

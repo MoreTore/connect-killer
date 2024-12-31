@@ -13,6 +13,7 @@ use crate::{models::_entities::{
     segments,
     },
     common::mkv_helpers,
+    common::re::*,
 };
 
 fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, ParseError> {
@@ -43,8 +44,11 @@ impl Task for Deleter {
     }
     async fn run(&self, ctx: &AppContext, _vars: &task::Vars) -> Result<()> {
         println!("Task Deleter generated");
-        let _re_boot_log = regex::Regex::new(r"^([0-9a-z]{16})_([0-9a-z]{8}--[0-9a-z]{10}.(?:bz2|zst)$)").unwrap();
-        let re = Regex::new(r"^([0-9a-z]{16})_([0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9a-f]{8}--[0-9a-f]{10})--([0-9]+)--(.+)$").unwrap();
+        
+        let segment_file_regex_string = format!(
+            r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)"
+        );
+        let re = Regex::new(&segment_file_regex_string).unwrap();
 
         let client = Client::new();
         // Get all keys from the MKV server
@@ -63,8 +67,8 @@ impl Task for Deleter {
         let keys = json["keys"].as_array().unwrap(); // Safely extract as an array
         // TODO: Refactor to not load the whole response in ram at once as it could get large.
 
-        let mut retention_minutes = 1 * 24 * 60; // Start with 1 day in minutes
-        let required_free_space = 20 * 1024 * 1024 * 1024; // 20 GB
+        let mut retention_minutes = 356 * 24 * 60; // Start with 356 days in minutes
+        let required_free_space = 2000 * 1024 * 1024 * 1024; // 2000 GB
 
         loop {
             let available_storage = get_available_storage();

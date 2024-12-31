@@ -14,6 +14,8 @@ use std::{
     },
     error::Error
 };
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 use crate::{common, 
     middleware::jwt, 
@@ -26,6 +28,9 @@ use crate::{common,
     }
 };
 use super::v1_responses::*;
+
+// Alias for HMAC-SHA256
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Deserialize)]
 struct UploadUrlQuery {
@@ -961,6 +966,57 @@ async fn get_locations(
     }
 }
 
+#[derive(Serialize)]
+struct RTCIceServer {
+    urls: String,
+    username: String,
+    credential: String,
+}
+
+fn generate_turn_credentials(secret_key: &str) -> (String, String) {
+    // Get the current UNIX timestamp (valid for 1 hour)
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() + 3600;
+
+    let username = timestamp.to_string();
+
+    // Generate HMAC-SHA256 hash as the password
+    let mut mac = HmacSha256::new_from_slice(secret_key.as_bytes()).unwrap();
+    mac.update(username.as_bytes());
+    let credential = base64::encode(mac.finalize().into_bytes());
+
+    (username, credential)
+}
+
+async fn get_ice_servers(
+    _auth: crate::middleware::auth::MyJWT,
+) -> Result<Json<Vec<RTCIceServer>>, StatusCode> {
+
+    let secret_key = env::var("TURN_SECRET_KEY").unwrap_or_else(|_| "default_secret".to_string());
+    
+    let ice_servers = vec![
+        RTCIceServer {
+            urls: "stun:stun.l.google.com:19302".to_string(),
+            username: "".to_string(),
+            credential: "".to_string(),
+        },
+        RTCIceServer {
+            urls: "turn:85.190.241.173:3478".to_string(),
+            username: "testuser".to_string(),
+            credential: "testpass".to_string(),
+        },
+        RTCIceServer {
+            urls: "stun:85.190.241.173:3478".to_string(),
+            username: "testuser".to_string(),
+            credential: "testpass".to_string(),
+        },
+    ];
+    Ok(Json(ice_servers))
+}
+
+
 #[derive(Serialize, Deserialize, Debug)]
 struct DeleteLocation {
     id: String,
@@ -1039,4 +1095,5 @@ pub fn routes() -> Routes {
         .add("/navigation/:dongle_id/set_destination", post(set_destination))
         .add("/navigation/:dongle_id/locations", get(get_locations).put(put_locations).delete(delete_location))
         .add("/navigation/:dongle_id/next", get(get_next_destination))
+        .add("/iceservers", get(get_ice_servers))
     }

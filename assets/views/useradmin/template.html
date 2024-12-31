@@ -216,7 +216,7 @@
       <script>
         function deleteDevice(dongle_id) {
           // Show a confirmation popup
-          const userConfirmed = confirm("Are you sure you want to delete this device?");
+          const userConfirmed = confirm("Are you sure you want to delete this device? You will need to repair the device.");
           
           if (userConfirmed) {
             fetch(`https://api.springerelectronics.com/connectdata/delete/${dongle_id}`, {
@@ -346,7 +346,7 @@
       <tr>
         <td style="white-space: nowrap">
           <button onclick="deleteDevice('{{ device.dongle_id }}')">
-            Delete Device Data
+            Unpair and Delete Device Data
           </button>
         </td>
         <td style="white-space: nowrap">dongle_id</td>

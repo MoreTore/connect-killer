@@ -99,7 +99,7 @@ pub async fn pilotauth(
     let result = DM::register_device(&ctx.db, params, &dongle_id).await;
     match result {
         Ok(_) => (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()})),
-        Err(result) => (StatusCode::INTERNAL_SERVER_ERROR, Err(loco_rs::Error::Model(result))),
+        Err(result) => (StatusCode::FORBIDDEN, Err(loco_rs::Error::Model(result))),
     }
 }
 

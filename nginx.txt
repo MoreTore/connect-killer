@@ -17,11 +17,6 @@
 # sudo tail -f /var/log/nginx/error.log /var/log/nginx/access.log
 
 server {
-    if ($host = cloud.springerelectronics.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name cloud.springerelectronics.com;
 
@@ -29,15 +24,14 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl;
     server_name cloud.springerelectronics.com;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3111;  # Forward HTTPS requests to the HTTP port
@@ -50,14 +44,9 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-
 }
 
-server {
-    if ($host = portal.springerelectronics.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
 
 
     listen 80;
@@ -67,16 +56,18 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
+location = /.well-known/acme-challenge/6NEaKM028DjsXu9oWKfAXxzqvXggxoYpkZOJr6gXoz0{default_type text/plain;return 200 6NEaKM028DjsXu9oWKfAXxzqvXggxoYpkZOJr6gXoz0.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
-server {
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
+
+
     listen 443 ssl http2;  # Enable HTTP/2
     server_name portal.springerelectronics.com;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
 
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3111;  # Forward HTTPS requests to the HTTP port
@@ -91,32 +82,26 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
+location = /.well-known/acme-challenge/6NEaKM028DjsXu9oWKfAXxzqvXggxoYpkZOJr6gXoz0{default_type text/plain;return 200 6NEaKM028DjsXu9oWKfAXxzqvXggxoYpkZOJr6gXoz0.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
 server {
-    if ($host = portal.gambitdriver.org) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
-    server_name portal.gambitdriver.org;
+    server_name portal.gambitdriver.org ;
 
     # Redirect all HTTP requests to HTTPS
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl http2;  # Enable HTTP/2
-    server_name portal.gambitdriver.org;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+    server_name portal.gambitdriver.org ;
 
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3111;  # Forward HTTPS requests to the HTTP port
@@ -131,13 +116,9 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
 }
 
-server {
-    if ($host = useradmin.springerelectronics.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
 
 
     listen 80;
@@ -147,16 +128,18 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
+location = /.well-known/acme-challenge/Z7osIKJfO04dCc9qFvunyLuPtTGP-bRM5mzuSD_Qo3o{default_type text/plain;return 200 Z7osIKJfO04dCc9qFvunyLuPtTGP-bRM5mzuSD_Qo3o.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
-server {
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
+
+
     listen 443 ssl;
     server_name useradmin.springerelectronics.com;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
 
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
    
 
     location / {
@@ -170,15 +153,11 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-
+location = /.well-known/acme-challenge/Z7osIKJfO04dCc9qFvunyLuPtTGP-bRM5mzuSD_Qo3o{default_type text/plain;return 200 Z7osIKJfO04dCc9qFvunyLuPtTGP-bRM5mzuSD_Qo3o.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
-server {
-    if ($host = api.springerelectronics.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
 
 
     listen 80;
@@ -191,7 +170,7 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
+location = /.well-known/acme-challenge/k34kQFU-vZJJrP46KHopBx855tTQyjKp16A6yVnI-c8{default_type text/plain;return 200 k34kQFU-vZJJrP46KHopBx855tTQyjKp16A6yVnI-c8.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
@@ -204,11 +183,14 @@ map $http_origin $cors_origin {
     "https://connect-api.duckdns.org" "$http_origin";
 }
 
-server {
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
+
+
     listen 443 ssl http2;  # Enable HTTP/2
     server_name api.springerelectronics.com;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     client_max_body_size 100M;
 
@@ -244,15 +226,11 @@ server {
         }
     }
 
-
-
+location = /.well-known/acme-challenge/k34kQFU-vZJJrP46KHopBx855tTQyjKp16A6yVnI-c8{default_type text/plain;return 200 k34kQFU-vZJJrP46KHopBx855tTQyjKp16A6yVnI-c8.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
-server {
-    if ($host = athena.springerelectronics.com) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
 
 
     listen 80;
@@ -262,15 +240,18 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
+location = /.well-known/acme-challenge/hvgfRX6Oe0rDEpvotutEytIS0jy0uTk3qnnKyNTqU8M{default_type text/plain;return 200 hvgfRX6Oe0rDEpvotutEytIS0jy0uTk3qnnKyNTqU8M.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
-server {
+server {rewrite ^(/.well-known/acme-challenge/.*) $1 break; # managed by Certbot
+
+
     listen 443 ssl;
     server_name athena.springerelectronics.com;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
     
     client_max_body_size 100M;
 
@@ -289,18 +270,12 @@ server {
         proxy_read_timeout 60s;
         send_timeout 60s;
     }
-
-
+location = /.well-known/acme-challenge/hvgfRX6Oe0rDEpvotutEytIS0jy0uTk3qnnKyNTqU8M{default_type text/plain;return 200 hvgfRX6Oe0rDEpvotutEytIS0jy0uTk3qnnKyNTqU8M.4hHa8-Lcs-892Ss4J9id9rsuMEvVVEjsfc2ZnpmVnYA;} # managed by Certbot
 
 }
 
 
 server {
-    if ($host = connect-portal.duckdns.org) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name connect-portal.duckdns.org;
 
@@ -308,16 +283,14 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl;
     server_name connect-portal.duckdns.org;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
 
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3111;  # Forward HTTPS requests to the HTTP port
@@ -330,16 +303,9 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-
 }
 
 server {
-    if ($host = connect-useradmin.duckdns.org) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name connect-useradmin.duckdns.org;
 
@@ -347,16 +313,14 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl;
     server_name connect-useradmin.duckdns.org;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
 
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
    
 
     location / {
@@ -370,16 +334,9 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-
 }
 
 server {
-    if ($host = connect-api.duckdns.org) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name connect-api.duckdns.org;
 
@@ -387,15 +344,14 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl;
     server_name connect-api.duckdns.org;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
 
     client_max_body_size 100M;
 
@@ -410,16 +366,9 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
-
-
 }
 
 server {
-    if ($host = connect-ws.duckdns.org) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name connect-ws.duckdns.org;
 
@@ -427,15 +376,14 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
-
 }
 
 server {
     listen 443 ssl;
     server_name connect-ws.duckdns.org;
-    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem; # managed by Certbot
+
+    ssl_certificate /etc/letsencrypt/live/cloud.springerelectronics.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.springerelectronics.com/privkey.pem;
     
     client_max_body_size 100M;
 
@@ -454,6 +402,4 @@ server {
         proxy_read_timeout 60s;
         send_timeout 60s;
     }
-
-
 }
