@@ -147,8 +147,8 @@
           const jwtToken = getCookie('jwt');
           async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
           const route_name = canonical_route_name.split("|")[1];
-          const api_url = "https://useradmin.springerelectronics.com/ws/" + dongle_id;
-          const uploadUrl = "https://api.springerelectronics.com/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
+          const api_url = "https://useradmin.konik.ai/ws/" + dongle_id;
+          const uploadUrl = "https://api.konik.ai/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
 
           const uploadCommand = {
             jsonrpc: "2.0",
@@ -191,7 +191,7 @@
         function deleteRoute(fullname) {
           const formattedFullname = fullname.replace('|', '/');
           
-          fetch(`https://api.springerelectronics.com/connectdata/delete/${formattedFullname}`, {
+          fetch(`https://api.konik.ai/connectdata/delete/${formattedFullname}`, {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json'
@@ -219,7 +219,7 @@
           const userConfirmed = confirm("Are you sure you want to delete this device? You will need to repair the device.");
           
           if (userConfirmed) {
-            fetch(`https://api.springerelectronics.com/connectdata/delete/${dongle_id}`, {
+            fetch(`https://api.konik.ai/connectdata/delete/${dongle_id}`, {
               method: 'DELETE',
               headers: {
                 'Content-Type': 'application/json'
