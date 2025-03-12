@@ -1,7 +1,7 @@
 This is an open-source alternative to openpilot connect for use with openpilot software.
-To see the server in action, go to: https://stable.konik.com/
+To see the server in action, go to: https://stable.konik.ai/
 
-Thank you https://konik.com for hosting!
+Thank you https://konik.ai for hosting!
 
 # To make your device connect to the server, complete the following steps:
 Note. There is no need to unpair the device from comma connect.
@@ -11,15 +11,15 @@ Note. There is no need to unpair the device from comma connect.
 
 * Step 3: Delete the device dongle ID by running rm /data/params/d/DongleId and rm /persist/comma/dongle_id
 
-If you are running a custom fork of openpilot that already has the code changes required, then you can reboot the device now and scan the qr code on the [website](https://stable.konik.com/) pair the device.
+If you are running a custom fork of openpilot that already has the code changes required, then you can reboot the device now and scan the qr code on the [website](https://stable.konik.ai/) pair the device.
 
 If you are using a fork that does not have the code changes, you will need to continue with the following steps:
 
 Step 4: export the server urls in launch_openpilot.sh by adding this to that file.
 ```bash
 #!/usr/bin/bash
-export API_HOST=https://api.springerelectronics.com
-export ATHENA_HOST=wss://athena.springerelectronics.com
+export API_HOST=https://api.konik.ai
+export ATHENA_HOST=wss://athena.konik.ai
 # Any other custom launch options here
 exec ./launch_chffrplus.sh
 ```

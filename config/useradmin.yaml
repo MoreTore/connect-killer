@@ -7,9 +7,9 @@ logger:
   # Enable pretty backtrace (sets RUST_BACKTRACE=1)
   pretty_backtrace: true
   # Log level, options: trace, debug, info, warn or error.
-  level: info
+  level: trace
   # Define the logging format. options: compact, pretty or Json
-  format: compact
+  format: pretty
   # By default the logger has filtering only logs that came from your code or logs that came from `loco` framework. to see all third party libraries
   # Uncomment the line below to override to see all third party libraries you can enable this config and override the logger filters.
   # override_filter: trace
@@ -48,7 +48,7 @@ server:
     cors:
       enable: false
       allow_origins:
-        - https://useradmin.springerelectronics.com
+        - https://useradmin.konik.ai
       allow_headers:
         - Authorization
         - Content-Type
