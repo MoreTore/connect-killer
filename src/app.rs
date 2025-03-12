@@ -75,6 +75,7 @@ impl Hooks for App {
             .add_route(controllers::connectincomming::routes())
             .add_route(controllers::connectdata::routes())
             .add_route(controllers::v1::routes())
+            .add_route(controllers::directions::routes())
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {

@@ -20,6 +20,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 
 use crate::{
     models::{
@@ -30,6 +31,51 @@ use crate::{
     },
 };
 
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("database error: {0}")]
+    Database(#[from] sea_orm::DbErr),
+    #[error("device not found")]
+    DeviceNotFound,
+    #[error("failed to send message to device: {0}")]
+    SendFailed(String),
+    #[error("serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
+    #[error("websocket error: {0}")]
+    WebSocketError(#[from] axum::Error),
+    #[error("timeout")]
+    Timeout,
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Error::DeviceNotFound => (axum::http::StatusCode::NOT_FOUND, "Device not found").into_response(),
+            Error::Timeout => (axum::http::StatusCode::REQUEST_TIMEOUT, "Timed out").into_response(),
+            Error::Unauthorized(msg) => (axum::http::StatusCode::UNAUTHORIZED, msg).into_response(),
+            _ => {
+                tracing::error!("Unhandled error: {:?}", self);
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error",
+                )
+                    .into_response()
+            }
+        }
+    }
+}
+pub type Result<T> = std::result::Result<T, Error>;
+
+fn generate_request_id() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct JsonRpcRequest {
     pub method: String,
@@ -38,13 +84,14 @@ pub struct JsonRpcRequest {
     pub id: u64,
 }
 
+
 impl Default for JsonRpcRequest {
     fn default() -> Self {
         Self {
             method: "".to_string(),
             params: None,
             jsonrpc: "2.0".to_string(),
-            id: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64,
+            id: generate_request_id(),
         }
     }
 }
@@ -80,23 +127,24 @@ async fn handle_jsonrpc_request(
     State(ctx): State<AppContext>,
     Extension(manager): Extension<Arc<ConnectionManager>>,
     Json(mut payload): Json<JsonRpcRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse> {
     let is_sensitive_method = payload.method == "takeSnapshot".to_string();
     if let Some(user_model) = auth.user_model {
         if !user_model.superuser || is_sensitive_method {
             DM::ensure_user_device(&ctx.db, user_model.id, &endpoint_dongle_id).await?;
         }
     } else {
-        return loco_rs::controller::unauthorized("Devices can't do this");
+        return Err(Error::Unauthorized("Devices can't do this".to_string()));
     }
     
-    let now_id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
+    let now_id = generate_request_id();
     payload.id += now_id; // roll over is ok
-    let message = Message::Text(serde_json::to_string(&payload).unwrap());
+    let message = Message::Text(serde_json::to_string(&payload)?);
 
-    if let Err(_e) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
-        return loco_rs::controller::bad_request("Device not connected");
-    }
+    // if let Err(_e) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
+    //     return loco_rs::controller::bad_request("Device not connected");
+    // }
+    forward_command_to_device(&endpoint_dongle_id, &manager, &message).await?;
 
     let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(1);
     {
@@ -108,9 +156,7 @@ async fn handle_jsonrpc_request(
         match time::timeout(Duration::from_secs(30), response_rx.recv()).await {
             Ok(Some(mut response)) => {
                 response.id -= now_id;
-                //let mut clients = manager.clients.lock().await;
-                //clients.remove(&now_id);
-                return format::json(response)
+                return Ok(format::json(response));
             },
             Ok(None) => {
                 // Acknowledge and continue waiting for a valid response
@@ -118,24 +164,39 @@ async fn handle_jsonrpc_request(
             },
             Err(_e) => {
                 // Remove client on timeout
-                //let mut clients = manager.clients.lock().await;
-                //clients.remove(&now_id);
-                return loco_rs::controller::bad_request("timed out");
+                let mut clients = manager.clients.lock().await;
+                clients.remove(&now_id);
+                return Err(Error::Timeout);
             },
         }
     }
 }
 
-async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
+// async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
+//     let mut devices = manager.devices.lock().await;
+//     if let Some(device_sender) = devices.get_mut(endpoint_dongle_id) {
+//         device_sender.send(message.clone()).await.map_err(|_e| {
+//             axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
+//         })
+//     } else {
+//         tracing::trace!("No device found for client ID {}", endpoint_dongle_id);
+//         Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Device not found")))
+//     }
+// }
+
+async fn forward_command_to_device(
+    endpoint_dongle_id: &str,
+    manager: &Arc<ConnectionManager>,
+    message: &Message,
+) -> Result<()> {
     let mut devices = manager.devices.lock().await;
-    if let Some(device_sender) = devices.get_mut(endpoint_dongle_id) {
-        device_sender.send(message.clone()).await.map_err(|_e| {
-            axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
-        })
-    } else {
-        tracing::trace!("No device found for client ID {}", endpoint_dongle_id);
-        Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Device not found")))
-    }
+    let device_sender = devices.get_mut(endpoint_dongle_id).ok_or(Error::DeviceNotFound)?;
+
+    device_sender
+        .send(message.clone())
+        .await
+        .map_err(|e| Error::SendFailed(e.to_string()))?;
+    Ok(())
 }
 
 async fn exit_handler(
@@ -144,21 +205,26 @@ async fn exit_handler(
     jwt_identity: String,
     manager: Arc<ConnectionManager>,
 ) {
-    let _is_device = jwt_identity == endpoint_dongle_id;
+    let is_device = jwt_identity == endpoint_dongle_id;
     {
-        tracing::debug!("Removing device to manager: {}", endpoint_dongle_id);
-        let mut connections: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
+        tracing::debug!("Removing device from manager: {}", endpoint_dongle_id);
+        let mut connections = manager.devices.lock().await;
         connections.remove(&endpoint_dongle_id);
     } // unlock
-    let device = match  DM::find_device(&ctx.db, &endpoint_dongle_id).await {
-        Ok(device) => device,
-        Err(_) => return,
-    };
-    let mut device_active_model = device.into_active_model();
-    device_active_model.online = ActiveValue::Set(false);
-    match device_active_model.update(&ctx.db).await {
-        Ok(_) => (),
-        Err(_e) => return,
+    // let mut clients = manager.clients.lock().await;
+    // clients.retain(|_id, tx| {
+    //     // Iterate and check if the sender is still connected.  If not, remove.
+    //     !tx.is_closed()
+    // });
+    // drop(clients); // Release lock before database operation
+    if is_device {
+        if let Ok(device) = DM::find_device(&ctx.db, &endpoint_dongle_id).await {
+            let mut device_active_model = device.into_active_model();
+            device_active_model.online = ActiveValue::Set(false);
+            if let Err(e) = device_active_model.update(&ctx.db).await {
+                tracing::error!("Failed to update device status: {:?}", e);
+            }
+        }
     }
 }
 
@@ -191,7 +257,7 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let _is_registered = DM::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
+    //let _is_registered = DM::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
 
     let (sender, mut receiver) = socket.split();
 
@@ -292,7 +358,6 @@ pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>, db: &Data
             }
         }
     }
-
 }
 
 pub async fn send_reset( // called from crate::middleware::auth

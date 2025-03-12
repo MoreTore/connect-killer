@@ -46,6 +46,9 @@ impl DM {
                     imei2: params.imei2,
                     serial: params.serial,
                     uploads_allowed: true,
+                    prime: true,
+                    prime_type: 2,
+                    alias: "Please set to discord username".to_string(),
                     ..Default::default()
                 };
                 device.into_active_model().insert(&txn).await?;

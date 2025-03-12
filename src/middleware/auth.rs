@@ -18,6 +18,7 @@ use super::jwt;
 use crate::models::{devices::DM, users::UM};
 // Define constants for token prefix and authorization header
 const QUERY_TOKEN_PREFIX: &str = "sig";
+const QUERY_TOKEN_PREFIX_DIRECTIONS: &str = "access_token";
 const TOKEN_PREFIX: &str = "JWT ";
 const AUTH_HEADER: &str = "Authorization";
 const AUTH_COOKIE_NAME: &str = "jwt";
@@ -206,7 +207,11 @@ fn extract_token(parts: &mut Parts) -> Result<String, AuthError> {
         })
         .or_else(|_| {
             // If extracting from cookies fails, attempt to extract from the authorization header
-            extract_token_from_header(&parts.headers)
+            extract_token_from_header(&parts.headers)     
+        })
+        .or_else(|_| {
+            // If extracting from the authorization header fails, attempt to extract from the query string
+            extract_token_from_query(QUERY_TOKEN_PREFIX_DIRECTIONS, parts)
                 .map_err(|e| handle_unauth(parts, &e))
         })
 }

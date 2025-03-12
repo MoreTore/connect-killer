@@ -26,9 +26,9 @@ use capnp::{
     serialize::{read_message, write_message}
 };
 
-use log_capnp::event as LogEvent;
-use crate::common;
 use crate::cereal::log_capnp;
+use crate::common;
+use crate::cereal::{log_capnp::event as LogEvent};
 use crate::models::_entities::{devices, routes, segments};
 
 pub struct LogSegmentWorker {
@@ -63,11 +63,12 @@ impl LockManager {
     }
 
     pub async fn acquire_advisory_lock(&self, _db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
-        // This is the local server lock
+        let start_time = Instant::now();
+
         let mut keys = self.keys.lock().await;
         while keys.contains_key(&key) {
-            // Drop the lock before awaiting and re-acquire it after being notified
             drop(keys);
+            let wait_start = Instant::now();
             self.notify.notified().await;
             keys = self.keys.lock().await;
         }
@@ -87,10 +88,11 @@ impl LockManager {
 
     pub async fn release_advisory_lock(&self, _db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
         let mut keys = self.keys.lock().await;
+        
         if keys.remove(&key).is_some() {
-            // Notify all waiting threads that a key has been removed
             self.notify.notify_waiters();
         }
+
         // tracing::trace!("Releasing advisory lock with key: {}", key);
         // let sql = format!("SELECT pg_advisory_unlock({})", key);
         // db.execute(Statement::from_string(db.get_database_backend(), sql)).await?;
@@ -104,7 +106,18 @@ impl LockManager {
 impl worker::AppWorker<LogSegmentWorkerArgs> for LogSegmentWorker {
     fn build(ctx: &AppContext) -> Self {
         static LOCK_MANAGER: Lazy<Arc<LockManager>> = Lazy::new(|| Arc::new(LockManager::new()));
-        pub static CLIENT: Lazy<Arc<Client>> = Lazy::new(|| Arc::new(Client::new()));
+        //pub static CLIENT: Lazy<Arc<Client>> = Lazy::new(|| Arc::new(Client::new()));
+        pub static CLIENT: Lazy<Arc<Client>> = Lazy::new(|| {
+            Arc::new(
+                Client::builder()
+                    .tcp_nodelay(true)
+                    .connect_timeout(std::time::Duration::from_secs(1))
+                    .timeout(std::time::Duration::from_secs(1)) // Response timeout
+                    .pool_idle_timeout(Some(std::time::Duration::from_secs(10)))
+                    .build()
+                    .expect("Failed to create HTTP client")
+            )
+        });
         Self { ctx: ctx.clone(), lock_manager: Arc::clone(&LOCK_MANAGER) , client: Arc::clone(&CLIENT)}
     }
 }
@@ -117,7 +130,6 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         tracing::trace!("Starting QlogParser for URL: {}", args.internal_file_url);
         let client = self.client.clone();
         let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
-
         // check if the device is in the database
         let _device_model = match devices::Model::find_device(&self.ctx.db, &args.dongle_id).await {
             Ok(device) => device,
@@ -423,7 +435,7 @@ struct QLogResult {
     git_remote: String,
     git_commit: String,
     openpilot_version: String,
-    device_type: crate::cereal::log_capnp::init_data::DeviceType,
+    device_type: log_capnp::init_data::DeviceType,
     start_time: i64,
     end_time: i64,
     total_time: i64,
@@ -437,12 +449,27 @@ impl Default for QLogResult {
             git_remote: "".to_string(),
             git_commit: "".to_string(),
             openpilot_version: "".to_string(),
-            device_type: crate::cereal::log_capnp::init_data::DeviceType::Unknown,
+            device_type: log_capnp::init_data::DeviceType::Unknown,
             start_time: -1,
             end_time: -1,
             total_time: 0,
         }
     }
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct StateData {
+    state: String,
+    enabled: bool,
+    alertStatus: i8,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
+struct JsonEvent {
+    r#type: String,
+    time: u64,
+    route_offset_millis:u64,
+    data: StateData,
 }
 
 async fn parse_qlog(
@@ -476,6 +503,7 @@ async fn parse_qlog(
     let mut last_lat = None;
     let mut last_lng = None;
     let mut coordinates: Vec<serde_json::Value> = Vec::new();
+    let mut events: Vec<serde_json::Value> = Vec::new();
     let mut qlog_result = QLogResult{..Default::default()};
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
@@ -487,9 +515,9 @@ async fn parse_qlog(
                 continue; // Skip this iteration if matching fails
             }
             Ok(event_type) => {
+                let log_mono_time = event.get_log_mono_time();
                 match event_type {
                     LogEvent::GpsLocationExternal(gps) | LogEvent::GpsLocation(gps)=> {
-                        let log_mono_time = event.get_log_mono_time();
                         if let Ok(gps) = gps {
                             let gps_ts = gps.get_unix_timestamp_millis();
                             if (gps.get_flags() % 2 == 1) || gps.get_has_fix() { // has fix
@@ -578,11 +606,64 @@ async fn parse_qlog(
                                 .map_or_else(String::new, |d| d.to_string().unwrap_or_default());
                             qlog_result.device_type = init_data
                                 .get_device_type().ok()
-                                .map_or(crate::cereal::log_capnp::init_data::DeviceType::Unknown, |d| d);
+                                .map_or(log_capnp::init_data::DeviceType::Unknown, |d| d);
                         }
         
                         writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
-                    },
+                    }
+                    LogEvent::OnroadEvents(onroad_event) => {
+                        if let Ok(onroad_event) = onroad_event {
+                            if onroad_event.len() == 0 {
+                                continue;
+                            }
+                            for car_event in onroad_event.iter() {
+                                let mut state = "disabled";
+                                let mut enabled: bool = false;
+                                let mut alert_status = 0;
+                                let no_entry = car_event.get_no_entry();
+                                let warning = car_event.get_warning();
+                                let user_disable = car_event.get_user_disable();
+                                let soft_disable = car_event.get_soft_disable();
+                                let immediate_disable = car_event.get_immediate_disable();
+                                let pre_enable = car_event.get_pre_enable();
+                                let permanent = car_event.get_permanent();
+                                let overridden = car_event.get_override_lateral() || car_event.get_override_longitudinal();
+                                if car_event.get_enable() || car_event.get_pre_enable() {
+                                    state = "enabled";
+                                    enabled = true;
+                                }
+                                if overridden {
+                                    state = "overriding";
+                                    enabled = true
+                                }
+                                if car_event.get_user_disable() || car_event.get_soft_disable() || car_event.get_immediate_disable() {
+                                    state = "disabled";
+                                }
+                                if immediate_disable {
+                                    alert_status = 2;
+                                }
+                                if soft_disable || warning {
+                                    alert_status = 1;
+                                }
+
+                                if let Some(onroad_mono_time) = onroad_mono_time{
+                                    events.push(
+                                        serde_json::json!({
+                                            "type": "state",
+                                            "time": log_mono_time,
+                                            "route_offset_millis": (log_mono_time - onroad_mono_time) / 1000000,
+                                            "data": {
+                                                "state": state,
+                                                "enabled": enabled,
+                                                "alertStatus": alert_status,
+                                            }
+                                        })
+                                    )
+                                }
+                            }
+                        }
+                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
+                    }
                     LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
@@ -592,7 +673,6 @@ async fn parse_qlog(
                     LogEvent::LiveTorqueParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::ManagerState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::NavInstruction(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::OnroadEvents(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::UploaderState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     LogEvent::QcomGnss(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
                     _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
@@ -607,10 +687,16 @@ async fn parse_qlog(
         seg.miles = ActiveValue::Set((total_meters_traveled*0.000621371) as f32);
     }
 
-    let json_url = common::mkv_helpers::get_mkv_file_url(
+    let coords_url = common::mkv_helpers::get_mkv_file_url(
         &format!("{}_{}--{}--coords.json", args.dongle_id, args.timestamp, args.segment)
     );
-    upload_data(client, &json_url, serde_json::to_vec(&coordinates).map_err(Box::from)?).await?;
+
+    let events_url = common::mkv_helpers::get_mkv_file_url(
+        &format!("{}_{}--{}--events.json", args.dongle_id, args.timestamp, args.segment)
+    );
+
+    upload_data(client, &coords_url, serde_json::to_vec(&coordinates).map_err(Box::from)?).await?;
+    upload_data(client, &events_url, serde_json::to_vec(&events).map_err(Box::from)?).await?;
     upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog").replace(".zst", ".unlog"), unlog_data).await?;
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
