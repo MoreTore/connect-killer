@@ -28,7 +28,7 @@ use capnp::{
 
 use crate::cereal::log_capnp;
 use crate::common;
-use crate::cereal::{log_capnp::event as LogEvent};
+use crate::cereal::log_capnp::event as LogEvent;
 use crate::models::_entities::{devices, routes, segments};
 
 pub struct LogSegmentWorker {
@@ -141,7 +141,8 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 
         let canonical_route_name = format!("{}|{}", args.dongle_id, args.timestamp);
         let key = super::log_helpers::calculate_advisory_lock_key(&canonical_route_name);
-        lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
+        lock_manager.acquire_advisory_lock(&self.ctx.db, key).await
+            .map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lock aquired
 
         let route_model = match routes::Model::find_route(&self.ctx.db,  &canonical_route_name).await {
             Ok(route) => route,
@@ -171,12 +172,14 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 }
             }
         };
-        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
+        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await
+            .map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
 
 
         let canonical_name = format!("{}|{}--{}", args.dongle_id, args.timestamp, args.segment);
         let key = super::log_helpers::calculate_advisory_lock_key(&canonical_name);
-        self.lock_manager.acquire_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lok aquired
+        self.lock_manager.acquire_advisory_lock(&self.ctx.db, key).await
+            .map_err(|e| sidekiq::Error::Message(format!("Failed to aquire advisory lock: {}", e)))?; // blocks here until lock aquired
         let segment = match segments::Model::find_one(&self.ctx.db, &canonical_name).await {
             Ok(segment) => segment, // The segment was added previously so here is the row.
             Err(e) => {  // Need to add the segment now.
@@ -256,9 +259,15 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                     args.segment,
                     args.file));
             }
-            "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
-            "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)),
+            "fcamera.hevc" =>   seg.fcam_url = ActiveValue::Set(
+                format!("{api_endpoint}/connectdata/fcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)
+            ),
+            "dcamera.hevc" =>   seg.dcam_url = ActiveValue::Set(
+                format!("{api_endpoint}/connectdata/dcam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)
+            ),
+            "ecamera.hevc" =>   seg.ecam_url = ActiveValue::Set(
+                format!("{api_endpoint}/connectdata/ecam/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file)
+            ),
             f => {
                 tracing::error!("Got invalid file type: {}", f);
                 ignore_uploads = Some(true);
@@ -298,7 +307,9 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
                 return Err(sidekiq::Error::Message(e.to_string()));
             }
         }
-        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await.map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e)))?;
+        self.lock_manager.release_advisory_lock(&self.ctx.db, key).await
+            .map_err(|e| sidekiq::Error::Message(format!("Failed to release advisory lock: {}", e))
+        )?;
 
         //active_device_model.update(&self.ctx.db).await.map_err(|e| sidekiq::Error::Message(e.to_string()))?;
         tracing::info!("Completed unlogging: {} in {:?}", args.internal_file_url, start_time.elapsed());
@@ -409,7 +420,10 @@ async fn handle_qlog(
     ctx: &AppContext,
     client: &Client
 ) -> worker::Result<QLogResult> {
-    let bytes_stream = response.bytes_stream().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    let bytes_stream = response
+        .bytes_stream()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)
+    );
     let stream_reader = StreamReader::new(bytes_stream);
     let mut decoder: std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> = if args.file.ends_with(".bz2") {
         Box::pin(bufread::BzDecoder::new(stream_reader))
@@ -507,12 +521,15 @@ async fn parse_qlog(
     let mut qlog_result = QLogResult{..Default::default()};
 
     while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, ReaderOptions::default()) {
-        let event = message_reader.get_root::<LogEvent::Reader>().map_err(Box::from)?;
+        let event = match message_reader.get_root::<LogEvent::Reader>() {
+            Ok(event) => event,
+            Err(e) => {tracing::warn!("Failed to get root: {:?}", e); continue}, // Skip parsing if we can't get the root
+        };
 
         match event.which() {
             Err(e) => {
-                tracing::warn!("Event type not in schema: {:?}", e);
-                continue; // Skip this iteration if matching fails
+                //tracing::trace!("Event type not in schema: {:?}", e);
+                continue; // Skip this iteration if matching fails. This happends often
             }
             Ok(event_type) => {
                 let log_mono_time = event.get_log_mono_time();
@@ -562,7 +579,7 @@ async fn parse_qlog(
                                 seg.end_time_utc_millis = ActiveValue::Set(gps_ts);
                             }
                         }
-                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
+                        writeln!(unlog_data, "{:#?}", event).ok();
                     }
                     LogEvent::DeviceState(device_state) => {
                         if let Ok(device_state) = device_state {
@@ -571,7 +588,7 @@ async fn parse_qlog(
                                 onroad_mono_time = Some(device_state.get_started_mono_time());
                             }
                         }
-                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+                        writeln!(unlog_data, "{:#?}", event).ok();
                     }
                     LogEvent::Thumbnail(thumbnail) => {
                         // take the jpg and add it to the array of the other jpgs.
@@ -588,7 +605,7 @@ async fn parse_qlog(
                             .ok()
                             .and_then(|params| params.get_car_fingerprint().ok())
                             .map_or_else(String::new, |fp| fp.to_string().unwrap_or_default());
-                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+                        writeln!(unlog_data, "{:#?}", event).ok();
                     }
                     LogEvent::InitData(init_data) => {
                         if let Ok(init_data) = init_data {
@@ -609,7 +626,7 @@ async fn parse_qlog(
                                 .map_or(log_capnp::init_data::DeviceType::Unknown, |d| d);
                         }
         
-                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?
+                        writeln!(unlog_data, "{:#?}", event).ok();
                     }
                     LogEvent::OnroadEvents(onroad_event) => {
                         if let Ok(onroad_event) = onroad_event {
@@ -662,19 +679,19 @@ async fn parse_qlog(
                                 }
                             }
                         }
-                        writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?;
+                        writeln!(unlog_data, "{:#?}", event).ok();
                     }
-                    LogEvent::PandaStates(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::Can(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::Sendcan(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::ErrorLogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::LogMessage(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::LiveParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::LiveTorqueParameters(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::ManagerState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::NavInstruction(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::UploaderState(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
-                    LogEvent::QcomGnss(_) => writeln!(unlog_data, "{:#?}", event).map_err(Box::from)?,
+                    LogEvent::PandaStates(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::Can(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::Sendcan(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::ErrorLogMessage(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::LogMessage(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::LiveParameters(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::LiveTorqueParameters(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::ManagerState(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::NavInstruction(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::UploaderState(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
+                    LogEvent::QcomGnss(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
                     _ => continue, //writeln!(writer, "{:#?}", event).map_err(Box::from)?, // unlog everything?
                 }
             }
@@ -694,10 +711,16 @@ async fn parse_qlog(
     let events_url = common::mkv_helpers::get_mkv_file_url(
         &format!("{}_{}--{}--events.json", args.dongle_id, args.timestamp, args.segment)
     );
+    
+    upload_data(client, &coords_url, serde_json::to_vec(&coordinates).unwrap_or_default()).await;
+    upload_data(client, &events_url, serde_json::to_vec(&events).unwrap_or_default()).await;
+    upload_data(&client, 
+        &args.internal_file_url
+            .replace(".bz2", ".unlog")
+            .replace(".zst", ".unlog"),
+        unlog_data
+    ).await;
 
-    upload_data(client, &coords_url, serde_json::to_vec(&coordinates).map_err(Box::from)?).await?;
-    upload_data(client, &events_url, serde_json::to_vec(&events).map_err(Box::from)?).await?;
-    upload_data(&client, &args.internal_file_url.replace(".bz2", ".unlog").replace(".zst", ".unlog"), unlog_data).await?;
     let img_proc_start = Instant::now();
     if !thumbnails.is_empty() {
         // Downscale each thumbnail in parallel
@@ -730,7 +753,7 @@ async fn parse_qlog(
         let img_bytes = {
             let mut img_bytes: Vec<u8> = Vec::new();
             let mut encoder = JpegEncoder::new_with_quality(&mut img_bytes, 80);
-            encoder.encode_image(&DynamicImage::ImageRgba8(final_img)).map_err(Box::from)?;
+            encoder.encode_image(&DynamicImage::ImageRgba8(final_img)).ok();
             img_bytes
         };
 
@@ -738,7 +761,7 @@ async fn parse_qlog(
             &format!("{}_{}--{}--sprite.jpg", args.dongle_id, args.timestamp, args.segment)
         );
         tracing::trace!("Image proc took: {:?}", img_proc_start.elapsed());
-        upload_data(client, &sprite_url, img_bytes).await?;
+        upload_data(client, &sprite_url, img_bytes).await;
     }
 
     qlog_result.total_time = coordinates
@@ -750,18 +773,12 @@ async fn parse_qlog(
     Ok(qlog_result)
 }
 
-async fn upload_data(client: &Client, url: &str, body: Vec<u8>) -> worker::Result<()> {
-    let response = client.put(url)
-        .body(body)
-        .send().await
-        .map_err(Box::from)?;
-
-    if !response.status().is_success() {
-        tracing::debug!("Response status: {}", response.status());
-        return Err(sidekiq::Error::Message(format!("Failed to upload data to {}. Status code {}", url, response.status())));
+async fn upload_data(client: &Client, url: &str, body: Vec<u8>) {
+    if let Err(e) = client.put(url).body(body).send().await {
+        tracing::error!("Request to {} failed: {}", url, e);
+    } else {
+        tracing::debug!("Uploaded data to {}", url);
     }
-    tracing::debug!("Uploaded {url} Response status: {}", response.status());
-    Ok(())
 }
 
 async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
