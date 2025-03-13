@@ -14,8 +14,8 @@ use axum::{
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
 use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use tokio::sync::{RwLock, Mutex};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::time::{self, Duration};
@@ -26,7 +26,6 @@ use crate::{
     models::{
         _entities,
         devices::DM,
-        users::UM,
         device_msg_queues::DMQM,
     },
 };
@@ -97,7 +96,7 @@ impl Default for JsonRpcRequest {
 }
 
 #[derive(Deserialize, Serialize)]
-struct JsonRpcResponse {
+pub struct JsonRpcResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -109,6 +108,7 @@ struct JsonRpcResponse {
 pub struct ConnectionManager {
     pub devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
     pub clients: Mutex<HashMap<u64, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
+    pub cloudlog_cache: RwLock<HashMap<String, VecDeque<u8>>>,
 }
 
 impl ConnectionManager {
@@ -116,6 +116,7 @@ impl ConnectionManager {
         Arc::new(Self {
             devices: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
+            cloudlog_cache: RwLock::new(HashMap::new()),
         })
     }
 }
@@ -141,9 +142,6 @@ async fn handle_jsonrpc_request(
     payload.id += now_id; // roll over is ok
     let message = Message::Text(serde_json::to_string(&payload)?);
 
-    // if let Err(_e) = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await {
-    //     return loco_rs::controller::bad_request("Device not connected");
-    // }
     forward_command_to_device(&endpoint_dongle_id, &manager, &message).await?;
 
     let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(1);
@@ -172,18 +170,6 @@ async fn handle_jsonrpc_request(
     }
 }
 
-// async fn forward_command_to_device(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>, message: &Message) -> Result<(), axum::Error> {
-//     let mut devices = manager.devices.lock().await;
-//     if let Some(device_sender) = devices.get_mut(endpoint_dongle_id) {
-//         device_sender.send(message.clone()).await.map_err(|_e| {
-//             axum::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to send message to device"))
-//         })
-//     } else {
-//         tracing::trace!("No device found for client ID {}", endpoint_dongle_id);
-//         Err(axum::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Device not found")))
-//     }
-// }
-
 async fn forward_command_to_device(
     endpoint_dongle_id: &str,
     manager: &Arc<ConnectionManager>,
@@ -210,13 +196,7 @@ async fn exit_handler(
         tracing::debug!("Removing device from manager: {}", endpoint_dongle_id);
         let mut connections = manager.devices.lock().await;
         connections.remove(&endpoint_dongle_id);
-    } // unlock
-    // let mut clients = manager.clients.lock().await;
-    // clients.retain(|_id, tx| {
-    //     // Iterate and check if the sender is still connected.  If not, remove.
-    //     !tx.is_closed()
-    // });
-    // drop(clients); // Release lock before database operation
+    } // unlock the mutex
     if is_device {
         if let Ok(device) = DM::find_device(&ctx.db, &endpoint_dongle_id).await {
             let mut device_active_model = device.into_active_model();
@@ -228,27 +208,6 @@ async fn exit_handler(
     }
 }
 
-// async fn reset_dongle(endpoint_dongle_id: &str, manager: &Arc<ConnectionManager>) -> () {
-//     let json_request = JsonRpcRequest {
-//         method: "resetDongle".to_string(),
-//         params: Some(serde_json::json!({})),
-//         jsonrpc: "2.0".to_string(),
-//         id: 1,
-//     };
-//     match serde_json::to_string(&json_request) {
-//         Ok(json_message) => {
-//             let ws_message = Message::Text(json_message);
-//             tracing::info!("Device not registered. Reseting DongleId: {}", endpoint_dongle_id);
-//             if let Err(e) = forward_command_to_device(&endpoint_dongle_id, &manager, &ws_message).await {
-//                 tracing::error!("Failed to forward command to device: {}", e);
-//             }
-//         },
-//         Err(e) => {
-//             tracing::trace!("Failed to serialize JSON-RPC request: {}", e);
-//         }
-//     }
-// }
-
 async fn handle_socket(
     ctx: &AppContext,
     socket: WebSocket,
@@ -257,8 +216,6 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    //let _is_registered = DM::find_device(&ctx.db, &endpoint_dongle_id).await.is_ok();
-
     let (sender, mut receiver) = socket.split();
 
     if is_device {
@@ -306,12 +263,17 @@ async fn handle_socket(
                 }
                 // handle other things
             }
-            Message::Binary(_bin) => {
-                // let response: JsonRpcResponse = serde_json::from_str(&bin).unwrap();
-                // let mut clients = manager.clients.lock().await;
-                // if let Some(client_sender) = clients.remove(&endpoint_dongle_id) {
-                //     let _ = client_sender.send(response).await;
-                // }
+            Message::Binary(bin) => { // lots of cloudlogs coming in here. Maybe send it to the web interface client for real-time rollout monitoring
+                let mut cloudlog_cache = manager.cloudlog_cache.write().await;
+                tracing::info!("Appending binary data for {}", endpoint_dongle_id);
+                // Get or create entry in cloudlog_cache
+                let entry = cloudlog_cache.entry(endpoint_dongle_id.clone()).or_insert(VecDeque::new());
+                // Append new data
+                entry.extend(bin);
+                // Ensure we don’t exceed 50 entries
+                while entry.len() > 50 {
+                    entry.pop_front(); // Remove oldest data
+                }
             }
         }
     }

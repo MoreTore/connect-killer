@@ -37,6 +37,12 @@ pub struct BootlogsTemplate {
 }
 
 #[derive(Serialize)]
+pub struct CloudlogsTemplate {
+    pub defined: bool,
+    pub cloudlogs: Vec<serde_json::Value>
+}
+
+#[derive(Serialize)]
 pub struct SegmentsTemplate {
     pub defined: bool,
     pub segments: Vec<_entities::segments::Model>,
@@ -53,6 +59,7 @@ pub struct MasterTemplate {
     pub devices: Option<DevicesTemplate>,
     pub routes: Option<RoutesTemplate>,
     pub bootlogs: Option<BootlogsTemplate>,
+    pub cloudlogs: Option<CloudlogsTemplate>,
 }
 
 pub async fn onebox_handler(
@@ -60,6 +67,7 @@ pub async fn onebox_handler(
     ViewEngine(v): ViewEngine<TeraView>,
     State(ctx): State<AppContext>,
     Query(params): Query<OneBox>,
+    Extension(manager): Extension<std::sync::Arc<super::ws::ConnectionManager>>,
 ) -> Result<impl IntoResponse> {
     
     let user_model = match auth.user_model {
@@ -109,6 +117,30 @@ pub async fn onebox_handler(
         master_template.users = Some(UsersTemplate {
             defined: true,
             users: vec![user_model.clone()],
+        });
+    }
+
+    // Parse cloudlogs from the connection manager's cache and add them to the template if available.
+    if let Some(ref d_id) = dongle_id {
+        let cloudlogs = {
+            let cloudlog_cache = manager.cloudlog_cache.read().await;
+            if let Some(data) = cloudlog_cache.get(d_id) {
+                // Convert VecDeque<u8> to Vec<u8>
+                let binary_data: Vec<u8> = data.iter().cloned().collect();
+                // Convert the binary data into a UTF-8 string.
+                let json_str = String::from_utf8(binary_data).unwrap_or_else(|_| String::new());
+                // Parse the string as JSON; if it’s an array, use it, otherwise return an empty vector.
+                match serde_json::from_str::<serde_json::Value>(&json_str) {
+                    Ok(serde_json::Value::Array(arr)) => arr,
+                    _ => vec![],
+                }
+            } else {
+                vec![]
+            }
+        };
+        master_template.cloudlogs = Some(CloudlogsTemplate {
+            defined: !cloudlogs.is_empty(),
+            cloudlogs: cloudlogs,
         });
     }
 

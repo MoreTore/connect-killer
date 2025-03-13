@@ -345,6 +345,46 @@ async fn delete_data(
     return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response()); 
 }
 
+
+pub async fn get_cloudlog_cache(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Extension(manager): Extension<std::sync::Arc<super::ws::ConnectionManager>>,
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
+    // Check if the authenticated user is authorized to access the data
+    if let Some(user_model) = auth.user_model {
+        let device_model = DM::find_device(&ctx.db, &dongle_id).await.map_err(|_| (StatusCode::UNAUTHORIZED, "Device not found"))?;
+        
+        if !user_model.superuser {
+            if let Some(owner_id) = device_model.owner_id {
+                if user_model.id != owner_id {
+                    return Err((StatusCode::UNAUTHORIZED, "You are not the owner"));
+                }
+            } else {
+                return Err((StatusCode::UNAUTHORIZED, "Only registered devices can upload"));
+            }
+        }
+    } else {
+        return Err((StatusCode::FORBIDDEN, "Devices can't do this"));
+    }
+
+    // Retrieve stored cloudlog data from the manager.
+    let cloudlog_cache = manager.cloudlog_cache.read().await;
+
+    if let Some(data) = cloudlog_cache.get(&dongle_id) {
+        // Convert VecDeque<u8> to Vec<u8> for the response.
+        let binary_data: Vec<u8> = data.iter().cloned().collect();
+        Ok((
+            StatusCode::OK,
+            [("Content-Type", "application/octet-stream")],
+            binary_data,
+        ))
+    } else {
+        Err((StatusCode::NOT_FOUND, "No binary data found for this dongle"))
+    }
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("connectdata")
@@ -357,4 +397,5 @@ pub fn routes() -> Routes {
         .add("/delete/:dongle_id/:timestamp", delete(delete_route))
         .add("/logs/", get(render_segment_ulog))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
+        .add("/:dongle_id/cloudlogs", get(get_cloudlog_cache))
 }

@@ -592,7 +592,25 @@
   </table>
   {% endif %}
 
-  
+  {% if cloudlogs.defined is defined %}
+  <hr>
+  <b>cloud logs cache:</b><br>
+  <table id="table_cloudlogs">
+    <tbody>
+      <tr>
+        <td style="white-space: nowrap">Cloud log</td>
+      </tr>
+      {% for log in cloudlogs.cloudlogs %}
+      <tr>
+        <td style="white-space: nowrap">
+          <a href="{{ bootlog.unlog_url }}">
+            {{ log }}
+          </a>
+        </td>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 
   <hr>
   <a href="/auth/logout">Sign out</a>
