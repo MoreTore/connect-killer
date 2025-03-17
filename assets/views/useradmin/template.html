@@ -34,6 +34,7 @@
             padding: 10px;
             text-align: left;
             border-bottom: 1px solid #ddd;
+            vertical-align: top;
         }
     
         th {
@@ -144,9 +145,10 @@
             const parts = value.split(`; ${name}=`);
             if (parts.length === 2) return parts.pop().split(';').shift();
           }
-          const jwtToken = getCookie('jwt');
-          async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
+          
+        async function uploadFile(dongle_id, segment_number, canonical_route_name, file, segment_num, file_type) {
           const route_name = canonical_route_name.split("|")[1];
+          const jwtToken = getCookie('jwt');
           const api_url = "https://useradmin.konik.ai/ws/" + dongle_id;
           const uploadUrl = "https://api.konik.ai/connectincoming/" + dongle_id + "/" + route_name + "/" + segment_num + "/" + file + "?sig=" + jwtToken;
 
@@ -167,8 +169,8 @@
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `JWT ${jwtToken}` // Include the JWT token in the Authorization header
               },
+              credentials: 'include',
               body: JSON.stringify(uploadCommand)
             });
 
@@ -283,6 +285,45 @@
           });
         });
       </script>
+      <script>
+          async function loadModuleLogs(device, branch, module) {
+            const containerId = `logs-${branch}-${module}`;
+            const container = document.getElementById(containerId);
+            // Optionally, show a loading indicator.
+            container.innerHTML = 'Loading...';
+        
+            try {
+                // Adjust the URL according to your routing.
+                const response = await fetch(
+                  `https://api.konik.ai/connectdata/${device}/cloudlogs?branch=${encodeURIComponent(branch)}&module=${encodeURIComponent(module)}&offset=0&limit=50`,
+                  {
+                    method: 'GET',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    credentials: 'include'
+                  }    
+                  );
+                if (!response.ok) {
+                    container.innerHTML = 'Failed to load logs';
+                    return;
+                }
+                const logs = await response.json();
+                let html = '<table>';
+                logs.forEach(log => {
+                    // Pretty-print each log (assuming the API returns JSON objects)
+                    html += `<tr><td>
+                        <pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(log, null, 2)}</pre>
+                        </td></tr>`;
+                });
+                html += '</table>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = 'Error loading logs';
+            }
+        }
+      </script>
         <title>{{ onebox }} - comma useradmin</title>
       </head>
 <body>
@@ -294,322 +335,349 @@
   <script>var ROUTE_NAME = '{{ onebox | replace(from="/", to="|")}}';</script>
 
   {% if users.defined is defined %}
-  <hr>
-  <b>registered users:</b><br>
-  <table id="table_users">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap">name</td>
-        <td style="white-space: nowrap">created at</td>
-        <td style="white-space: nowrap">updated at</td>
-        <td style="white-space: nowrap">id</td>
-        <td style="white-space: nowrap">identity</td>
-        <td style="white-space: nowrap">email</td>
-        <td style="white-space: nowrap">points</td>
-        <td style="white-space: nowrap">superuser</td>
-      </tr>
-      {% for user in users.users %}
-      <tr>
-        <td style="white-space: nowrap"><a href="/?onebox={{ user.name }}">{{ user.name }}</a></td>
-        <td style="white-space: nowrap">{{ user.created_at }}</td>
-        <td style="white-space: nowrap">{{ user.updated_at }}</td>
-        <td style="white-space: nowrap">{{ user.id }}</td>
-        <td style="white-space: nowrap">{{ user.identity }}</td>
-        <td style="white-space: nowrap">{{ user.email }}</td>
-        <td style="white-space: nowrap">{{ user.points }}</td>
-        <td style="white-space: nowrap">{{ user.superuser }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <details>
+    <summary>Registered Users</summary>
+    <hr>
+    <table id="table_users">
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap">name</td>
+          <td style="white-space: nowrap">created at</td>
+          <td style="white-space: nowrap">updated at</td>
+          <td style="white-space: nowrap">id</td>
+          <td style="white-space: nowrap">identity</td>
+          <td style="white-space: nowrap">email</td>
+          <td style="white-space: nowrap">points</td>
+          <td style="white-space: nowrap">superuser</td>
+        </tr>
+        {% for user in users.users %}
+        <tr>
+          <td style="white-space: nowrap"><a href="/?onebox={{ user.name }}">{{ user.name }}</a></td>
+          <td style="white-space: nowrap">{{ user.created_at }}</td>
+          <td style="white-space: nowrap">{{ user.updated_at }}</td>
+          <td style="white-space: nowrap">{{ user.id }}</td>
+          <td style="white-space: nowrap">{{ user.identity }}</td>
+          <td style="white-space: nowrap">{{ user.email }}</td>
+          <td style="white-space: nowrap">{{ user.points }}</td>
+          <td style="white-space: nowrap">{{ user.superuser }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-
+  
   {% if devices.defined is defined %}
-  <hr>
-  <b>devices:</b><br>
-  <table id="table_devices">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap"></td>
-        <td style="white-space: nowrap">dongle_id</td>
-        <td style="white-space: nowrap">serial</td>
-        <td style="white-space: nowrap">device_type</td>
-        <td style="white-space: nowrap">server storage used</td>
-        <td style="white-space: nowrap">alias</td>
-        <td style="white-space: nowrap">sim_id</td>
-        <td style="white-space: nowrap">prime</td>
-        <td style="white-space: nowrap">prime_type</td>
-        <td style="white-space: nowrap">last_athena_ping</td>
-        <td style="white-space: nowrap"></td>
-      </tr>
-      {% for device in devices.devices %}
-      <tr>
-        <td style="white-space: nowrap">
-          <button onclick="deleteDevice('{{ device.dongle_id }}')">
-            Unpair and Delete Device Data
-          </button>
-        </td>
-        <td style="white-space: nowrap">dongle_id</td>
-        <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
-        <td style="white-space: nowrap">{{ device.serial }}</td>
-        <td style="white-space: nowrap">{{ device.device_type }}</td> 
-        <td style="white-space: nowrap">{{ device.server_storage / 1000000000}} GB</td> 
-        <td style="white-space: nowrap">{{ device.alias }}</td>
-        <td style="white-space: nowrap">{{ device.sim_id }}</td>
-        <td style="white-space: nowrap">{{ device.prime }}</td>
-        <td style="white-space: nowrap">{{ device.prime_type }}</td>
-        {% if device.online %}
-        <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
-        {% else %}
-        <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
-        {% endif %}
-        {% if device.uploads_allowed %}
-        <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
-        {% else %}
-        <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
-        {% endif%}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <details>
+    <summary>Devices</summary>
+    <hr>
+    <table id="table_devices">
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap"></td>
+          <td style="white-space: nowrap">dongle_id</td>
+          <td style="white-space: nowrap">serial</td>
+          <td style="white-space: nowrap">device_type</td>
+          <td style="white-space: nowrap">server storage used</td>
+          <td style="white-space: nowrap">alias</td>
+          <td style="white-space: nowrap">sim_id</td>
+          <td style="white-space: nowrap">prime</td>
+          <td style="white-space: nowrap">prime_type</td>
+          <td style="white-space: nowrap">last_athena_ping</td>
+          <td style="white-space: nowrap"></td>
+        </tr>
+        {% for device in devices.devices %}
+        <tr>
+          <td style="white-space: nowrap">
+            <button onclick="deleteDevice('{{ device.dongle_id }}')">
+              Unpair and Delete Device Data
+            </button>
+          </td>
+          <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+          <td style="white-space: nowrap">{{ device.serial }}</td>
+          <td style="white-space: nowrap">{{ device.device_type }}</td> 
+          <td style="white-space: nowrap">{{ device.server_storage / 1000000000 }} GB</td> 
+          <td style="white-space: nowrap">{{ device.alias }}</td>
+          <td style="white-space: nowrap">{{ device.sim_id }}</td>
+          <td style="white-space: nowrap">{{ device.prime }}</td>
+          <td style="white-space: nowrap">{{ device.prime_type }}</td>
+          {% if device.online %}
+          <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+          {% else %}
+          <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+          {% endif %}
+          {% if device.uploads_allowed %}
+          <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
+          {% else %}
+          <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-
+  
   {% if segments.defined is defined %}
-  <hr>
-  <a href="link" style="color: green">connect</a>
-  <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|")}}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
-  <hr>
-  {% for segment in segments.segments %}
-    {% set_global canonical_name = segment.canonical_name %}
-  {% endfor %}
-  <b>dongle id:</b> <a href="/?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
-  <hr>
-  <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
-  <b>segments:</b><br>
-  <table id="data-table">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Parsed Data</th>
-        <th>qlog</th>
-        <th>qcam</th>
-        <th>rlog</th>
-        <th>fcam</th>
-        <th>dcam</th>
-        <th>ecam</th>
-      </tr>
-    </thead>
+  <details>
+    <summary>Segments</summary>
+    <hr>
+    <a href="link" style="color: green">connect</a>
+    <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|") }}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
+    <hr>
     {% for segment in segments.segments %}
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap">{{ segment.number }}</td>
-        <td style="white-space: nowrap">
-          {% if segment.ulog_url != "" %}
-          <a href="{{ segment.ulog_url }}">
-            {{ segment.canonical_name }}
-          </a>
-          {% endif %}
-        </td>
-        <td style="white-space: nowrap">
-          {% if segment.qlog_url != "" %}
-          <a href="{{ segment.qlog_url }}">qlog.bz2</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_qlog" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qlog.bz2', '{{ segment.number }}', 'qlog')">Upload</button>
-          {% endif %}
-        </td>
-        <td style="white-space: nowrap">
-          {% if segment.qcam_url != "" %}
-          <a href="{{ segment.qcam_url }}">camera.ts</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_qcam" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_qcam" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_qcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qcamera.ts', '{{ segment.number }}', 'qcam')">Upload</button>
-          {% endif %}
-        </td>
-        <!-- rlog -->
-        <td>
-          {% if segment.rlog_url != "" %}
-          <a href="{{ segment.rlog_url }}">rlog.bz2</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog.bz2', '{{ segment.number }}', 'rlog')">Upload</button>
-          {% endif %}
-        </td>
-        <!-- fcam -->
-        <td>
-          {% if segment.fcam_url != "" %}
-          <a href="{{ segment.fcam_url }}">fcamera.hevc</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_fcam" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcam.hevc', '{{ segment.number }}', 'fcam')">Upload</button>
-          {% endif %}
-        </td>
-        <!-- dcam -->
-        <td>
-          {% if segment.dcam_url != "" %}
-          <a href="{{ segment.dcam_url }}">dcamera.hevc</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_dcam" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcam.hevc', '{{ segment.number }}', 'dcam')">Upload</button>
-          {% endif %}
-        </td>
-        <!-- ecam -->
-        <td>
-          {% if segment.ecam_url != "" %}
-          <a href="{{ segment.ecam_url }}">ecamera.hevc</a>
-          {% else %}
-          <div id="progressContainer_{{ segment.number }}_ecam" style="display:none;">
-            <progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress>
-          </div>
-          <button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecam.hevc', '{{ segment.number }}', 'ecam')">Upload</button>
-          {% endif %}
-        </td>
-      </tr>
-    </tbody>
+      {% set_global canonical_name = segment.canonical_name %}
     {% endfor %}
-  </table>
+    <b>dongle id:</b> <a href="/?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
+    <hr>
+    <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
+    <b>segments:</b><br>
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Parsed Data</th>
+          <th>qlog</th>
+          <th>qcam</th>
+          <th>rlog</th>
+          <th>fcam</th>
+          <th>dcam</th>
+          <th>ecam</th>
+        </tr>
+      </thead>
+      {% for segment in segments.segments %}
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap">{{ segment.number }}</td>
+          <td style="white-space: nowrap">
+            {% if segment.ulog_url != "" %}
+            <a href="{{ segment.ulog_url }}">
+              {{ segment.canonical_name }}
+            </a>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.qlog_url != "" %}
+            <a href="{{ segment.qlog_url }}">qlog.bz2</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_qlog" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qlog.bz2', '{{ segment.number }}', 'qlog')">Upload</button>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.qcam_url != "" %}
+            <a href="{{ segment.qcam_url }}">camera.ts</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_qcam" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_qcam" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_qcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qcamera.ts', '{{ segment.number }}', 'qcam')">Upload</button>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.rlog_url != "" %}
+            <a href="{{ segment.rlog_url }}">rlog.bz2</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog.bz2', '{{ segment.number }}', 'rlog')">Upload</button>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.fcam_url != "" %}
+            <a href="{{ segment.fcam_url }}">fcamera.hevc</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_fcam" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcam.hevc', '{{ segment.number }}', 'fcam')">Upload</button>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.dcam_url != "" %}
+            <a href="{{ segment.dcam_url }}">dcamera.hevc</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_dcam" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcam.hevc', '{{ segment.number }}', 'dcam')">Upload</button>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if segment.ecam_url != "" %}
+            <a href="{{ segment.ecam_url }}">ecamera.hevc</a>
+            {% else %}
+            <div id="progressContainer_{{ segment.number }}_ecam" style="display:none;">
+              <progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress>
+            </div>
+            <button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecam.hevc', '{{ segment.number }}', 'ecam')">Upload</button>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+      {% endfor %}
+    </table>
+  </details>
   {% endif %}
-
+  
   {% if routes.defined is defined %}
-  <hr>
-  <b>routes:</b><br>
-  <table id="table_routes">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap"></td>
-        <td style="white-space: nowrap">start_time</td>
-        <td style="white-space: nowrap">route_name</td>
-        <td style="white-space: nowrap">connect</td>
-        <td style="white-space: nowrap">preserve</td>
-        <td style="white-space: nowrap">miles</td>
-        <td style="white-space: nowrap">maxlog</td>
-        <td style="white-space: nowrap">maxqlog</td>
-        <td style="white-space: nowrap">maxqcamera</td>
-        <td style="white-space: nowrap">platform</td>
-        <td style="white-space: nowrap">git_remote</td>
-        <td style="white-space: nowrap">git_branch</td>
-      </tr>
-      {% for route in routes.routes %}
-      <tr>
-        <td style="white-space: nowrap">
-          <button onclick="deleteRoute('{{ route.fullname }}')">
-            Delete Route
-          </button>
-        </td>
-        <td style="white-space: nowrap">{{ route.start_time }}</td>
-        <td style="white-space: nowrap">
-          <a href="/?onebox={{ route.fullname }}">
-            {{ route.fullname }}
-          </a>
-        </td>
-        <td style="white-space: nowrap">
-          {% if route.connect_url is defined %}
-          <a href="{{ route.connect_url }}">
-            connect
-          </a>
-          {% endif %}
-        </td>
-        <td style="white-space: nowrap">
-          {% if route.preserve_url is defined %}
-          <a href="{{ route.preserve_url }}">
-            preserve
-          </a>
-          {% endif %}
-        </td>
-        <td style="white-space: nowrap">{{ route.length }}</td>
-        <td style="white-space: nowrap">{{ route.maxlog }}</td>
-        <td style="white-space: nowrap">{{ route.maxqlog }}</td>
-        <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
-        <td style="white-space: nowrap">{{ route.platform }}</td>
-        <td style="white-space: nowrap">{{ route.git_remote }}</td>
-        <td style="white-space: nowrap">{{ route.git_branch }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <details>
+    <summary>Routes</summary>
+    <hr>
+    <table id="table_routes">
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap"></td>
+          <td style="white-space: nowrap">start_time</td>
+          <td style="white-space: nowrap">route_name</td>
+          <td style="white-space: nowrap">connect</td>
+          <td style="white-space: nowrap">preserve</td>
+          <td style="white-space: nowrap">miles</td>
+          <td style="white-space: nowrap">maxlog</td>
+          <td style="white-space: nowrap">maxqlog</td>
+          <td style="white-space: nowrap">maxqcamera</td>
+          <td style="white-space: nowrap">platform</td>
+          <td style="white-space: nowrap">git_remote</td>
+          <td style="white-space: nowrap">git_branch</td>
+        </tr>
+        {% for route in routes.routes %}
+        <tr>
+          <td style="white-space: nowrap">
+            <button onclick="deleteRoute('{{ route.fullname }}')">
+              Delete Route
+            </button>
+          </td>
+          <td style="white-space: nowrap">{{ route.start_time }}</td>
+          <td style="white-space: nowrap">
+            <a href="/?onebox={{ route.fullname }}">
+              {{ route.fullname }}
+            </a>
+          </td>
+          <td style="white-space: nowrap">
+            {% if route.connect_url is defined %}
+            <a href="{{ route.connect_url }}">
+              connect
+            </a>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">
+            {% if route.preserve_url is defined %}
+            <a href="{{ route.preserve_url }}">
+              preserve
+            </a>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap">{{ route.length }}</td>
+          <td style="white-space: nowrap">{{ route.maxlog }}</td>
+          <td style="white-space: nowrap">{{ route.maxqlog }}</td>
+          <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
+          <td style="white-space: nowrap">{{ route.platform }}</td>
+          <td style="white-space: nowrap">{{ route.git_remote }}</td>
+          <td style="white-space: nowrap">{{ route.git_branch }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-
+  
   {% if device_users.defined is defined %}
-  <hr>
-  <b>authorized users:</b><br>
-  <table id="table_device_users">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap">email</td>
-        <td style="white-space: nowrap"></td>
-        <td style="white-space: nowrap">access_level</td>
-        <td style="white-space: nowrap"></td>
-      </tr>
-      {% for device_user in device_users %}
-      <tr>
-        <td style="white-space: nowrap"><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
-        <td style="white-space: nowrap"></td>
-        <td style="white-space: nowrap">{{ device_user.access_level }}</td>
-        <td style="white-space: nowrap">
-          <a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">
-            remove
-          </a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <details>
+    <summary>Authorized Users</summary>
+    <hr>
+    <table id="table_device_users">
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap">email</td>
+          <td style="white-space: nowrap"></td>
+          <td style="white-space: nowrap">access_level</td>
+          <td style="white-space: nowrap"></td>
+        </tr>
+        {% for device_user in device_users %}
+        <tr>
+          <td style="white-space: nowrap"><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
+          <td style="white-space: nowrap"></td>
+          <td style="white-space: nowrap">{{ device_user.access_level }}</td>
+          <td style="white-space: nowrap">
+            <a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">
+              remove
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-
+  
   {% if bootlogs.defined is defined %}
-  <hr>
-  <b>boot logs:</b><br>
-  <table id="table_bootlogs">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap">Parsed Boot log</td>
-        <td style="white-space: nowrap">download</td>
-      </tr>
-      {% for bootlog in bootlogs.bootlogs %}
-      <tr>
-        <td style="white-space: nowrap">
-          <a href="{{ bootlog.unlog_url }}">
-            {{ bootlog.date_time }}
-          </a>
-        </td>
-        <td style="white-space: nowrap">
-          <a href="{{ bootlog.bootlog_url }}">
-            download
-          </a>
-        </td>
-      {% endfor %}
-    </tbody>
-  </table>
+  <details>
+    <summary>Boot Logs</summary>
+    <hr>
+    <table id="table_bootlogs">
+      <tbody>
+        <tr>
+          <td style="white-space: nowrap">Parsed Boot log</td>
+          <td style="white-space: nowrap">download</td>
+        </tr>
+        {% for bootlog in bootlogs.bootlogs %}
+        <tr>
+          <td style="white-space: nowrap">
+            <a href="{{ bootlog.unlog_url }}">
+              {{ bootlog.date_time }}
+            </a>
+          </td>
+          <td style="white-space: nowrap">
+            <a href="{{ bootlog.bootlog_url }}">
+              download
+            </a>
+          </td>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
-
-  {% if cloudlogs.defined is defined %}
-  <hr>
-  <b>cloud logs cache:</b><br>
-  <table id="table_cloudlogs">
-    <tbody>
-      <tr>
-        <td style="white-space: nowrap">Cloud log</td>
-      </tr>
-      {% for log in cloudlogs.cloudlogs %}
-      <tr>
-        <td style="white-space: nowrap">
-          <a href="{{ bootlog.unlog_url }}">
-            {{ log }}
-          </a>
-        </td>
-      {% endfor %}
-    </tbody>
-  </table>
+  
+  {% if cloudlogs.defined %}
+  <details>
+    <summary>Cloud Logs Cache Summary</summary>
+    <hr>
+    <table id="table_cloudlogs_summary">
+      <tbody>
+        {% for branch, modules in cloudlogs.cloudlogs %}
+        <tr>
+          <!-- A single table row that spans all columns for the details element -->
+          <td colspan="2" style="padding: 0; border: none;">
+            <!-- Wrap each branch in its own details block -->
+            <details>
+              <summary><b>Branch:</b> {{ branch }}</summary>
+              <table style="width: 100%;">
+                {% for module, count in modules %}
+                <tr>
+                  <!-- The module name/counter -->
+                  <td style="white-space: nowrap;">
+                    <b>{{ module }}</b> ({{ count }} logs)
+                  </td>
+                  <!-- The button and logs container -->
+                  <td>
+                    <button onclick="loadModuleLogs('{{ dongle_id }}', '{{ branch }}', '{{ module }}')">
+                      Load Logs
+                    </button>
+                    <div id="logs-{{ branch }}-{{ module }}"></div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </table>
+            </details>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
   {% endif %}
 
   <hr>
