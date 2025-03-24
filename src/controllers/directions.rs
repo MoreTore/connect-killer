@@ -15,6 +15,7 @@ use crate::middleware::auth::MyJWT;
 #[derive(Debug)]
 pub enum ErrorResponse {
     UpstreamError(String),
+    Unauthorized,
     InternalServerError,
 }
 
@@ -31,6 +32,10 @@ impl IntoResponse for ErrorResponse {
             ErrorResponse::UpstreamError(message) => (
                 StatusCode::BAD_GATEWAY,
                 format!("Upstream service error: {}", message),
+            ),
+            ErrorResponse::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "Unauthorized".to_string(),
             ),
             ErrorResponse::InternalServerError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -52,8 +57,16 @@ pub async fn proxy_mapbox(
     Extension(client): Extension<reqwest::Client>,
     method: Method,
     uri: Uri,
+    headers: HeaderMap,
     body: Body,
 ) -> Result<Response, ErrorResponse> {
+    match headers.get("User-Agent").and_then(|v| v.to_str().ok()) {
+        Some(agent) if agent.starts_with("hoofpilot-") => {} // allowed
+        _ => {
+            return Err(ErrorResponse::Unauthorized);
+        }
+    }
+
     let mapbox_token = env::var("MAPBOX_TOKEN").expect("MAPBOX_TOKEN env variable not set");
 
     let path = uri.path().replacen("/maps", "", 1);
@@ -74,19 +87,15 @@ pub async fn proxy_mapbox(
         mapbox_url.push_str(&updated_query);
     }
     tracing::debug!("the mapbox url is: {}", mapbox_url);
-    // Convert Uri to String for reqwest
-    let mapbox_url_string = mapbox_url.to_string();
 
     let size_limit = 10 * 1024 * 1024;
     let body_bytes = to_bytes(body, size_limit).await.map_err(|_| ErrorResponse::InternalServerError)?;
     let reqwest_body = reqwest::Body::from(body_bytes);
 
-    // Use the String representation of the URL
     let request_builder = client
-        .request(method, mapbox_url_string)
-        .headers(HeaderMap::new())
+        .request(method, mapbox_url)
+        .headers(HeaderMap::new()) // Optional: forward some headers
         .body(reqwest_body);
-
 
     let upstream_response = request_builder.send().await?;
 
