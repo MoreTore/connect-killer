@@ -11,6 +11,13 @@ services:
     env_file:
       - .env
     # entrypoint: ["sh", "/pgvector/init_pgvector.sh"]
+    logging:
+      driver: "json-file"
+      options:
+        mode: "non-blocking"
+        max-size: "10m"
+        max-file: "3"
+
   minikeyvalue:
     build:
       context: ./minikeyvalue
@@ -21,6 +28,13 @@ services:
       - "3000-3005:3000-3005"
     network_mode: "host"
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        mode: "non-blocking"
+        max-size: "10m"
+        max-file: "3"
+
   connect:
     build: .
     restart: unless-stopped
@@ -38,6 +52,12 @@ services:
     network_mode: "host"
     volumes:
       - cargo-cache:/usr/local/cargo
+    logging:
+      driver: "json-file"
+      options:
+        mode: "non-blocking"
+        max-size: "10m"
+        max-file: "10"
 
 volumes:
   pgdata:
