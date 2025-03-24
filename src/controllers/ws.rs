@@ -1,4 +1,5 @@
 #![allow(clippy::unused_async)]
+use combine::parser::token::Value;
 use loco_rs::prelude::*;
 use axum::{
     extract::{
@@ -17,7 +18,7 @@ use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
 use std::{collections::{HashMap, VecDeque}, sync::Arc};
 use tokio::sync::{RwLock, Mutex};
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
@@ -68,19 +69,36 @@ impl IntoResponse for Error {
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
-fn generate_request_id() -> u64 {
+fn generate_request_id() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_nanos() as u64
+        .as_nanos()
+        .to_string()
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(untagged)]
+enum Id {
+    String(String),
+    Int(u64),
+}
+
+impl From<Id> for String {
+    fn from(id: Id) -> Self {
+        match id {
+            Id::String(s) => s,
+            Id::Int(i) => i.to_string(),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct JsonRpcRequest {
     pub method: String,
     pub params: Option<serde_json::Value>,
     pub jsonrpc: String,
-    pub id: u64,
+    pub id: Id,
 }
 
 
@@ -90,25 +108,34 @@ impl Default for JsonRpcRequest {
             method: "".to_string(),
             params: None,
             jsonrpc: "2.0".to_string(),
-            id: generate_request_id(),
+            id: Id::String(generate_request_id()),
         }
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct JsonRpcResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<serde_json::Value>,
     jsonrpc: String,
-    id: u64,
+    id: Id,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+enum JsonRpcMessage {
+    Request(JsonRpcRequest),
+    Response(JsonRpcResponse),
 }
 
 pub struct ConnectionManager {
     pub devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
-    pub clients: Mutex<HashMap<u64, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
-    pub cloudlog_cache: RwLock<HashMap<String, VecDeque<u8>>>,
+    pub clients: Mutex<HashMap<String, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
+    // branch -> module -> Vec<serde_json::Value>
+    pub cloudlog_cache: RwLock<HashMap<String, HashMap<String, HashMap<String, Vec<serde_json::Value>>>>>,
+
 }
 
 impl ConnectionManager {
@@ -121,15 +148,14 @@ impl ConnectionManager {
     }
 }
 
-// TODO fix the retunr values so they make sense
 async fn handle_jsonrpc_request(
     auth: crate::middleware::auth::MyJWT,
     Path(endpoint_dongle_id): Path<String>,
     State(ctx): State<AppContext>,
     Extension(manager): Extension<Arc<ConnectionManager>>,
     Json(mut payload): Json<JsonRpcRequest>,
-) -> Result<impl IntoResponse> {
-    let is_sensitive_method = payload.method == "takeSnapshot".to_string();
+) -> impl IntoResponse {
+    let is_sensitive_method = payload.method == "takeSnapshot";
     if let Some(user_model) = auth.user_model {
         if !user_model.superuser || is_sensitive_method {
             DM::ensure_user_device(&ctx.db, user_model.id, &endpoint_dongle_id).await?;
@@ -139,29 +165,42 @@ async fn handle_jsonrpc_request(
     }
     
     let now_id = generate_request_id();
-    payload.id += now_id; // roll over is ok
+    // Convert the current id into a String.
+    let mut id_string: String = payload.id.into();
+    // Append the generated now_id.
+    id_string.push_str(&now_id);
+    // Update payload.id with the new string.
+    payload.id = Id::String(id_string.clone()); 
+    
     let message = Message::Text(serde_json::to_string(&payload)?);
-
     forward_command_to_device(&endpoint_dongle_id, &manager, &message).await?;
-
+    
     let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(1);
     {
         let mut clients = manager.clients.lock().await;
-        clients.insert(now_id.clone(), response_tx);
+        clients.insert(id_string, response_tx);
     }
-
+    
     loop {
         match time::timeout(Duration::from_secs(30), response_rx.recv()).await {
             Ok(Some(mut response)) => {
-                response.id -= now_id;
+                // Convert response.id to a String for manipulation.
+                let mut response_id_string: String = response.id.into();
+                // If it ends with the appended now_id, remove that part.
+                if response_id_string.ends_with(&now_id) {
+                    let new_len = response_id_string.len() - now_id.len();
+                    response_id_string.truncate(new_len);
+                }
+                // Update response.id with the new value.
+                response.id = Id::String(response_id_string);
                 return Ok(format::json(response));
             },
             Ok(None) => {
-                // Acknowledge and continue waiting for a valid response
+                // Acknowledge and continue waiting for a valid response.
                 continue;
             },
             Err(_e) => {
-                // Remove client on timeout
+                // Remove client on timeout.
                 let mut clients = manager.clients.lock().await;
                 clients.remove(&now_id);
                 return Err(Error::Timeout);
@@ -169,6 +208,7 @@ async fn handle_jsonrpc_request(
         }
     }
 }
+
 
 async fn forward_command_to_device(
     endpoint_dongle_id: &str,
@@ -216,7 +256,7 @@ async fn handle_socket(
     manager: Arc<ConnectionManager>,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
-    let (sender, mut receiver) = socket.split();
+    let (mut sender, mut receiver) = socket.split();
 
     if is_device {
         let mut devices: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
@@ -255,25 +295,135 @@ async fn handle_socket(
                 break;
             }
             Message::Text(text) => {
-                if let Ok(JsonRpcResponse { result, error, jsonrpc, id }) = serde_json::from_str(&text) {
-                    let mut clients = manager.clients.lock().await;
-                    if let Some(client_sender) = clients.remove(&id) {
-                        let _ = client_sender.send(JsonRpcResponse { result, error, jsonrpc, id }).await;
+                if let Ok(message) = serde_json::from_str::<JsonRpcMessage>(&text) {
+                    match message {
+                        JsonRpcMessage::Response(resp) => {
+                            let mut clients = manager.clients.lock().await;
+                            let id_str: String = resp.id.clone().into();
+                            if let Some(client_sender) = clients.remove(&id_str) {
+                                let _ = client_sender.send(resp).await;
+                            }
+                        },
+                        JsonRpcMessage::Request(req) => {
+                            // Create a response based on the method.
+                            let response = match req.method.as_str() {
+                                "forwardLogs" => {
+                                    if let Some(params) = req.params {
+                                        if let Some(logs_str) = params.get("logs").and_then(|v| v.as_str()) {
+                                            // Parse logs using a streaming deserializer.
+                                            let mut parsed_logs = Vec::new();
+                                            let mut had_parse_errors = false;
+                                            let mut stream = serde_json::Deserializer::from_str(&logs_str)
+                                                .into_iter::<serde_json::Value>();
+                                            while let Some(result) = stream.next() {
+                                                match result {
+                                                    Ok(log) => parsed_logs.push(log),
+                                                    Err(e) => {
+                                                        tracing::error!("Error parsing log: {}", e);
+                                                        had_parse_errors = true;
+                                                    }
+                                                }
+                                            }
+                            
+                                            // Now store logs in a nested hashmap:
+                                            {
+                                                let mut cloudlog_cache = manager.cloudlog_cache.write().await;
+                                                // Get or create the entry for this device.
+                                                let device_logs = cloudlog_cache
+                                                    .entry(endpoint_dongle_id.clone())
+                                                    .or_insert_with(HashMap::new);
+                            
+                                                for log in parsed_logs {
+                                                    // Extract branch from ctx. If missing, default to "unknown".
+                                                    let branch = log.get("ctx")
+                                                        .and_then(|ctx| ctx.get("branch"))
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or("unknown")
+                                                        .to_string();
+                                                    // Extract module. If missing, default to "unknown".
+                                                    let module = log.get("filename")
+                                                        .and_then(|m| m.as_str())
+                                                        .unwrap_or("unknown")
+                                                        .to_string();
+                                                    
+                                                    // For this branch, get or create the module map.
+                                                    let branch_map = device_logs.entry(branch).or_insert_with(HashMap::new);
+                                                    // Get or create the vector for the module.
+                                                    let module_logs = branch_map.entry(module).or_insert_with(Vec::new);
+                                                    module_logs.insert(0, log);
+                                                    module_logs.truncate(50); // limit to 50 of the latest logs
+                                                }
+                                            }
+                            
+                                            // Respond based on parse results.
+                                            if had_parse_errors {
+                                                JsonRpcResponse {
+                                                    result: None,
+                                                    error: Some(serde_json::json!({
+                                                        "code": -32000,
+                                                        "message": "Some log lines failed to parse"
+                                                    })),
+                                                    jsonrpc: "2.0".to_string(),
+                                                    id: req.id,
+                                                }
+                                            } else {
+                                                JsonRpcResponse {
+                                                    result: Some(serde_json::json!({"status": "ok"})),
+                                                    error: None,
+                                                    jsonrpc: "2.0".to_string(),
+                                                    id: req.id,
+                                                }
+                                            }
+                                        } else {
+                                            // "logs" parameter is missing.
+                                            JsonRpcResponse {
+                                                result: None,
+                                                error: Some(serde_json::json!({
+                                                    "code": -32602,
+                                                    "message": "Missing 'logs' parameter"
+                                                })),
+                                                jsonrpc: "2.0".to_string(),
+                                                id: req.id,
+                                            }
+                                        }
+                                    } else {
+                                        // Parameters missing.
+                                        JsonRpcResponse {
+                                            result: None,
+                                            error: Some(serde_json::json!({
+                                                "code": -32602,
+                                                "message": "Missing parameters"
+                                            })),
+                                            jsonrpc: "2.0".to_string(),
+                                            id: req.id,
+                                        }
+                                    }
+                                },
+                                _ => {
+                                    // If the method is not recognized, send a method not found error.
+                                    JsonRpcResponse {
+                                        result: None,
+                                        error: Some(serde_json::json!({
+                                            "code": -32601,
+                                            "message": format!("Method '{}' not found", req.method)
+                                        })),
+                                        jsonrpc: "2.0".to_string(),
+                                        id: req.id,
+                                    }
+                                }
+                            };
+                            // Convert the response to a text message and forward it.
+                            let message = Message::Text(serde_json::to_string(&response).unwrap());
+                            forward_command_to_device(&endpoint_dongle_id, &manager, &message).await;
+                        },
+                        _ => {
+                            tracing::error!("Invalid JSON-RPC message: {}", text);
+                        }
                     }
                 }
-                // handle other things
             }
             Message::Binary(bin) => { // lots of cloudlogs coming in here. Maybe send it to the web interface client for real-time rollout monitoring
-                let mut cloudlog_cache = manager.cloudlog_cache.write().await;
-                tracing::info!("Appending binary data for {}", endpoint_dongle_id);
-                // Get or create entry in cloudlog_cache
-                let entry = cloudlog_cache.entry(endpoint_dongle_id.clone()).or_insert(VecDeque::new());
-                // Append new data
-                entry.extend(bin);
-                // Ensure we don’t exceed 50 entries
-                while entry.len() > 50 {
-                    entry.pop_front(); // Remove oldest data
-                }
+                tracing::info!("Got Binary Data from {}", endpoint_dongle_id);
             }
         }
     }
@@ -331,7 +481,7 @@ pub async fn send_reset( // called from crate::middleware::auth
             method: "resetDongle".to_string(),
             params: Some(serde_json::json!({})),
             jsonrpc: "2.0".to_string(),
-            id: 1,
+            id: Id::Int(1),
         };
         let msg = serde_json::to_string(&reset_dongle_rpc).unwrap();
         match sender.send(Message::Text(msg)).await {

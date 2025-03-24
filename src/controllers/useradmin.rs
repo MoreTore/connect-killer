@@ -2,11 +2,12 @@
 use loco_rs::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use axum::{
     extract::{Query, State}, Extension,
 };
 extern crate url;
-use std::env;
+use std::{collections::HashMap, env};
 
 use crate::{models::_entities, views};
 
@@ -39,7 +40,8 @@ pub struct BootlogsTemplate {
 #[derive(Serialize)]
 pub struct CloudlogsTemplate {
     pub defined: bool,
-    pub cloudlogs: Vec<serde_json::Value>
+    // Nested summary: branch -> (map: module -> count of logs)
+    pub cloudlogs: std::collections::HashMap<String, std::collections::HashMap<String, usize>>,
 }
 
 #[derive(Serialize)]
@@ -122,25 +124,34 @@ pub async fn onebox_handler(
 
     // Parse cloudlogs from the connection manager's cache and add them to the template if available.
     if let Some(ref d_id) = dongle_id {
-        let cloudlogs = {
+        // Retrieve the nested logs from the cloudlog cache.
+        // Here we assume the cache is stored as:
+        // HashMap<String, HashMap<String, HashMap<String, Vec<Value>>>>
+        // where the outer key is the device id, then branch, then module.
+        let nested_logs: Option<HashMap<String, HashMap<String, Vec<Value>>>> = {
             let cloudlog_cache = manager.cloudlog_cache.read().await;
-            if let Some(data) = cloudlog_cache.get(d_id) {
-                // Convert VecDeque<u8> to Vec<u8>
-                let binary_data: Vec<u8> = data.iter().cloned().collect();
-                // Convert the binary data into a UTF-8 string.
-                let json_str = String::from_utf8(binary_data).unwrap_or_else(|_| String::new());
-                // Parse the string as JSON; if it’s an array, use it, otherwise return an empty vector.
-                match serde_json::from_str::<serde_json::Value>(&json_str) {
-                    Ok(serde_json::Value::Array(arr)) => arr,
-                    _ => vec![],
-                }
-            } else {
-                vec![]
-            }
+            cloudlog_cache.get(d_id).cloned()
         };
+    
+        // Build a summary: for each branch and module, count the number of logs.
+        let summary: HashMap<String, HashMap<String, usize>> =
+            if let Some(nested) = nested_logs {
+                let mut map = HashMap::new();
+                for (branch, modules) in nested {
+                    let mut module_map = HashMap::new();
+                    for (module, logs_array) in modules {
+                        module_map.insert(module, logs_array.len());
+                    }
+                    map.insert(branch, module_map);
+                }
+                map
+            } else {
+                HashMap::new()
+            };
+    
         master_template.cloudlogs = Some(CloudlogsTemplate {
-            defined: !cloudlogs.is_empty(),
-            cloudlogs: cloudlogs,
+            defined: !summary.is_empty(),
+            cloudlogs: summary,
         });
     }
 

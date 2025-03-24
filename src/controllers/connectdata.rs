@@ -1,4 +1,6 @@
 #![allow(clippy::unused_async)]
+use std::{collections::HashMap, sync::Arc};
+
 use loco_rs::prelude::*;
 use axum::{
     extract::{Path, Query, State},
@@ -8,6 +10,7 @@ use axum::{
   
   };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use crate::{
     common::{
         re::*,
@@ -22,6 +25,8 @@ use crate::{
         bootlogs::BM,
     }
 };
+
+use super::ws::ConnectionManager;
 
 
 #[derive(Deserialize)]
@@ -38,7 +43,7 @@ pub async fn asset_download(
     lookup_key: String,
     client: &reqwest::Client,
     headers: HeaderMap,
-) -> Result<Response<reqwest::Body>,(StatusCode,&'static str)> {
+) -> Result<Response<reqwest::Body>, (StatusCode, &'static str)> {
     // Validate the lookup_key to allow only alphanumeric, '_', '-' and '.' characters
     let valid_key_pattern = regex::Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
     if !valid_key_pattern.is_match(&lookup_key) {
@@ -66,9 +71,15 @@ pub async fn asset_download(
                     .and_then(|ct_len| ct_len.to_str().ok())
                     .and_then(|ct_len| ct_len.parse::<u64>().ok());
 
+                // Build the response with additional caching header
                 let mut response_builder = Response::builder();
                 response_builder = response_builder
-                    .header(hyper::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{lookup_key}\""));
+                    .header(
+                        hyper::header::CONTENT_DISPOSITION,
+                        format!("attachment; filename=\"{lookup_key}\"")
+                    )
+                    // Set a long max-age so the browser caches the sprite
+                    .header(hyper::header::CACHE_CONTROL, "public, max-age=31536000");
 
                 // Add Content-Length if available
                 if let Some(length) = content_length {
@@ -346,16 +357,26 @@ async fn delete_data(
 }
 
 
-pub async fn get_cloudlog_cache(
+#[derive(Deserialize)]
+struct CloudlogQuery {
+    branch: Option<String>,
+    module: Option<String>,
+    offset: Option<usize>,
+    limit: Option<usize>,
+}
+
+async fn get_cloudlog_cache(
     auth: crate::middleware::auth::MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
-    Extension(manager): Extension<std::sync::Arc<super::ws::ConnectionManager>>,
+    Query(query): Query<CloudlogQuery>,
+    Extension(manager): Extension<Arc<ConnectionManager>>,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
-    // Check if the authenticated user is authorized to access the data
+    // Authorization check
     if let Some(user_model) = auth.user_model {
-        let device_model = DM::find_device(&ctx.db, &dongle_id).await.map_err(|_| (StatusCode::UNAUTHORIZED, "Device not found"))?;
-        
+        let device_model = DM::find_device(&ctx.db, &dongle_id)
+            .await
+            .map_err(|_| (StatusCode::UNAUTHORIZED, "Device not found"))?;
         if !user_model.superuser {
             if let Some(owner_id) = device_model.owner_id {
                 if user_model.id != owner_id {
@@ -369,19 +390,51 @@ pub async fn get_cloudlog_cache(
         return Err((StatusCode::FORBIDDEN, "Devices can't do this"));
     }
 
-    // Retrieve stored cloudlog data from the manager.
     let cloudlog_cache = manager.cloudlog_cache.read().await;
-
-    if let Some(data) = cloudlog_cache.get(&dongle_id) {
-        // Convert VecDeque<u8> to Vec<u8> for the response.
-        let binary_data: Vec<u8> = data.iter().cloned().collect();
-        Ok((
-            StatusCode::OK,
-            [("Content-Type", "application/octet-stream")],
-            binary_data,
-        ))
+    if let Some(device_logs) = cloudlog_cache.get(&dongle_id) {
+        // device_logs: HashMap<String, HashMap<String, Vec<Value>>>
+        if let (Some(branch), Some(module)) = (query.branch, query.module) {
+            if let Some(module_logs) = device_logs.get(&branch).and_then(|m| m.get(&module)) {
+                let offset = query.offset.unwrap_or(0);
+                let limit = query.limit.unwrap_or(50);
+                let sliced: Vec<Value> = module_logs
+                    .iter()
+                    .skip(offset)
+                    .take(limit)
+                    .cloned()
+                    .collect();
+                let json_bytes = serde_json::to_vec(&sliced).map_err(|_| {
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Failed to serialize cloudlogs")
+                })?;
+                return Ok((
+                    StatusCode::OK,
+                    [("Content-Type", "application/json")],
+                    json_bytes,
+                ));
+            } else {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    "No logs found for the specified branch/module",
+                ));
+            }
+        } else {
+            // If branch or module is not provided, return a summary structure.
+            // For example, a mapping from branch -> list of module names.
+            let summary: HashMap<&String, Vec<&String>> = device_logs
+                .iter()
+                .map(|(branch, modules)| (branch, modules.keys().collect()))
+                .collect();
+            let json_bytes = serde_json::to_vec(&summary).map_err(|_| {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to serialize summary")
+            })?;
+            return Ok((
+                StatusCode::OK,
+                [("Content-Type", "application/json")],
+                json_bytes,
+            ));
+        }
     } else {
-        Err((StatusCode::NOT_FOUND, "No binary data found for this dongle"))
+        Err((StatusCode::NOT_FOUND, "No cloudlog data found for this dongle"))
     }
 }
 
