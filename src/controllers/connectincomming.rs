@@ -6,8 +6,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
   };
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use crate::{
     workers::{
         bootlog_parser::{
@@ -166,6 +165,7 @@ pub async fn upload_driving_logs(
     axum::Extension(client): axum::Extension<reqwest::Client>,
     body: axum::body::Body,
 ) -> Result<(StatusCode, &'static str)> {
+    let start = Instant::now();
     //enforce_device_upload_permission!(auth);
     // Construct the URL to store the file
     let full_url = common::mkv_helpers::get_mkv_file_url(&format!("{}_{}--{}--{}", dongle_id, timestamp, segment, file));
@@ -180,13 +180,28 @@ pub async fn upload_driving_logs(
     while let Some(chunk) = stream.next().await {
         match chunk {
             Ok(data) => buffer.extend_from_slice(&data),
-            Err(_) => return Ok((StatusCode::BAD_REQUEST, "Error reading request body")),
+            Err(e) => {
+                tracing::warn!("Error reading request body: {}", e);
+                return Ok((StatusCode::BAD_REQUEST, "Error reading request body"));
+            }
         }
     }
-
+    
     let data = buffer.freeze();
     let data_len = data.len() as i64;
-    tracing::info!("File `{}` received is {} bytes", full_url, data.len());
+
+    let duration = start.elapsed();
+    let secs = duration.as_secs_f64();
+    let bytes_per_sec = data_len as f64 / secs;
+    let mb_per_sec = bytes_per_sec / (1024.0 * 1024.0);
+
+    tracing::info!(
+        "File {} downloaded in {} bytes in {:.2?} seconds ({:.2} MB/s)",
+        full_url,
+        data_len,
+        duration,
+        mb_per_sec
+    );
 
     // Post the binary data to the specified URL
     let response = client.put(&full_url)
