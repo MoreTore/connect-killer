@@ -111,10 +111,9 @@ async fn get_qcam_stream(
 ) -> Result<Response> {
     // Do not need to check for data ownership because its done when you try to fetch the data
     let mut segment_models = SM::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
-    segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones where the qlog is missing
+    //segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones where the qlog is missing
     segment_models.retain(|segment| segment.qcam_url != ""); // exclude ones where the qcam is missing
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
-
     let exp = (3600 * 24 as u64);
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
@@ -126,26 +125,30 @@ async fn get_qcam_stream(
         seg.qcam_url = format!("{}?exp={}&sig={}",seg.qcam_url, exp, token)
     }
 
+    
     let mut response = String::new();
+
     response.push_str("#EXTM3U\n");
     response.push_str("#EXT-X-VERSION:3\n");
     response.push_str("#EXT-X-TARGETDURATION:61\n");
     response.push_str("#EXT-X-MEDIA-SEQUENCE:0\n");
     response.push_str("#EXT-X-PLAYLIST-TYPE:VOD\n");
-    
-    let mut prev_seg_number = match segment_models.first() {
-        Some(first_seg) => first_seg.number - 1,
-        None => -1, // should we throw an error instead?
-    };
+
+    let mut prev_seg_number = 0;
     for segment in segment_models {
+        // Fill any missing segments until we catch up
+        if prev_seg_number < segment.number {
+
+            response.push_str("#EXT-X-DISCONTINUITY\n");
+            prev_seg_number = segment.number;
+        }
+
+        // Now prev_seg_number == segment.number, so we write the real segment
+        response.push_str(&format!("#EXTINF:{},{}\n", segment.qcam_duration, segment.number));
+        response.push_str(&format!("{}\n", segment.qcam_url));
+
+        // Increment to the next number for subsequent segments
         prev_seg_number += 1;
-        if segment.number != prev_seg_number {  // Only in sequence
-            break;
-        }
-        if segment.qcam_url != "" {
-            response.push_str(&format!("#EXTINF:{},{}\n", segment.qcam_duration, segment.number));
-            response.push_str(&format!("{}\n", segment.qcam_url));
-        }
     }
 
     response.push_str("#EXT-X-ENDLIST\n");
@@ -993,6 +996,7 @@ fn generate_turn_credentials(secret_key: &str) -> (String, String) {
 async fn get_ice_servers(
     _auth: crate::middleware::auth::MyJWT,
 ) -> Result<Json<Vec<RTCIceServer>>, StatusCode> {
+    tracing::info!("Getting ICE servers");
 
     let secret_key = env::var("TURN_SECRET_KEY").unwrap_or_else(|_| "default_secret".to_string());
     
