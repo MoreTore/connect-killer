@@ -19,6 +19,7 @@ pub struct Model {
     pub url: String,
     pub can: bool,
     pub git_commit: Option<String>,
+    #[serde(rename = "dongle_id")]
     pub device_dongle_id: String,
     pub create_time: i64,
     #[sea_orm(column_type = "Double")]

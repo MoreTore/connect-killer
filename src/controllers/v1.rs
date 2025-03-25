@@ -16,6 +16,7 @@ use std::{
 };
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use jsonwebtoken::get_current_timestamp;
 
 use crate::{common, 
     middleware::jwt, 
@@ -155,6 +156,26 @@ async fn get_qcam_stream(
 
     Ok(response.into_response())
 }
+
+
+async fn get_share_signature(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(fullname): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
+    let jwt_secret = ctx.config.get_jwt_config()
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secret"))?;
+    let token = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(&(3600 * 24 as u64), auth.claims.identity.to_string())
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "failed to generate token"))?;
+    
+    let response = ShareSignatureResponse {
+        exp: (get_current_timestamp() + (3600 * 24 as u64)).to_string(),
+        sig: token,
+    };
+    Ok(format::json(response))
+}
+
 
 async fn get_links_for_route(
     route_id: &str,
@@ -538,7 +559,16 @@ async fn route_segment(
     } else {
         return loco_rs::controller::bad_request("devices can't do this")
     }
-    let mut route_models = RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?;
+
+    let mut route_models = match (params.start, params.end) {
+        (Some(start), Some(end)) => {
+            RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, Some(start), Some(end), params.limit).await?
+        },
+        _ => {
+            RM::find_recent_device_routes(&ctx.db, &dongle_id, params.limit).await?
+        }
+    };
+    
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
     let exp = (3600 * 24 as u64);
     let jwt_secret = ctx.config.get_jwt_config()?;
@@ -551,7 +581,6 @@ async fn route_segment(
         route.share_sig = token.clone();
         route.share_exp = exp.to_string();
     }
-
 
     format::json(route_models)
 }
@@ -574,6 +603,33 @@ async fn route_info(
         }
     }
     format::json(route_model)
+}
+
+
+async fn patch_route(
+    auth: crate::middleware::auth::MyJWT,
+    State(ctx): State<AppContext>,
+    Path(fullname): Path<String>,
+    Json(patch): Json<RoutePatch>,
+) -> Result<Response> {
+    let route_model = RM::find_route(&ctx.db, &fullname).await?;
+    if let Some(user_model) = auth.user_model {
+        if user_model.superuser {
+
+        } else {
+            DM::find_user_device(
+                &ctx.db, 
+                user_model.id,
+                &route_model.device_dongle_id)
+                .await?;
+        }
+    }
+    let mut active_route_model = route_model.into_active_model();
+    if let Some(is_public) = patch.is_public {
+        active_route_model.is_public = ActiveValue::Set(is_public);
+    }
+    let model = active_route_model.update(&ctx.db).await?;
+    format::json(model)
 }
 
 
@@ -1084,8 +1140,10 @@ pub fn routes() -> Routes {
         .add("/me", get(get_me))
         .add("/me/devices", get(get_my_devices))
         .add("/route/:fullname", get(route_info))
+        .add("/route/:fullname", patch(patch_route))
         .add("/route/:fullname/files", get(get_route_files))
         .add("/route/:fullname/qcamera.m3u8", get(get_qcam_stream))
+        .add("/route/:fullname/share_signature", get(get_share_signature))
         .add("/:dongleId/upload_urls/", post(upload_urls_handler))
         .add(".4/:dongleId/upload_url/", get(get_upload_url))
         .add("/devices/:dongle_id/routes_segments", get(route_segment))

@@ -124,6 +124,22 @@ pub async fn ensure_user_is_owner(
     Ok(())
 }
 
+pub async fn is_owner(
+    auth: &crate::middleware::auth::MyJWT,
+    db: &DatabaseConnection,
+    dongle_id: &str
+) -> bool {
+    if let Some(user_model) = &auth.user_model {
+        if !user_model.superuser {
+            return DM::find_user_device(&db, user_model.id, &dongle_id)
+                .await
+                .map(|_| true)
+                .unwrap_or(false);
+        }
+    }
+    false
+}
+
 pub async fn events_download(
     Path((dongle_id, canonical_route_name, segment)): Path<(String, String, String)>,
     State(_ctx): State<AppContext>,
@@ -161,9 +177,14 @@ pub async fn auth_file_download(
     Extension(client): Extension<reqwest::Client>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    ensure_user_is_owner(&auth, &ctx.db, &dongle_id).await?;
+    let owner = is_owner(&auth, &ctx.db, &dongle_id).await;
+    let fullname = format!("{dongle_id}|{route_name}", dongle_id=dongle_id, route_name=route_name);
+    let public = RM::is_public(&ctx.db, &fullname).await.unwrap_or(false);
+    if !public && !owner {
+        return Err((StatusCode::UNAUTHORIZED, "You are not the owner and the route is not public"));
+    }
+
     let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");
-    // Call asset_download with the lookup_key
     return asset_download(lookup_key, &client, headers).await;
 }
 

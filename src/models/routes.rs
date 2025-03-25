@@ -122,6 +122,31 @@ impl RM {
         Ok(routes)
     }
 
+    pub async fn find_recent_device_routes(
+        db: &DatabaseConnection,
+        dongle_id: &str,
+        limit: Option<u64>,
+    ) -> ModelResult<Vec<RM>> {
+        let routes = Entity::find()
+            .filter(Column::DeviceDongleId.eq(dongle_id))
+            .order_by_desc(Column::CreatedAt)
+            .limit(limit)
+            .all(db).await?;
+        Ok(routes)
+    }
+
+    pub async fn is_public(
+        db: &DatabaseConnection,
+        fullname: &str,
+    ) -> ModelResult<bool> {
+        let route = Entity::find()
+            .filter(Column::Fullname.eq(fullname))
+            .one(db)
+            .await?
+            .unwrap_or_default();
+        Ok(route.is_public)
+    }
+
     /// Finds all routes associated with a device.
     ///
     /// # Arguments

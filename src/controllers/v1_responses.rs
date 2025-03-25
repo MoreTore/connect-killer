@@ -233,3 +233,14 @@ pub struct FilesResponse {
 pub struct UnPairResponse {
     pub success: bool,
 }
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct ShareSignatureResponse {
+    pub exp: String,
+    pub sig: String,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct RoutePatch {
+    pub is_public: Option<bool>,
+}
