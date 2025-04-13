@@ -24,7 +24,7 @@ sudo apt-get install nodejs -y
 source ~/.bashrc
 . "$HOME/.cargo/env"
 
-cargo install loco-cli
+cargo install loco
 cargo install sea-orm-cli
 
 export PATH="$PATH:$HOME/.local/share/pnpm"
