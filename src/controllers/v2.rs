@@ -98,8 +98,14 @@ pub async fn pilotauth(
     // TODO Add blacklist or whitelist here. Maybe a db table
     let result = DM::register_device(&ctx.db, params, &dongle_id).await;
     match result {
-        Ok(_) => (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()})),
-        Err(result) => (StatusCode::FORBIDDEN, Err(loco_rs::Error::Model(result))),
+        Ok(_) => {
+            tracing::info!("Device registered: {}", &dongle_id);
+            return (StatusCode::OK, format::json(PilotAuthResponse { dongle_id: dongle_id, access_token: "".into()}))
+        }
+        Err(result) => {
+            tracing::error!("Failed to register device: {} {}", dongle_id,  result);
+            return (StatusCode::FORBIDDEN, Err(loco_rs::Error::Model(result)))
+        }
     }
 }
 

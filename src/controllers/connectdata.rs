@@ -178,9 +178,10 @@ pub async fn auth_file_download(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let owner = is_owner(&auth, &ctx.db, &dongle_id).await;
+    let superuser = auth.user_model.map(|u| u.superuser).unwrap_or(false);
     let fullname = format!("{dongle_id}|{route_name}", dongle_id=dongle_id, route_name=route_name);
     let public = RM::is_public(&ctx.db, &fullname).await.unwrap_or(false);
-    if !public && !owner {
+    if !public && !owner && !superuser {
         return Err((StatusCode::UNAUTHORIZED, "You are not the owner and the route is not public"));
     }
 

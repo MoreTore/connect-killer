@@ -394,6 +394,17 @@ async fn update_route_info(
         }
     }
 
+    // We have looped through all the segments. If none have gps, then we need 
+    // to set the start time based on the first segment created_at which
+    // is the time the first segment was uploaded. created_at is in naive UTC
+    if !gps_seen {
+        let first_seg = segment_models.first().unwrap();
+        let created_time = first_seg.created_at.and_utc().timestamp_millis(); 
+        active_route_model.start_time_utc_millis = ActiveValue::Set(created_time);
+        active_route_model.start_time = ActiveValue::Set(Some(first_seg.created_at));
+        calculated_start_time = created_time - (first_seg.number as i64 * 60000); // first segment number may not be 0
+    }
+
     for segment_model in segment_models {
         let (seg_start_time, seg_end_time) = if segment_model.hpgps {
             (segment_model.start_time_utc_millis, segment_model.start_time_utc_millis)
@@ -637,6 +648,7 @@ async fn parse_qlog(
                                 let mut state = "disabled";
                                 let mut enabled: bool = false;
                                 let mut alert_status = 0;
+                                let mut name = car_event.get_name().ok();
                                 let no_entry = car_event.get_no_entry();
                                 let warning = car_event.get_warning();
                                 let user_disable = car_event.get_user_disable();

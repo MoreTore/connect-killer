@@ -544,6 +544,7 @@ struct DeviceSegmentQuery {
     end: Option<i64>,
     start: Option<i64>,
     limit: Option<u64>,
+    route_str: Option<String>,
 }
 
 async fn route_segment(
@@ -560,13 +561,14 @@ async fn route_segment(
         return loco_rs::controller::bad_request("devices can't do this")
     }
 
-    let mut route_models = match (params.start, params.end) {
-        (Some(start), Some(end)) => {
-            RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, Some(start), Some(end), params.limit).await?
-        },
-        _ => {
-            RM::find_recent_device_routes(&ctx.db, &dongle_id, params.limit).await?
+    let mut route_models = if let Some(route_str) = params.route_str {
+        let route_model = RM::find_route(&ctx.db, &route_str).await?;
+        if route_model.device_dongle_id != dongle_id {
+            return loco_rs::controller::unauthorized("route does not belong to device")
         }
+        vec!(route_model)
+    } else {
+        RM::find_time_filtered_device_routes(&ctx.db, &dongle_id, params.start, params.end, params.limit).await?
     };
     
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing

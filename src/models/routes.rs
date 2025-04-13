@@ -112,13 +112,21 @@ impl RM {
         to: Option<i64>,
         limit: Option<u64>,
     ) -> ModelResult<Vec<RM>> {
-        let routes = Entity::find()
-            .filter(Column::DeviceDongleId.eq(dongle_id))
-            .filter(Column::StartTimeUtcMillis.gte(from))
-            .filter(Column::StartTimeUtcMillis.lte(to))
+        let mut query = Entity::find().filter(Column::DeviceDongleId.eq(dongle_id));
+
+        if let Some(from_time) = from {
+            query = query.filter(Column::StartTimeUtcMillis.gte(from_time));
+        }
+        if let Some(to_time) = to {
+            query = query.filter(Column::StartTimeUtcMillis.lte(to_time));
+        }
+        if let Some(limit_val) = limit {
+            query = query.limit(limit_val);
+        }
+        let routes = query
             .order_by_desc(Column::CreatedAt)
-            .limit(limit)
-            .all(db).await?;
+            .all(db)
+            .await?;
         Ok(routes)
     }
 

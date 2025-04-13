@@ -60,12 +60,6 @@ pub async fn proxy_mapbox(
     headers: HeaderMap,
     body: Body,
 ) -> Result<Response, ErrorResponse> {
-    match headers.get("User-Agent").and_then(|v| v.to_str().ok()) {
-        Some(agent) if agent.starts_with("hoofpilot-") => {} // allowed
-        _ => {
-            return Err(ErrorResponse::Unauthorized);
-        }
-    }
 
     let mapbox_token = env::var("MAPBOX_TOKEN").expect("MAPBOX_TOKEN env variable not set");
 
