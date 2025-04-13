@@ -295,6 +295,21 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
         let mut active_route_model = route_model.into_active_model();
         if let Some(log) = qlog_result {
             active_route_model.platform = ActiveValue::Set(log.car_fingerprint);
+            active_route_model.git_remote = ActiveValue::Set(if log.git_remote.is_empty() {
+                None
+            } else {
+                Some(log.git_remote)
+            });
+            active_route_model.git_commit = ActiveValue::Set(if log.git_commit.is_empty() {
+                None
+            } else {
+                Some(log.git_commit)
+            });
+            active_route_model.git_branch = ActiveValue::Set(if log.git_branch.is_empty() {
+                None
+            } else {
+                Some(log.git_branch)
+            });
         }
         //let mut active_device_model = device_model.into_active_model();
         update_route_info(&self.ctx, &mut active_route_model, &segment_models).await?;

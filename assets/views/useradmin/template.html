@@ -669,6 +669,7 @@
             <td style="white-space: nowrap">platform</td>
             <td style="white-space: nowrap">git_remote</td>
             <td style="white-space: nowrap">git_branch</td>
+            <td style="white-space: nowrap">git_commit</td>
           </tr>
           {% for route in routes.routes %}
           <tr>
@@ -704,6 +705,7 @@
             <td style="white-space: nowrap">{{ route.platform }}</td>
             <td style="white-space: nowrap">{{ route.git_remote }}</td>
             <td style="white-space: nowrap">{{ route.git_branch }}</td>
+            <td style="white-space: nowrap">{{ route.git_commit }}</td>
           </tr>
           {% endfor %}
         </tbody>
