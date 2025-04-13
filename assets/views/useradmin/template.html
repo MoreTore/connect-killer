@@ -253,12 +253,21 @@
         const parts = canonicalRouteName.split("|");
         const routeName = parts[1] || canonicalRouteName;
 
-        // Adjust file name (path) similar to your Python logic.
+        // Create an array to hold file paths
+        let filePaths = [];
+        
+        // Add the original file path
         let filePath = file;
         if (file.includes('rlog') || file.includes('qlog')) {
           if (!file.endsWith('.bz2')) {
             filePath += '.bz2';
           }
+          // Add a .zst version for rlog and qlog files
+          let zstPath = file;
+          if (!zstPath.endsWith('.zst')) {
+            zstPath += '.zst';
+          }
+          filePaths.push(zstPath);
         } else if (file.includes('qcam')) {
           if (!file.endsWith('.ts')) {
             filePath += '.ts';
@@ -268,42 +277,54 @@
             filePath += '.hevc';
           }
         }
+        
+        // Add the original file path to the array
+        filePaths.push(filePath);
 
         try {
-          // Request the upload URL for this file.
-          const urls = await getUploadUrls(dongleId, [canonicalRouteName.split("|")[1] + "--" + segmentNumber + "/" + filePath]);
-          const uploadUrl = urls[0].url;  // assuming the first URL is for the file
+          // Process each file path in the array
+          for (const path of filePaths) {
+            // Request the upload URL for this file.
+            const urls = await getUploadUrls(dongleId, [canonicalRouteName.split("|")[1] + "--" + segmentNumber + "/" + path]);
+            const uploadUrl = urls[0].url;  // assuming the first URL is for the file
 
-          // Build the API URL for the useradmin upload command.
-          const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
-          const uploadCommand = {
-            jsonrpc: "2.0",
-            method: "uploadFileToUrl",
-            params: {
-              // Construct a filename based on the route and segment
-              fn: `${routeName}--${segmentNum}/${file}`,
-              url: uploadUrl,
-              headers: {}
-            },
-            id: 1
-          };
+            const file_name = path;
+            if(file_name.includes('.bz2')) {
+              // when extension is bz2 the uploadCommand used to be without extension - keepin it that way for now
+              file_name = file_name.replace('.bz2', '');
+            }
 
-          // Send the upload command via POST.
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(uploadCommand)
-          });
-          
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
+            // Build the API URL for the useradmin upload command.
+            const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
+            const uploadCommand = {
+              jsonrpc: "2.0",
+              method: "uploadFileToUrl",
+              params: {
+                // Construct a filename based on the route and segment
+                fn: `${routeName}--${segmentNum}/${file_name}`,
+                url: uploadUrl,
+                headers: {}
+              },
+              id: 1
+            };
+
+            // Send the upload command via POST.
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              credentials: 'include',
+              body: JSON.stringify(uploadCommand)
+            });
+            
+            if (!response.ok) {
+              throw new Error('Network response was not ok');
+            }
+            
+            const jsonResponse = await response.json();
+            console.log('Upload success:', jsonResponse);
           }
-          
-          const jsonResponse = await response.json();
-          console.log('Upload success:', jsonResponse);
           
           // Update the UI: show progress bar and hide the upload button.
           document.getElementById(`progressContainer_${segmentNum}_${fileType}`).style.display = 'block';
@@ -585,7 +606,7 @@
             </td>
             <td style="white-space: nowrap">
               {% if segment.qlog_url != "" %}
-              <a href="{{ segment.qlog_url }}">qlog.bz2</a>
+              <a href="{{ segment.qlog_url }}">qlog</a>
               {% else %}
               <div id="progressContainer_{{ segment.number }}_qlog" style="display:none;">
                 <progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress>
@@ -605,7 +626,7 @@
             </td>
             <td style="white-space: nowrap">
               {% if segment.rlog_url != "" %}
-              <a href="{{ segment.rlog_url }}">rlog.bz2</a>
+              <a href="{{ segment.rlog_url }}">rlog</a>
               {% else %}
               <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
                 <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
