@@ -99,30 +99,29 @@ def get_upload_queue(dongle_id):
         print(f"Failed to send request: {response.status_code}")
         print("Response:", response.text)
 
-def get_upload_urls(dongle_id, paths):
+def get_upload_urls(dongle_id, paths: list):
     url = f'{base_url}/v1/{dongle_id}/upload_urls'
-    for i, path in enumerate(paths):
+    i = 0
+
+    while i < len(paths):
+        path = paths[i]
         if 'rlog' in path:
+            if ".bz2" in path or ".zst" in path:
+                i += 1
+                continue
+            # replace path with bz2 and add zst after it
             paths[i] = path + ".bz2"
-        if 'qlog' in path:
+            paths.insert(i + 1, path + ".zst")
+            i += 2  # then skip over both new entries
+            continue
+        if 'qlog' in path and not path.endswith(".bz2"):
             paths[i] = path + ".bz2"
-        if 'qcam' in path:
-            if not ".ts" in path:
-                path = path + ".ts"
-            paths[i] = path
-        if 'fcam' in path:
-            if not ".hevc" in path:
-                path = path + ".hevc"
-            paths[i] = path
-        if 'dcam' in path:
-            if not '.hevc' in path:
-                path = path + ".hevc"
-            paths[i] = path
-            print(paths[i])
-        if 'ecam' in path:
-            if not ".hevc" in path:
-                path = path + ".hevc"
-            paths[i] = path
+        if 'qcam' in path and not path.endswith(".ts"):
+            paths[i] = path + ".ts"
+        if any(cam in path for cam in ['fcam', 'dcam', 'ecam']):
+            if not path.endswith(".hevc"):
+                paths[i] = path + ".hevc"
+        i += 1
 
     payload = {
         "paths": paths,
@@ -139,7 +138,6 @@ def get_upload_urls(dongle_id, paths):
     else:
         print()
         return {"error": response.status_code, "message": response.text}
-    
 
 
 def request_upload(dongle_id, paths, urls):

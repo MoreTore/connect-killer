@@ -288,12 +288,6 @@
             const urls = await getUploadUrls(dongleId, [canonicalRouteName.split("|")[1] + "--" + segmentNumber + "/" + path]);
             const uploadUrl = urls[0].url;  // assuming the first URL is for the file
 
-            const file_name = path;
-            if(file_name.includes('.bz2')) {
-              // when extension is bz2 the uploadCommand used to be without extension - keepin it that way for now
-              file_name = file_name.replace('.bz2', '');
-            }
-
             // Build the API URL for the useradmin upload command.
             const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
             const uploadCommand = {
@@ -301,7 +295,7 @@
               method: "uploadFileToUrl",
               params: {
                 // Construct a filename based on the route and segment
-                fn: `${routeName}--${segmentNum}/${file_name}`,
+                fn: `${routeName}--${segmentNum}/${path}`,
                 url: uploadUrl,
                 headers: {}
               },
@@ -321,9 +315,8 @@
             if (!response.ok) {
               throw new Error('Network response was not ok');
             }
-            
-            const jsonResponse = await response.json();
-            console.log('Upload success:', jsonResponse);
+
+            console.log(await response.json());
           }
           
           // Update the UI: show progress bar and hide the upload button.
