@@ -344,6 +344,9 @@ async fn delete_data(
         }
         let mut active_device_model = device_model.into_active_model();
         active_device_model.server_storage = ActiveValue::Set(0);
+        active_device_model.locations = ActiveValue::Set(None);
+        active_device_model.alias = ActiveValue::Set("".to_string());
+        active_device_model.owner_id = ActiveValue::Set(None);
         active_device_model.update(&ctx.db).await?;
     }
 
@@ -371,10 +374,9 @@ async fn delete_data(
                 return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             );
     }
-    // Do this last in case the above fails for some reason
-    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
-    device_model.delete(&ctx.db).await?; // should cascade to all related data
-
+    // We cant delete the device model but we still want to delete all the routes and segments. We want to keep the device in the db so it can 
+    // be used for the new customer that pairs the device.
+    RM::delete_device_routes(&ctx.db, &dongle_id).await?;
     return Ok((StatusCode::OK, format!("Deleted {} files", keys.len())).into_response()); 
 }
 
