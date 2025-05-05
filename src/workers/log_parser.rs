@@ -801,10 +801,18 @@ async fn parse_qlog(
 }
 
 async fn upload_data(client: &Client, url: &str, body: Vec<u8>) {
-    if let Err(e) = client.put(url).body(body).send().await {
-        tracing::error!("Request to {} failed: {}", url, e);
-    } else {
-        tracing::debug!("Uploaded data to {}", url);
+    match client.put(url).body(body).send().await {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                tracing::trace!("Uploaded data to {} with status {}", url, status);
+            } else {
+                tracing::error!("Failed to upload data to {} with status {}", url, status);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Request to {} failed: {}", url, e);
+        }
     }
 }
 

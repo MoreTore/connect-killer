@@ -233,7 +233,7 @@ async fn exit_handler(
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
     {
-        tracing::debug!("Removing device from manager: {}", endpoint_dongle_id);
+        tracing::info!("Removing device from manager: {}", endpoint_dongle_id);
         let mut connections = manager.devices.lock().await;
         connections.remove(&endpoint_dongle_id);
     } // unlock the mutex

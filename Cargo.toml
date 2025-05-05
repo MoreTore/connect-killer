@@ -72,7 +72,9 @@ time = "0.3.36"
 sea-schema = "0.15.0"
 indicatif = "0.17.11"
 serde_urlencoded = "0.7.1"
-
+hyperlocal = "0.9.1"
+governor = "0.10.0"
+dashmap = "6.1.0"
 
 [[bin]]
 name = "connect-cli"
