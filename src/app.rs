@@ -12,12 +12,7 @@ use reqwest::Client;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_layer::Layer;
 use axum_server::tls_rustls::RustlsConfig;
-use axum::{
-    extract::Host,
-    handler::HandlerWithoutStateExt,
-    http::{StatusCode, Uri},
-    response::Redirect, Extension,
-};
+use axum::Extension;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},

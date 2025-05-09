@@ -22,6 +22,7 @@ use serde::{de, Deserialize, Serialize};
 use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::{
     models::{
@@ -79,7 +80,7 @@ fn generate_request_id() -> String {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
-enum Id {
+pub enum Id {
     String(String),
     Int(u64),
 }
@@ -130,12 +131,16 @@ enum JsonRpcMessage {
     Response(JsonRpcResponse),
 }
 
+pub struct DeviceConnection {
+    pub connection_id: String,
+    pub sender: SplitSink<WebSocket, Message>,
+}
+
 pub struct ConnectionManager {
-    pub devices: Mutex<HashMap<String, SplitSink<WebSocket, Message>>>,
+    pub devices: Mutex<HashMap<String, DeviceConnection>>,
     pub clients: Mutex<HashMap<String, tokio::sync::mpsc::Sender<JsonRpcResponse>>>,
     // branch -> module -> Vec<serde_json::Value>
     pub cloudlog_cache: RwLock<HashMap<String, HashMap<String, HashMap<String, Vec<serde_json::Value>>>>>,
-
 }
 
 impl ConnectionManager {
@@ -157,7 +162,7 @@ async fn handle_jsonrpc_request(
 ) -> impl IntoResponse {
     let is_sensitive_method = payload.method == "takeSnapshot";
     if let Some(user_model) = auth.user_model {
-        if !user_model.superuser || is_sensitive_method {
+        if (!user_model.superuser || is_sensitive_method) {
             DM::ensure_user_device(&ctx.db, user_model.id, &endpoint_dongle_id).await?;
         }
     } else {
@@ -215,10 +220,11 @@ async fn forward_command_to_device(
     manager: &Arc<ConnectionManager>,
     message: &Message,
 ) -> Result<()> {
-    let mut devices = manager.devices.lock().await;
-    let device_sender = devices.get_mut(endpoint_dongle_id).ok_or(Error::DeviceNotFound)?;
+    let mut device_connections = manager.devices.lock().await;
+    let device_conn = device_connections.get_mut(endpoint_dongle_id).ok_or(Error::DeviceNotFound)?;
 
-    device_sender
+    device_conn
+        .sender
         .send(message.clone())
         .await
         .map_err(|e| Error::SendFailed(e.to_string()))?;
@@ -230,12 +236,21 @@ async fn exit_handler(
     endpoint_dongle_id: String,
     jwt_identity: String,
     manager: Arc<ConnectionManager>,
+    connection_id: String,
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
     {
-        tracing::info!("Removing device from manager: {}", endpoint_dongle_id);
-        let mut connections = manager.devices.lock().await;
-        connections.remove(&endpoint_dongle_id);
+        let mut device_connections = manager.devices.lock().await;
+
+        // Check if the connection ID matches the one in the manager. In some cases, the device might have tried to reconnect before
+        // the old connection was removed, so we need to ensure we are removing the correct one and not drop the new connection.
+        if let Some(device_conn) = device_connections.get(&endpoint_dongle_id) {
+            if device_conn.connection_id == connection_id {
+                tracing::info!("Removing device from manager: {}", endpoint_dongle_id);
+                device_connections.remove(&endpoint_dongle_id);
+            }
+        }
+
     } // unlock the mutex
     if is_device {
         if let Ok(device) = DM::find_device(&ctx.db, &endpoint_dongle_id).await {
@@ -257,11 +272,15 @@ async fn handle_socket(
 ) {
     let is_device = jwt_identity == endpoint_dongle_id;
     let (mut sender, mut receiver) = socket.split();
+    let connection_id = Uuid::new_v4().to_string();
 
     if is_device {
-        let mut devices: tokio::sync::MutexGuard<HashMap<String, SplitSink<WebSocket, Message>>> = manager.devices.lock().await;
+        let mut devices: tokio::sync::MutexGuard<HashMap<String, DeviceConnection>> = manager.devices.lock().await;
         tracing::info!("Adding device to manager: {}", endpoint_dongle_id);
-        devices.insert(endpoint_dongle_id.clone(), sender);
+        devices.insert(endpoint_dongle_id.clone(), DeviceConnection {
+            connection_id: connection_id.clone(),
+            sender,
+        });
     }
     
     while let Some(message_result) = receiver.next().await {
@@ -414,7 +433,7 @@ async fn handle_socket(
                             };
                             // Convert the response to a text message and forward it.
                             let message = Message::Text(serde_json::to_string(&response).unwrap());
-                            forward_command_to_device(&endpoint_dongle_id, &manager, &message).await;
+                            let _ = forward_command_to_device(&endpoint_dongle_id, &manager, &message).await;
                         },
                         _ => {
                             tracing::error!("Invalid JSON-RPC message: {}", text);
@@ -422,13 +441,13 @@ async fn handle_socket(
                     }
                 }
             }
-            Message::Binary(bin) => { // lots of cloudlogs coming in here. Maybe send it to the web interface client for real-time rollout monitoring
+            Message::Binary(_bin) => { // lots of cloudlogs coming in here. Maybe send it to the web interface client for real-time rollout monitoring
                 tracing::info!("Got Binary Data from {}", endpoint_dongle_id);
             }
         }
     }
     tracing::trace!("Connection out of context.");
-    exit_handler(ctx,endpoint_dongle_id, jwt_identity, manager).await;
+    exit_handler(ctx,endpoint_dongle_id, jwt_identity, manager, connection_id).await;
 }
 
 async fn handle_device_ws(
@@ -454,15 +473,15 @@ async fn handle_device_ws(
 
 pub async fn send_ping_to_all_devices(manager: Arc<ConnectionManager>, db: &DatabaseConnection) {
     let mut devices = manager.devices.lock().await;
-    for (dongle_id, sender) in devices.iter_mut() {
+    for (dongle_id, device_connection) in devices.iter_mut() {
         tracing::trace!("Sending ping to {}", &dongle_id);
-        if let Err(e) = sender.send(Message::Ping(Vec::new())).await {
+        if let Err(e) = device_connection.sender.send(Message::Ping(Vec::new())).await {
             tracing::trace!("Failed to send ping to device {}: {}", dongle_id, e);
         }
     }
-    for (dongle_id, sender) in devices.iter_mut() {
+    for (dongle_id, device_connection) in devices.iter_mut() {
         if let Ok(Some(latest_msg)) = DMQM::find_latest_msg(db, &dongle_id).await {
-            if let Err(e) = sender.send(Message::Text(latest_msg.json_rpc_request.to_string())).await {
+            if let Err(e) = device_connection.sender.send(Message::Text(latest_msg.json_rpc_request.to_string())).await {
                 tracing::error!("Failed to send jsonrpc msg to device {}: {}", dongle_id, e);
             }
             if _entities::device_msg_queues::Entity::delete_by_id(latest_msg.id).exec(db).await.is_err() {

@@ -120,7 +120,7 @@ pub async fn proxy_mapbox(
     Extension(client): Extension<reqwest::Client>,
     method: Method,
     uri: Uri,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     body: Body,
 ) -> Result<Response, ErrorResponse> {
     tracing::info!("Proxying request to Mapbox API: {}", uri);

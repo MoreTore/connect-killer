@@ -118,20 +118,20 @@ impl Task for SeedFromMkv {
                         let unlog_file_name = file_name.replace(".bz2", ".unlog").replace(".zst", ".unlog");
                         let internal_unlog_url = common::mkv_helpers::get_mkv_file_url(&unlog_file_name);
                         tracing::trace!("Deleting: {internal_unlog_url}");
-                        let response = client.delete(&internal_unlog_url).send().await.unwrap();
+                        let _response = client.delete(&internal_unlog_url).send().await.unwrap();
                         // delete the sprite file from mkv
                         let sprite_file_name = file_name.replace("qlog.bz2", "sprite.jpg").replace("qlog.zst", "sprite.jpg");
                         let internal_sprite_url = common::mkv_helpers::get_mkv_file_url(&sprite_file_name);
                         tracing::trace!("Deleting: {internal_sprite_url}");
-                        let response = client.delete(&internal_sprite_url).send().await.unwrap();
+                        let _response = client.delete(&internal_sprite_url).send().await.unwrap();
                         let coords_file_name = file_name.replace("qlog.bz2", "coords.json").replace("qlog.zst", "coords.json");
                         let internal_coords_url = common::mkv_helpers::get_mkv_file_url(&coords_file_name);
                         tracing::trace!("Deleting: {internal_coords_url}");
-                        let response = client.delete(&internal_coords_url).send().await.unwrap();
+                        let _response = client.delete(&internal_coords_url).send().await.unwrap();
                         let events_file_name = file_name.replace("qlog.bz2", "events.json").replace("qlog.zst", "events.json");
                         let internal_coords_url = common::mkv_helpers::get_mkv_file_url(&events_file_name);
                         tracing::trace!("Deleting: {internal_coords_url}");
-                        let response = client.delete(&internal_coords_url).send().await.unwrap();
+                        let _response = client.delete(&internal_coords_url).send().await.unwrap();
                     }
     
                     let internal_url = common::mkv_helpers::get_mkv_file_url(&file_name);
