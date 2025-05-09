@@ -202,8 +202,18 @@
         var timestamps = document.querySelectorAll('.timestamp');
         timestamps.forEach(function(el) {
             var unixTimestamp = el.getAttribute('data-timestamp');
-            var date = new Date(Number(unixTimestamp*1000));
-            el.textContent = date.toUTCString();  // Set the formatted UTC date-time string
+            if (unixTimestamp && !isNaN(unixTimestamp)) {
+              var date = new Date(Number(unixTimestamp) * 1000);
+              var localString = date.toLocaleString();
+              var now = Date.now();
+              var diff = Math.floor((now - date.getTime()) / 1000);
+              var rel = '';
+              if (diff < 60) rel = 'just now';
+              else if (diff < 3600) rel = Math.floor(diff/60) + ' min ago';
+              else if (diff < 86400) rel = Math.floor(diff/3600) + ' hr ago';
+              else rel = Math.floor(diff/86400) + ' days ago';
+              el.textContent = localString + ' (' + rel + ')';
+            }
         });
       });
       function api_post(endpoint, data, callback) {
@@ -450,10 +460,15 @@
               const logs = await response.json();
               let html = '<table>';
               logs.forEach(log => {
-                  // Pretty-print each log (assuming the API returns JSON objects)
-                  html += `<tr><td>
-                      <pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(log, null, 2)}</pre>
-                      </td></tr>`;
+                  // Format the 'created' field to local time string
+                  let createdLocal = '';
+                  if (log.created) {
+                    createdLocal = new Date(log.created * 1000).toLocaleString();
+                  }
+                  html += `<tr><td>` +
+                      `<b>Created:</b> ${createdLocal}<br>` +
+                      `<pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(log, null, 2)}</pre>` +
+                      `</td></tr>`;
               });
               html += '</table>';
               container.innerHTML = html;

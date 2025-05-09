@@ -63,19 +63,19 @@ impl LockManager {
     }
 
     pub async fn acquire_advisory_lock(&self, _db: &DatabaseConnection, key: u32) -> Result<(), DbErr> {
-        let start_time = Instant::now();
+        //let start_time = Instant::now();
 
         let mut keys = self.keys.lock().await;
         while keys.contains_key(&key) {
             drop(keys);
-            let wait_start = Instant::now();
+            //let wait_start = Instant::now();
             self.notify.notified().await;
             keys = self.keys.lock().await;
         }
 
         // Insert the key to indicate it is locked
         keys.insert(key, true);
-        /// TODO: Fix the global locking
+        // TODO: Fix the global locking
         // This is the global lock (literally for servers around the globe accessing the same db)
         // tracing::trace!("Attempting to acquire advisory lock with key: {}", key);
         // let sql = format!("SELECT pg_advisory_lock({})", key);
@@ -224,7 +224,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
 
 
         let mut seg = segment.into_active_model();
-        let mut ignore_uploads = None;
+        //let mut ignore_uploads = None;
         let mut qlog_result: Option<QLogResult> = None;
         match args.file.as_str() {
             "rlog.bz2" | "rlog.zst" =>  {
@@ -270,7 +270,7 @@ impl worker::Worker<LogSegmentWorkerArgs> for LogSegmentWorker {
             ),
             f => {
                 tracing::error!("Got invalid file type: {}", f);
-                ignore_uploads = Some(true);
+                //ignore_uploads = Some(true);
                 return Ok(())
             } // TODO: Mark for immediate deletion and block this user
         }
@@ -553,7 +553,7 @@ async fn parse_qlog(
         };
 
         match event.which() {
-            Err(e) => {
+            Err(_e) => {
                 //tracing::trace!("Event type not in schema: {:?}", e);
                 continue; // Skip this iteration if matching fails. This happends often
             }
@@ -663,14 +663,14 @@ async fn parse_qlog(
                                 let mut state = "disabled";
                                 let mut enabled: bool = false;
                                 let mut alert_status = 0;
-                                let mut name = car_event.get_name().ok();
-                                let no_entry = car_event.get_no_entry();
+                                let mut _name = car_event.get_name().ok();
+                                let _no_entry = car_event.get_no_entry();
                                 let warning = car_event.get_warning();
-                                let user_disable = car_event.get_user_disable();
+                                let _user_disable = car_event.get_user_disable();
                                 let soft_disable = car_event.get_soft_disable();
                                 let immediate_disable = car_event.get_immediate_disable();
-                                let pre_enable = car_event.get_pre_enable();
-                                let permanent = car_event.get_permanent();
+                                let _pre_enable = car_event.get_pre_enable();
+                                let _permanent = car_event.get_permanent();
                                 let overridden = car_event.get_override_lateral() || car_event.get_override_longitudinal();
                                 if car_event.get_enable() || car_event.get_pre_enable() {
                                     state = "enabled";

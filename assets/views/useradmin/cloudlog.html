@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cloudlogs Viewer</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 13px; }
+    th { background: #f0f0f0; }
+    input, select { margin: 0 4px 8px 0; }
+    pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
+    .expandable-row { cursor: pointer; }
+    .raw-log { display: none; background: #f9f9f9; }
+  </style>
+</head>
+<body>
+  <h2>Cloudlogs Viewer</h2>
+  <form id="filterForm">
+    <label>From: <input name="from_datetime" type="datetime-local" step="1"></label>
+    <label>To: <input name="to_datetime" type="datetime-local" step="1"></label>
+    <label><input type="checkbox" id="useUnix" onchange="toggleDatetimeMode()"> Use Unix Timestamp</label>
+    <div id="unixFields" style="display:none;">
+      <input name="date_from" id="unixFrom" type="number" placeholder="From Unix Timestamp (seconds)">
+      <input name="date_to" id="unixTo" type="number" placeholder="To Unix Timestamp (seconds)">
+    </div>
+    <input name="dongle_id" placeholder="Dongle ID">
+    <input name="branch" placeholder="Branch">
+    <input name="module" placeholder="Module">
+    <input name="level" placeholder="Level">
+    <input name="levelnum" type="number" placeholder="Levelnum">
+    <input name="funcName" placeholder="Function Name">
+    <!-- ctx fields -->
+    <input name="ctx_branch" placeholder="ctx.branch">
+    <input name="ctx_commit" placeholder="ctx.commit">
+    <input name="ctx_device" placeholder="ctx.device">
+    <input name="ctx_dirty" placeholder="ctx.dirty (true/false)">
+    <input name="ctx_dongle_id" placeholder="ctx.dongle_id">
+    <input name="ctx_origin" placeholder="ctx.origin">
+    <input name="ctx_version" placeholder="ctx.version">
+    <input name="limit" type="number" min="1" max="5000" value="500" style="width:60px;" title="Limit">
+    <button type="submit">Filter</button>
+  </form>
+  <table id="logsTable">
+    <thead>
+      <tr>
+        <th>Time</th><th>Device</th><th>Branch</th><th>Module</th><th>Level</th><th>Message</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <script>
+    function toggleDatetimeMode() {
+      const useUnix = document.getElementById('useUnix').checked;
+      document.getElementById('unixFields').style.display = useUnix ? '' : 'none';
+      document.querySelector('input[name="from_datetime"]').disabled = useUnix;
+      document.querySelector('input[name="to_datetime"]').disabled = useUnix;
+    }
+
+    document.getElementById('filterForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const form = e.target;
+      const params = new URLSearchParams();
+      const useUnix = document.getElementById('useUnix').checked;
+      if (useUnix) {
+        const unixFrom = document.getElementById('unixFrom').value;
+        const unixTo = document.getElementById('unixTo').value;
+        if (unixFrom) params.append('date_from', unixFrom);
+        if (unixTo) params.append('date_to', unixTo);
+      } else {
+        const fromDt = form.elements['from_datetime'].value;
+        const toDt = form.elements['to_datetime'].value;
+        if (fromDt) params.append('date_from', Math.floor(new Date(fromDt).getTime() / 1000));
+        if (toDt) params.append('date_to', Math.floor(new Date(toDt).getTime() / 1000));
+      }
+      for (const el of form.elements) {
+        if (el.name && el.value && !['from_datetime','to_datetime','date_from','date_to'].includes(el.name)) {
+          if (el.name === 'ctx_dirty') {
+            if (el.value.toLowerCase() === 'true') params.append('ctx_dirty', 'true');
+            else if (el.value.toLowerCase() === 'false') params.append('ctx_dirty', 'false');
+          } else {
+            params.append(el.name, el.value);
+          }
+        }
+      }
+      const res = await fetch(`/connectdata/cloudlogs/all?${params.toString()}`);
+      if (!res.ok) {
+        alert('Failed to fetch logs');
+        return;
+      }
+      const logs = await res.json();
+      const tbody = document.getElementById('logsTable').querySelector('tbody');
+      tbody.innerHTML = '';
+      logs.forEach((log, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'expandable-row';
+        const created = log.created ? new Date(log.created * 1000).toLocaleString() : '';
+        let msg = log.msg$s;
+        if (!msg && log.msg !== undefined) {
+          if (typeof log.msg === 'string') {
+            msg = log.msg;
+          } else {
+            msg = JSON.stringify(log.msg);
+          }
+        }
+        if (!msg) msg = '';
+        const execInfo = log.exec_info || '';
+        tr.innerHTML = `
+          <td>${created}</td>
+          <td>${log._dongle_id || ''}</td>
+          <td>${log._branch || ''}</td>
+          <td>${log._module || ''}</td>
+          <td>${log.level || ''}</td>
+          <td>${msg.substring(0, 120)}${msg.length > 120 ? '…' : ''}${execInfo ? ' <span style=\"color:#b00;\">[exec_info]</span>' : ''}</td>
+        `;
+        // Add a hidden row for the raw log
+        const rawTr = document.createElement('tr');
+        rawTr.className = 'raw-log';
+        rawTr.innerHTML = `<td colspan="6"><pre>${escapeHtml(JSON.stringify(log, null, 2))}</pre></td>`;
+        // Toggle expand/collapse
+        tr.onclick = () => {
+          rawTr.style.display = rawTr.style.display === 'table-row' ? 'none' : 'table-row';
+        };
+        tbody.appendChild(tr);
+        tbody.appendChild(rawTr);
+      });
+      function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, function(m) {
+          return ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          })[m];
+        });
+      }
+    };
+  </script>
+</body>
+</html>

@@ -202,7 +202,7 @@ pub async fn onebox_handler(
 
 pub async fn login(
     ViewEngine(v): ViewEngine<TeraView>,
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
 ) -> Result<impl IntoResponse> {
     views::auth::login(
         v, 
@@ -212,8 +212,19 @@ pub async fn login(
     )
 }
 
+pub async fn cloudlogs_view(
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(_ctx): State<AppContext>,
+) -> Result<impl IntoResponse> {
+    views::route::admin_cloudlogs(v, CloudlogsTemplate {
+        defined: true,
+        cloudlogs: HashMap::new(),
+    })
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .add("/", get(onebox_handler))
         .add("/login", get(login))
+        .add("/cloudlogs", get(cloudlogs_view))
 }
