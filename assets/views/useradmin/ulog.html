@@ -1,199 +1,32 @@
+<!DOCTYPE html>
+<html>
 <head>
+    <meta charset="utf-8">
+    <title>Log Event Viewer</title>
     <style>
-          input { width: 500px; }
-          body { font-family: monospace; }
-          th { border: 1px solid black; }
-          td { border: 1px solid black; padding: 2px; }
-          td[right] { text-align: right; }
-          th[title]::after, td[title]::after { content: '[i]'; color: blue; font-size: 0.5rem; font-weight: bold; vertical-align: super; }
-          th[warn]::after, td[warn]::after { content: '[!]'; color: red; font-size: 0.5rem; font-weight: bold; vertical-align: super; }
-          #lines_to_deactivate { color: red; font-weight: bold; }
-        </style>
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-        <script>
-          window.ATHENA_HOST = "https://athena.comma.ai";
-          window.API_HOST = "https://api.comma.ai";
-          window.BILLING_HOST = "https://billing.comma.ai";
-          if (typeof window.API_HOST === 'undefined') {
-      window.API_HOST = 'https://api.comma.ai';
-      window.ATHENA_HOST = 'https://athena.comma.ai';
-      window.BILLING_HOST = 'https://billing.comma.ai';
-    }
-    
-    Date.prototype.toLocalString = function() {
-      return this.getUTCFullYear() +
-        '-' + (this.getMonth() + 1).toString().padStart(2, '0') +
-        '-' + this.getDate().toString().padStart(2, '0') +
-        ' ' + this.getHours().toString().padStart(2, '0') +
-        ':' + this.getMinutes().toString().padStart(2, '0') +
-        ':' + this.getSeconds().toString().padStart(2, '0');
-    };
-    
-    $(document).ready(function() {
-      // convert epoch times to localtime
-      $('time').each(function(i, e) {
-        var dt = parseInt($(e).attr('datetime'));
-        if (dt) {
-          $(e).text(new Date(dt * 1000).toLocalString());
-        }
-      });
-    });
-    
-    function api_request(method, endpoint, callback, extraOptions) {
-      var options = $.extend(true, {}, {
-          method: method,
-          headers: {
-            'Authorization': getCookie('Authorization')
-          },
-          url: window.API_HOST + "/" + endpoint,
-          success: callback
-      }, extraOptions);
-      return $.ajax(options);
-    }
-    function api_post(endpoint, data, callback) {
-      return api_request('POST', endpoint, callback, { data: JSON.stringify(data), contentType: 'application/json' });
-    }
-    function api_patch(endpoint, data, callback) {
-      return api_request('PATCH', endpoint, callback, { data: JSON.stringify(data) , contentType: 'application/json' });
-    }
-    function api_get(endpoint, callback) {
-      return api_request('GET', endpoint, callback);
-    }
-    function api_delete(endpoint) {
-      return api_request('DELETE', endpoint);
-    }
-    function bind(dongle_id) {
-      var email = prompt("Granting access for "+dongle_id+" to email?");
-      // check if user clicked cancel
-      if (email === null) {
-        return
-      }
-      api_post("v1/devices/" + dongle_id + "/add_user", {email: email}, function(x) { alert('Bound ' + email + ' to ' + dongle_id); });
-      window.location.reload();
-    }
-    function unbind(dongle_id, email) {
-      var x = confirm("Remove " + (email || "self") + " from " + dongle_id + "?");
-      if (x === false) {
-        return;
-      }
-      api_post("v1/devices/" + dongle_id + "/del_user", email ? {email: email} : {}, function(x) { alert('Unbound ' + (email || 'self') + ' from ' + dongle_id); });
-      if (email) {
-        window.location.reload();
-      } else {
-        window.location.href = '/';
-      }
-    }
-    function unpair(dongle_id) {
-      if (confirm("Unpair "+dongle_id+"?")) {
-        api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) { alert('Unpaired ' + dongle_id); });
-      }
-      window.location.reload();
-    }
-    
-    function preserveRoute(route) {
-      api_post('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert('Preserved ' + route);
-          window.location.reload();
-        } else if (xhr.status === 403) {
-          alert('Maximum number of drives have been preserved. Unpreserve a drive and try again.');
-        } else {
-          console.log('failed to preserve route', route, xhr.url, xhr.status, data);
-        }
-      });
-    }
-    function unpreserveRoute(route) {
-      api_delete('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert('Unpreserved ' + route);
-          window.location.reload();
-        } else {
-          console.log('failed to unpreserve route', route, xhr.url, xhr.status, data);
-        }
-      });
-    }
-    function publicizeRoute(route) {
-      var x = confirm("Publicizing "+route+". This will allow any comma user with the route name to access all route files.");
-      if (x === false) {
-        return;
-      }
-    
-      api_patch('v1/route/' + route + '/', {'is_public': true}).then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert(route + ' is now public.');
-          window.location.reload();
-        } else {
-          console.log('failed to publicize route', route, xhr.url, xhr.status, data);
-        }
-      })
-    }
-    function unpublicizeRoute(route) {
-      api_patch('v1/route/' + route + '/', {'is_public': false}).then(function(data, _, xhr) {
-        if (xhr.status === 200) {
-          alert(route + ' is now private.');
-          window.location.reload();
-        } else {
-          console.log('failed to privatize route', route, xhr.url, xhr.status, data);
-        }
-      })
-    }
-    function getCookie(name) {
-      var value = "; " + document.cookie;
-      var parts = value.split("; " + name + "=");
-      if (parts.length == 2) return parts.pop().split(";").shift().replace(/^"(.*)"$/, '$1');
-    }
-    
-          
-        </script>
-        <title>comma useradmin</title>
+        body { font-family: monospace; }
+        select { min-width: 128px; }
+        pre { background: #f8f8f8; padding: 1em; border-radius: 4px; }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 </head>
-
-
 <body>
-    <hr>
-    <b>log:</b> 
-    <select style="min-width: 128px">
-        <option val=""></option>
-        <option val="accelerometer">accelerometer</option>
-        <option val="cameraOdometry">cameraOdometry</option>
-        <option val="can">can</option>
-        <option val="carControl">carControl</option>
-        <option val="carParams">carParams</option>
-        <option val="carState">carState</option>
-        <option val="clocks">clocks</option>
-        <option val="controlsState">controlsState</option>
-        <option val="customReserved0">customReserved0</option>
-        <option val="customReserved1">customReserved1</option>
-        <option val="customReserved3">customReserved3</option>
-        <option val="deviceState">deviceState</option>
-        <option val="driverCameraState">driverCameraState</option>
-        <option val="driverEncodeIdx">driverEncodeIdx</option>
-        <option val="driverMonitoringState">driverMonitoringState</option>
-        <option val="driverStateV2">driverStateV2</option>
-        <option val="errorLogMessage">errorLogMessage</option>
-        <option val="gpsLocationExternal">gpsLocationExternal</option>
-        <option val="gyroscope">gyroscope</option>
-        <option val="initData">initData</option>
-        <option val="liveCalibration">liveCalibration</option>
-        <option val="liveLocationKalman">liveLocationKalman</option>
-        <option val="liveParameters">liveParameters</option>
-        <option val="liveTorqueParameters">liveTorqueParameters</option>
-        <option val="longitudinalPlan">longitudinalPlan</option>
-        <option val="magnetometer">magnetometer</option>
-        <option val="managerState">managerState</option>
-        <option val="mapRenderState">mapRenderState</option>
-        <option val="microphone">microphone</option>
-        <option val="modelV2">modelV2</option>
-        <option val="navInstruction">navInstruction</option>
-
+    <b>log:</b>
+    <select>
+        <option value="">-- Select event --</option>
+        {% for event in events %}
+          <option value="{{ event }}"{% if selected_event == event %} selected{% endif %}>{{ event }}</option>
+        {% endfor %}
     </select>
-
-    <pre>
-    {{ text }}
-    ...
-    </pre>  
+    <pre>{{ text }}</pre>
     <script>
-        $(document).ready(()=>{
-            $('select').change(()=>{ps = new URLSearchParams(window.location.search); ps.set('event', $('select').val()); window.location.search = ps.toString();});
+        $(document).ready(function() {
+            $('select').change(function() {
+                let ps = new URLSearchParams(window.location.search);
+                ps.set('event', $('select').val());
+                window.location.search = ps.toString();
+            });
         });
     </script>
+</body>
+</html>

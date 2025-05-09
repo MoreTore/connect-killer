@@ -308,44 +308,6 @@ pub async fn depreciated_auth_file_download(
     return asset_download(lookup_key, &client, headers).await;
 }
 
-pub async fn render_segment_ulog(
-    auth: crate::middleware::auth::MyJWT,
-    ViewEngine(v): ViewEngine<TeraView>,
-    State(_ctx): State<AppContext>,
-    Extension(client): Extension<reqwest::Client>,
-    Query(params): Query<UlogQuery>
-) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
-    // Validate the lookup_key to allow only alphanumeric, '_', '-' and '.' characters
-    let valid_key_pattern = regex::Regex::new(r"^(http://localhost:3000/|https://localhost:3000/)?([a-zA-Z0-9_.-]+)$").unwrap(); //TODO purge hardcoded url from db
-    if let Some(captures) = valid_key_pattern.captures(&params.url) {
-        // Always use mkv_helpers::get_mkv_file_url with the second part (lookup key)
-        let internal_file_url = mkv_helpers::get_mkv_file_url(&captures[2]);
-        
-        // Proceed with the request using the `internal_file_url`
-        let request = client.get(&internal_file_url);
-    
-        // Get the data and save it as a string to pass to admin_segment_ulog
-        let res = request.send().await;
-    
-        match res {
-            Ok(response) => {
-                if response.status().is_success() {
-                    let bytes = response.bytes().await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Error reading response"))?;
-                    let bytes_vec: Vec<u8> = bytes.to_vec(); // Convert bytes to Vec<u8>
-                    let data = unsafe { String::from_utf8_unchecked(bytes_vec) };
-    
-                    // Render the view with the fetched data
-                    Ok(crate::views::route::admin_segment_ulog(v, UlogText { text: data }))
-                } else {
-                    Err((StatusCode::BAD_GATEWAY, "Failed to fetch the segment"))
-                }
-            }
-            Err(_) => Err((StatusCode::BAD_GATEWAY, "Failed to fetch the segment")),
-        }
-    } else {
-        Err((StatusCode::BAD_REQUEST, "Invalid lookup key"))
-    }
-}
 
 async fn delete_route(
     auth: crate::middleware::auth::MyJWT,
@@ -785,7 +747,6 @@ pub fn routes() -> Routes {
         .add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
         .add("/delete/:dongle_id", delete(delete_data))
         .add("/delete/:dongle_id/:timestamp", delete(delete_route))
-        .add("/logs/", get(render_segment_ulog))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))
         .add("/:dongle_id/cloudlogs", get(get_cloudlog_cache))
         .add("/cloudlogs/all", get(get_all_cloudlogs))

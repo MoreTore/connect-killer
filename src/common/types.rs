@@ -22,3 +22,10 @@ impl FileType {
         }
     }
 }
+
+// Function to get the event type name as a string based on the WhichReader
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cereal/generated_event_type_names.rs"));
+
+pub fn get_event_name(event_type: &LogEvent::WhichReader) -> String {
+    generated_event_type_name(event_type)
+}

@@ -1,4 +1,5 @@
 #![allow(clippy::unused_async)]
+use async_compression::tokio::bufread;
 use loco_rs::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -6,10 +7,16 @@ use serde_json::Value;
 use axum::{
     extract::{Query, State}, Extension,
 };
+use tokio_util::io::StreamReader;
 extern crate url;
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, io::Cursor};
 
-use crate::{models::_entities, views};
+use crate::{
+    cereal::log_capnp::event as LogEvent, 
+    common::{mkv_helpers, re::*}, 
+    models::_entities, 
+    views,
+};
 
 #[derive(Deserialize)]
 pub struct OneBox {
@@ -200,16 +207,133 @@ pub async fn onebox_handler(
     }
 }
 
-pub async fn login(
+
+// A function that uses capnp to parse the qlog file and return the parsed data
+#[derive(Deserialize)]
+pub struct UlogQuery {
+    pub url: String,
+    pub event: Option<String>
+}
+
+#[derive(Serialize)]
+pub struct UlogText {
+   pub text: String,
+   pub events: Vec<String>,
+   pub selected_event: Option<String>,
+}
+
+
+pub async fn qlog_render(
+    _auth: crate::middleware::auth::MyJWT, // Using underscore to indicate it's required but not used
     ViewEngine(v): ViewEngine<TeraView>,
     State(_ctx): State<AppContext>,
+    Extension(client): Extension<Client>,
+    Query(params): Query<UlogQuery>
 ) -> Result<impl IntoResponse> {
-    views::auth::login(
-        v, 
-        crate::views::auth::LoginTemplate { 
-            api_host: env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set")
+    // Validate the URL
+    let segment_file_regex_string = format!(
+        r"(({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$))"
+    );
+    let segment_file_regex = regex::Regex::new(&segment_file_regex_string).unwrap();
+    let response = if let Some(captures) = segment_file_regex.captures(&params.url) {
+        // Always use mkv_helpers::get_mkv_file_url with the second part (lookup key)
+        let internal_file_url = mkv_helpers::get_mkv_file_url(&captures[0]);
+        
+        // Proceed with the request using the `internal_file_url`
+        let request = client.get(&internal_file_url);
+    
+        // Get the data and save it as a string to pass to admin_segment_ulog
+        match request.send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    response
+                } else {
+                    return Err(Error::Message(format!("Failed to get file: {}", response.status())));
+                }
+            }
+            Err(e) => {
+                return Err(Error::Message(format!("Failed to get file: {}", e)));
+            }
         }
-    )
+    } else {
+        return Err(Error::Message("Invalid file name".to_string()));
+    };
+                
+    // Decompress the file
+    use futures_util::TryStreamExt;
+    let bytes_stream = response
+        .bytes_stream()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+    
+    let stream_reader = StreamReader::new(bytes_stream);
+    
+    let file_name = params.url.clone();
+    let mut decoder: std::pin::Pin<Box<dyn tokio::io::AsyncRead + Send>> = if file_name.ends_with(".bz2") {
+        Box::pin(bufread::BzDecoder::new(stream_reader))
+    } else if file_name.ends_with(".zst") {
+        Box::pin(bufread::ZstdDecoder::new(stream_reader))
+    } else {
+        return Err(Error::Message("Invalid file type. Must end with .bz2 or .zst".to_string()));
+    };
+    
+    let mut decompressed_data = Vec::new();
+    match tokio::io::AsyncReadExt::read_to_end(&mut decoder, &mut decompressed_data).await {
+        Ok(_) => (),
+        Err(e) => return Err(Error::Message(e.to_string()))
+    };
+
+    let mut cursor = Cursor::new(decompressed_data);
+    let mut unlog_data = Vec::new();
+    let reader_options = capnp::message::ReaderOptions::default();
+    
+    // Create a set to store event names
+    let mut event_types = std::collections::HashSet::new();
+
+    use std::io::Write;
+    while let Ok(message_reader) = capnp::serialize::read_message(&mut cursor, reader_options) {
+        let event = match message_reader.get_root::<LogEvent::Reader>() {
+            Ok(event) => event,
+            Err(e) => {
+                tracing::warn!("Failed to get root: {:?}", e); 
+                continue;
+            }, 
+        };
+        
+        match event.which() {
+            Err(_) => {
+                continue;
+            }
+            Ok(event_type) => {
+                // Get the string representation of the event type
+                let type_name = crate::common::types::get_event_name(&event_type);
+                event_types.insert(type_name.clone());
+                // If an event is requested, only output that event's data
+                if let Some(ref requested_event) = params.event {
+                    if type_name == *requested_event {
+                        writeln!(&mut unlog_data, "{:#?}", event).unwrap_or(());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Always return the list of events
+    let mut event_list: Vec<String> = event_types.into_iter().collect();
+    event_list.sort();
+
+    let data = if let Some(_) = params.event {
+        String::from_utf8(unlog_data).unwrap_or_else(|_| "Failed to convert log data to string".to_string())
+    } else if !event_list.is_empty() {
+        format!("Available event types:\n{}", event_list.join("\n"))
+    } else {
+        "No events found in log".to_string()
+    };
+
+    Ok(views::route::admin_segment_ulog(v, UlogText {
+        text: data,
+        events: event_list,
+        selected_event: params.event.clone(),
+    }))
 }
 
 pub async fn cloudlogs_view(
@@ -222,9 +346,22 @@ pub async fn cloudlogs_view(
     })
 }
 
+pub async fn login(
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(_ctx): State<AppContext>,
+) -> Result<impl IntoResponse> {
+    views::auth::login(
+        v, 
+        crate::views::auth::LoginTemplate { 
+            api_host: env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set")
+        }
+    )
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .add("/", get(onebox_handler))
         .add("/login", get(login))
         .add("/cloudlogs", get(cloudlogs_view))
+        .add("/qlog", get(qlog_render))
 }

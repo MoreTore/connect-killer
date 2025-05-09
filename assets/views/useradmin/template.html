@@ -606,8 +606,8 @@
           <tr>
             <td style="white-space: nowrap">{{ segment.number }}</td>
             <td style="white-space: nowrap">
-              {% if segment.ulog_url != "" %}
-              <a href="{{ segment.ulog_url }}">
+              {% if segment.qlog_url != "" %}
+              <a href="/qlog?url={{ segment.ulog_url }}&event=initData">
                 {{ segment.canonical_name }}
               </a>
               {% endif %}
