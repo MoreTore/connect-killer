@@ -1,5 +1,4 @@
 #![allow(clippy::unused_async)]
-use combine::parser::token::Value;
 use loco_rs::prelude::*;
 use axum::{
     extract::{
@@ -15,10 +14,10 @@ use axum::{
 use futures::stream::SplitSink;
 use loco_rs::app::AppContext;
 use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
-use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use std::{collections::{HashMap}, sync::Arc};
 use tokio::sync::{RwLock, Mutex};
 use futures_util::{SinkExt, StreamExt};
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use tokio::time::{self, Duration};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
@@ -162,7 +161,7 @@ async fn handle_jsonrpc_request(
 ) -> impl IntoResponse {
     let is_sensitive_method = payload.method == "takeSnapshot";
     if let Some(user_model) = auth.user_model {
-        if (!user_model.superuser || is_sensitive_method) {
+        if !user_model.superuser || is_sensitive_method {
             DM::ensure_user_device(&ctx.db, user_model.id, &endpoint_dongle_id).await?;
         }
     } else {

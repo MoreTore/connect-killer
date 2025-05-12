@@ -4,152 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+      :root {
+        --bg-color: #181c20;
+        --text-color: #e3e6eb;
+        --input-bg: #23272e;
+        --input-border: #333a44;
+        --table-bg: #23272e;
+        --table-alt-bg: #20242a;
+        --primary: #6cb6ff;
+        --success: #4CAF50;
+        --danger: #FF5252;
+      }
+      [data-theme="light"] {
+        --bg-color: #f5f6fa;
+        --text-color: #23272e;
+        --input-bg: #fff;
+        --input-border: #b3b8c3;
+        --table-bg: #fff;
+        --table-alt-bg: #f0f1f4;
+        --primary: #0074d9;
+        --success: #388e3c;
+        --danger: #d32f2f;
+      }
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background-color: #f9f9f9;
+        background-color: var(--bg-color);
+        color: var(--text-color);
         margin: 0;
         padding: 8px;
-        color: #333;
         font-size: 13px;
         line-height: 1.3;
       }
-      
       input {
         width: 100%;
         max-width: 500px;
         padding: 6px 8px;
         margin-bottom: 12px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--input-border);
         border-radius: 3px;
         font-size: 13px;
+        background: var(--input-bg);
+        color: var(--text-color);
       }
-      
       h1, h2, h3 {
         margin: 8px 0;
-        color: #333;
+        color: var(--text-color);
         font-size: 16px;
       }
-      
       table {
         width: 100%;
         border-collapse: collapse;
         margin-bottom: 12px;
         font-size: 12px;
+        background: var(--table-bg);
+        color: var(--text-color);
       }
-      
       th, td {
         padding: 4px 6px;
         text-align: left;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid var(--input-border);
         white-space: nowrap;
         vertical-align: middle;
       }
-      
       th {
-        background-color: #f2f2f2;
+        background-color: var(--table-bg);
         font-weight: 600;
-        color: #444;
+        color: #b3b8c3;
         position: sticky;
         top: 0;
         z-index: 10;
       }
-      
       tr:nth-child(even) {
-        background-color: #f9f9f9;
+        background-color: var(--table-alt-bg);
       }
-      
       tr:hover {
-        background-color: #f0f0f0;
+        background-color: var(--table-bg);
       }
-      
       a {
-        color: #2563eb;
+        color: var(--primary);
         text-decoration: none;
       }
-      
       a:hover {
         text-decoration: underline;
       }
-      
       button {
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
+        background-color: var(--table-bg);
+        border: 1px solid var(--input-border);
         border-radius: 3px;
         padding: 3px 6px;
         font-size: 11px;
         cursor: pointer;
         white-space: nowrap;
+        color: var(--text-color);
       }
-      
-      button:hover {
-        background-color: #e0e0e0;
-      }
-      
       button.delete {
-        background-color: #fff0f0;
-        border-color: #ffd0d0;
-        color: #d00;
+        background-color: #3a2323;
+        border-color: #5a2a2a;
+        color: #ff6b6b;
       }
-      
-      button.delete:hover {
-        background-color: #ffe0e0;
-      }
-      
       button.upload {
-        background-color: #f0f8ff;
-        border-color: #d0e0ff;
-        color: #2563eb;
+        background-color: #23313a;
+        border-color: #2a3a5a;
+        color: #6cb6ff;
       }
-      
-      button.upload:hover {
-        background-color: #e0f0ff;
-      }
-      
       details {
         margin-bottom: 8px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--input-border);
         border-radius: 3px;
-        background-color: white;
+        background-color: var(--bg-color);
       }
-      
       details summary {
         padding: 6px 8px;
-        background-color: #f5f5f5;
+        background-color: var(--table-bg);
         cursor: pointer;
         font-weight: 600;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--input-border);
+        color: #b3b8c3;
       }
-      
-      details[open] summary {
-        border-bottom: 1px solid #ddd;
-      }
-      
       progress {
         height: 8px;
         width: 100%;
+        background: var(--table-bg);
       }
-      
       .timestamp {
         font-size: 11px;
+        color: #b3b8c3;
       }
-      
-      /* Status colors */
-      .green-text, .text-success {
-        color: #4CAF50;
-      }
-      
-      .red-text, .text-danger {
-        color: #FF5252;
-      }
-      
-      /* Compact table overrides */
-      table.compact th, 
-      table.compact td {
-        padding: 2px 4px;
-        font-size: 11px;
-      }
-      
-      /* Device status indicators */
+      .green-text, .text-success { color: var(--success); }
+      .red-text, .text-danger { color: var(--danger); }
       .device-status {
         display: inline-block;
         width: 8px;
@@ -157,46 +139,58 @@
         border-radius: 50%;
         margin-right: 4px;
       }
-      
-      .status-online {
-        background-color: #4CAF50;
-      }
-      
-      .status-offline {
-        background-color: #FF5252;
-      }
-      
-      /* For tables with many columns */
+      .status-online { background-color: #4CAF50; }
+      .status-offline { background-color: #FF5252; }
       .scrollable-container {
         overflow-x: auto;
         max-width: 100%;
+        background: var(--bg-color);
       }
-      
-      /* Reduce spacing in nested elements */
-      details details {
-        margin: 4px 0;
-      }
-      
-      /* Hide scrollbars when not needed */
-      @media (min-width: 1200px) {
-        .scrollable-container {
-          overflow: visible;
-        }
-      }
-      
-      /* Responsive adjustments */
       @media (max-width: 768px) {
-        body {
-          padding: 4px;
-        }
-        
-        th, td {
-          padding: 2px 4px;
-        }
+        body { padding: 4px; }
+        th, td { padding: 2px 4px; }
       }
-
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 2000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: auto;
+        background: rgba(0,0,0,0.7);
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background: var(--bg-color);
+        margin: auto;
+        padding: 16px;
+        border-radius: 8px;
+        max-width: 90vw;
+        max-height: 90vh;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .modal-close {
+        align-self: flex-end;
+        background: none;
+        border: none;
+        color: var(--text-color);
+        font-size: 24px;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .modal video {
+        max-width: 80vw;
+        max-height: 70vh;
+        background: #000;
+      }
     </style>
-
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         var timestamps = document.querySelectorAll('.timestamp');
@@ -215,22 +209,266 @@
               el.textContent = localString + ' (' + rel + ')';
             }
         });
-      });
-      function api_post(endpoint, data, callback) {
-        return api_request('POST', endpoint, callback, {
-            data: JSON.stringify(data),
-            contentType: 'application/json'
+        // Theme init
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(savedTheme);
+        // Add toggle button
+        const btn = document.createElement('button');
+        btn.textContent = savedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+        btn.style.position = 'fixed';
+        btn.style.top = '10px';
+        btn.style.right = '10px';
+        btn.style.zIndex = 1000;
+        btn.onclick = function() {
+          toggleTheme();
+          btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+        };
+        document.body.appendChild(btn);
+        // Add play buttons for .ts and .hevc links
+        document.querySelectorAll('a').forEach(function(link) {
+          if (link.href && (link.href.endsWith('.ts'))) {
+            var playBtn = document.createElement('button');
+            playBtn.textContent = '▶️';
+            playBtn.title = 'Play Video';
+            playBtn.style.marginLeft = '4px';
+            playBtn.onclick = function(e) {
+              e.preventDefault();
+              console.log('[playBtn] Play button clicked for', link.href);
+              showVideoModal(link.href);
+            };
+            link.parentNode.insertBefore(playBtn, link.nextSibling);
+            console.log('[playBtn] Play button added for', link.href);
+          }
         });
-      }
-      function unpair(dongle_id) {
-        if (confirm("Unpair " + dongle_id + "?")) {
-            api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) {
-                alert('Unpaired ' + dongle_id);
-            });
+        // --- Remember expanded/collapsed state for all <details> tables ---
+        document.querySelectorAll('details').forEach(function(el, idx) {
+          // Use a unique key for each details element (by index and page path)
+          const key = 'details-open-' + window.location.pathname + '-' + idx;
+          // Restore state
+          el.open = localStorage.getItem(key) === 'true';
+          // Save state on toggle
+          el.addEventListener('toggle', function() {
+            localStorage.setItem(key, el.open);
+          });
+        });
+      });
+      function deleteDevice(dongle_id) {
+        if (confirm("Are you sure you want to delete this device? You will need to repair the device.")) {
+          fetch(`https://api.konik.ai/connectdata/delete/${dongle_id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+          })
+          .then(response => response.text())
+          .then(data => { alert(data); })
+          .catch(() => { alert("Failed to delete the device."); });
         }
-        window.location.reload();
+      }
+      function deleteRoute(fullname) {
+        const formattedFullname = fullname.replace('|', '/');
+        fetch(`https://api.konik.ai/connectdata/delete/${formattedFullname}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        })
+        .then(response => response.json())
+        .catch(() => {});
+      }
+      function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+      }
+      function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        setTheme(current === 'dark' ? 'light' : 'dark');
+      }
+      let hlsInstance = null;
+      function showVideoModal(url) {
+        console.log('[showVideoModal] called with url:', url);
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+        var modal = document.getElementById('videoModal');
+        var video = document.getElementById('videoPlayer');
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        // Match URLs like /connectdata/<type>/<dongle>/<route>/<segment>/<file>
+        var match = url.match(/\/connectdata\/([^\/]+)\/([^\/]+)\/([^\/]+)\/[^\/]+\/(qcamera\.ts)$/);
+        if (match) {
+          var type = match[1]; // e.g., qcam, fcam, dcam, ecam
+          var dongle = match[2];
+          var route = match[3];
+          var file = match[4];
+          var camType = file.split('.')[0]; // qcamera, fcamera, etc.
+          var ext = file.split('.')[1];
+          var route_fullname = encodeURIComponent(dongle + '|' + route);
+          var m3u8 = `/v1/route/${route_fullname}/${camType}.m3u8`;
+          console.log('[showVideoModal] m3u8 url:', m3u8);
+          if (Hls.isSupported()) {
+            hlsInstance = new Hls();
+            hlsInstance.loadSource(m3u8);
+            hlsInstance.attachMedia(video);
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+              console.log('[showVideoModal] HLS manifest parsed, playing video');
+              video.play();
+            });
+            hlsInstance.on(Hls.Events.ERROR, function(event, data) {
+              console.error('[showVideoModal] HLS.js error:', data);
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = m3u8;
+            video.addEventListener('loadedmetadata', function() {
+              console.log('[showVideoModal] Native HLS loadedmetadata, playing video');
+              video.play();
+            }, { once: true });
+          } else {
+            console.log('[showVideoModal] Fallback to direct video src');
+            video.src = url;
+            video.load();
+            video.play();
+          }
+          modal.style.display = 'flex';
+          return;
+        }
+        // fallback for direct video
+        console.log('[showVideoModal] No match for m3u8, fallback to direct');
+        video.src = url;
+        modal.style.display = 'flex';
+        video.load();
+        video.play();
+      }
+      function closeVideoModal() {
+        var modal = document.getElementById('videoModal');
+        var video = document.getElementById('videoPlayer');
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        modal.style.display = 'none';
+      }
+      // --- Poll upload queue and update progress bars ---
+      let uploadQueueInterval = null;
+      function startUploadQueuePolling(dongleId) {
+        if (uploadQueueInterval) return; // Only one interval
+        uploadQueueInterval = setInterval(listUploadQueueAndUpdateProgress, 5000, dongleId);
+        listUploadQueueAndUpdateProgress(dongleId); // Also run immediately
+      }
+      function stopUploadQueuePolling() {
+        if (uploadQueueInterval) {
+          clearInterval(uploadQueueInterval);
+          uploadQueueInterval = null;
+        }
+      }
+      async function listUploadQueueAndUpdateProgress(dongleId) {
+        try {
+          const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
+          const payload = {
+            jsonrpc: "2.0",
+            method: "listUploadQueue",
+            id: 0
+          };
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!data.result) return;
+
+          // Track which progress bars are in the queue
+          const barsInQueue = new Set();
+
+          // If the upload queue is empty, stop polling and fill all progress bars to 100%
+          if (data.result.length === 0) {
+            stopUploadQueuePolling();
+            document.querySelectorAll('progress[id^="uploadProgress_"]').forEach(bar => {
+              if (bar.parentElement && bar.parentElement.style.display !== 'none') {
+                bar.value = 100;
+                bar.max = 100;
+                setTimeout(() => {
+                  if (bar.parentElement) bar.parentElement.style.display = 'none';
+                }, 2000);
+              }
+            });
+            return;
+          }
+
+          data.result.forEach(item => {
+            // Extract segment number and file type from item.path
+            // Example: /data/media/0/realdata/0000002b--a1ca5d45b7--6/ecamera.hevc
+            const match = item.path.match(/([0-9a-f]+)--([0-9a-f]+)--(\d+)\/(qlog|rlog|qcamera|fcamera|dcamera|ecamera)\.(bz2|zst|ts|hevc)$/);
+            if (!match) return;
+            const segmentNum = match[3];
+            let fileType = match[4];
+            if (fileType === 'qcamera') fileType = 'qcam';
+            if (fileType === 'fcamera') fileType = 'fcam';
+            if (fileType === 'dcamera') fileType = 'dcam';
+            if (fileType === 'ecamera') fileType = 'ecam';
+            const barId = `uploadProgress_${segmentNum}_${fileType}`;
+            barsInQueue.add(barId);
+            // Hide upload button and show progress bar if present
+            const uploadBtn = document.getElementById(`uploadButton_${segmentNum}_${fileType}`);
+            const progressDiv = document.getElementById(`progressContainer_${segmentNum}_${fileType}`);
+            const progressBar = document.getElementById(barId);
+            if (uploadBtn) uploadBtn.style.display = 'none';
+            if (progressDiv) progressDiv.style.display = 'block';
+            if (progressBar) {
+              progressBar.value = Math.round(item.progress * 100);
+              progressBar.max = 100;
+              if (item.progress >= 1) {
+                progressBar.value = 100;
+                setTimeout(() => {
+                  if (progressDiv) progressDiv.style.display = 'none';
+                }, 2000);
+              }
+            }
+          });
+
+          // For all progress bars on the page, if not in queue and visible, set to 100% and fill in the file link
+          document.querySelectorAll('progress[id^="uploadProgress_"]').forEach(bar => {
+            if (!barsInQueue.has(bar.id) && bar.parentElement && bar.parentElement.style.display !== 'none') {
+              bar.value = 100;
+              bar.max = 100;
+              // Extract segmentNum and fileType from bar id
+              const match = bar.id.match(/^uploadProgress_(\d+)_(\w+)$/);
+              if (match) {
+                const segmentNum = match[1];
+                const fileType = match[2];
+                // Find the parent td
+                const td = bar.closest('td');
+                if (td) {
+                  // Build the file name and url
+                  let fileName = '';
+                  let url = '';
+                  if (fileType === 'qlog') { fileName = 'qlog'; url = window.segmentFileUrls?.[segmentNum]?.qlog_url; }
+                  if (fileType === 'qcam') { fileName = 'camera.ts'; url = window.segmentFileUrls?.[segmentNum]?.qcam_url; }
+                  if (fileType === 'rlog') { fileName = 'rlog'; url = window.segmentFileUrls?.[segmentNum]?.rlog_url; }
+                  if (fileType === 'fcam') { fileName = 'fcamera.hevc'; url = window.segmentFileUrls?.[segmentNum]?.fcam_url; }
+                  if (fileType === 'dcam') { fileName = 'dcamera.hevc'; url = window.segmentFileUrls?.[segmentNum]?.dcam_url; }
+                  if (fileType === 'ecam') { fileName = 'ecamera.hevc'; url = window.segmentFileUrls?.[segmentNum]?.ecam_url; }
+                  if (url) {
+                    td.innerHTML = `<a href="${url}">${fileName}</a>`;
+                  }
+                }
+              }
+              setTimeout(() => {
+                if (bar.parentElement) bar.parentElement.style.display = 'none';
+              }, 2000);
+            }
+          });
+        } catch (e) {
+          // Ignore errors
+        }
       }
     </script>
+
     <script>
       const baseUrl = "https://api.konik.ai";           // API endpoint for upload URLs
       const userAdminUrl = "https://useradmin.konik.ai";  // Endpoint for sending the upload command
@@ -327,158 +565,174 @@
             }
 
             console.log(await response.json());
+            // Check the response for success or failure
           }
-          
-          // Update the UI: show progress bar and hide the upload button.
           document.getElementById(`progressContainer_${segmentNum}_${fileType}`).style.display = 'block';
           document.getElementById(`uploadButton_${segmentNum}_${fileType}`).style.display = 'none';
+          startUploadQueuePolling(dongleId); // Start polling after upload
           
         } catch (error) {
           console.error('Upload error:', error);
         }
       }
-    </script>
-    <script>
-      function deleteRoute(fullname) {
-        const formattedFullname = fullname.replace('|', '/');
-        
-        fetch(`https://api.konik.ai/connectdata/delete/${formattedFullname}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        })
-        
-        .then(response => {
-          if (response.ok) {
-            return response.json();
+
+      // --- Function to upload multiple files of a given type ---
+      async function uploadAllOfType(fileType) {
+        // Find all upload buttons for this fileType
+        const buttons = document.querySelectorAll(`button[id^='uploadButton_'][id$='_${fileType}']`);
+        if (buttons.length === 0) return;
+        let filesData = [];
+        let dongleId = null;
+        for (const btn of buttons) {
+          // Extract segmentNum from button id
+          const match = btn.id.match(/^uploadButton_(\d+)_/);
+          if (!match) continue;
+          const segmentNum = match[1];
+          // Get data from button's onclick attribute
+          const onclick = btn.getAttribute('onclick');
+          // Parse args from the onclick string
+          // Example: uploadFile('dongle_id', 'segment.number', 'canonical_route_name', 'qlog', 'segment.number', 'qlog')
+          const argsMatch = onclick.match(/uploadFile\(([^)]+)\)/);
+          if (!argsMatch) continue;
+          const args = argsMatch[1].split(',').map(s => s.trim().replace(/^'|'$/g, ''));
+          dongleId = args[0];
+          const segmentNumber = args[1];
+          const canonicalRouteName = args[2];
+          let file = args[3];
+          // Build file path logic (same as uploadFile)
+          let filePaths = [];
+          let filePath = file;
+          if (file.includes('rlog') || file.includes('qlog')) {
+            if (!file.endsWith('.bz2')) {
+              filePath += '.bz2';
+            }
+            let zstPath = file;
+            if (!zstPath.endsWith('.zst')) {
+              zstPath += '.zst';
+            }
+            filePaths.push(zstPath);
+          } else if (file.includes('qcam')) {
+            if (!file.endsWith('.ts')) {
+              filePath += '.ts';
+            }
+          } else if (file.includes('fcam') || file.includes('dcam') || file.includes('ecam')) {
+            if (!file.endsWith('.hevc')) {
+              filePath += '.hevc';
+            }
           }
-          throw new Error('Network response was not ok.');
-        })
-        .then(data => {
-          console.log('Request successful', data);
-        })
-        .catch(error => {
-          console.error('There was a problem with the fetch operation:', error);
-        });
-      }
-    </script>
-    <script>
-      function deleteDevice(dongle_id) {
-        // Show a confirmation popup
-        const userConfirmed = confirm("Are you sure you want to delete this device? You will need to repair the device.");
-        
-        if (userConfirmed) {
-          fetch(`https://api.konik.ai/connectdata/delete/${dongle_id}`, {
-            method: 'DELETE',
+          filePaths.push(filePath);
+          // For each filePath, build the uploadFilesToUrls entry
+          const parts = canonicalRouteName.split("|");
+          const routeName = parts[1] || canonicalRouteName;
+          for (const path of filePaths) {
+            filesData.push({
+              segmentNumber,
+              canonicalRouteName,
+              routeName,
+              segmentNum,
+              fileType,
+              file: path
+            });
+          }
+        }
+        if (!dongleId || filesData.length === 0) return;
+        // Request upload URLs for all files
+        const uploadPaths = filesData.map(f => f.routeName + "--" + f.segmentNumber + "/" + f.file);
+        let urls;
+        try {
+          urls = await getUploadUrls(dongleId, uploadPaths);
+        } catch (e) {
+          alert('Failed to get upload URLs: ' + e);
+          return;
+        }
+        // Build files array for uploadFilesToUrls
+        const files = filesData.map((f, i) => ({
+          fn: `${f.routeName}--${f.segmentNum}/${f.file}`,
+          url: urls[i].url,
+          headers: {}
+        }));
+        // Send the uploadFilesToUrls command
+        const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
+        const uploadCommand = {
+          jsonrpc: "2.0",
+          method: "uploadFilesToUrls",
+          params: [files], // Pass as a single array argument
+          id: 1
+        };
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            credentials: 'include'
-          })
-          .then(response => {
-            if (response.ok) {
-                return response.text();
-            }
-            throw new Error('Network response was not ok.');
-          })
-          .then(data => {
-            console.log('Request successful', data);
-            alert(data.message || data); // Show success message
-          })
-          .catch(error => {
-            console.error('There was a problem with the fetch operation:', error);
-            alert("Failed to delete the device."); // Error message for user
+            credentials: 'include',
+            body: JSON.stringify(uploadCommand)
           });
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          console.log(await response.json());
+          // Hide all upload buttons and show progress bars for this fileType
+          for (const btn of buttons) {
+            btn.style.display = 'none';
+            const match = btn.id.match(/^uploadButton_(\d+)_/);
+            if (match) {
+              const segmentNum = match[1];
+              const progressDiv = document.getElementById(`progressContainer_${segmentNum}_${fileType}`);
+              if (progressDiv) progressDiv.style.display = 'block';
+            }
+          }
+          startUploadQueuePolling(dongleId); // Start polling after upload all
+        } catch (error) {
+          alert('Upload error: ' + error);
         }
       }
     </script>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM fully loaded and parsed');
-        
-        document.querySelectorAll('a').forEach(link => {
-          console.log('Processing link:', link.href);  // Debugging output
-            if (link.href.includes('/connectdata/') && !link.href.includes('unlog')) {
-              link.addEventListener('click', function(event) {
-                event.preventDefault();
-                const url = link.href;
-                
-                console.log('Link clicked, URL:', url);  // Debugging output
-          
-                fetch(url, {
-                  method: 'GET',
-                  credentials: 'include' // This sends the JWT cookie with the request
-                })
-                .then(response => {
-                  console.log('Response status:', response.status);  // Debugging output
-          
-                  if (!response.ok) {
-                    throw new Error('Authorization failed.');
-                  }
-                  return response.blob();
-                })
-                .then(blob => {
-                  const downloadUrl = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = downloadUrl;
-                  a.download = url.split('/connectdata/').pop();
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                })
-                .catch(error => console.error('Error:', error));  // Debugging output
-              });
-            }
-        });
-      });
-    </script>
-    <script>
-        async function loadModuleLogs(device, branch, module) {
-          const containerId = `logs-${branch}-${module}`;
-          const container = document.getElementById(containerId);
-          // Optionally, show a loading indicator.
-          container.innerHTML = 'Loading...';
-      
-          try {
-              // Adjust the URL according to your routing.
-              const response = await fetch(
-                `https://api.konik.ai/connectdata/${device}/cloudlogs?branch=${encodeURIComponent(branch)}&module=${encodeURIComponent(module)}&offset=0&limit=50`,
-                {
-                  method: 'GET',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  credentials: 'include'
-                }    
-                );
-              if (!response.ok) {
-                  container.innerHTML = 'Failed to load logs';
-                  return;
-              }
-              const logs = await response.json();
-              let html = '<table>';
-              logs.forEach(log => {
-                  // Format the 'created' field to local time string
-                  let createdLocal = '';
-                  if (log.created) {
-                    createdLocal = new Date(log.created * 1000).toLocaleString();
-                  }
-                  html += `<tr><td>` +
-                      `<b>Created:</b> ${createdLocal}<br>` +
-                      `<pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(log, null, 2)}</pre>` +
-                      `</td></tr>`;
-              });
-              html += '</table>';
-              container.innerHTML = html;
-          } catch (error) {
-              console.error(error);
-              container.innerHTML = 'Error loading logs';
-          }
-      }
-    </script>
 
+    <script>
+      async function loadModuleLogs(device, branch, module) {
+        const containerId = `logs-${branch}-${module}`;
+        const container = document.getElementById(containerId);
+        // Optionally, show a loading indicator.
+        container.innerHTML = 'Loading...';
+    
+        try {
+            // Adjust the URL according to your routing.
+            const response = await fetch(
+              `https://api.konik.ai/connectdata/${device}/cloudlogs?branch=${encodeURIComponent(branch)}&module=${encodeURIComponent(module)}&offset=0&limit=50`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include'
+              }    
+              );
+            if (!response.ok) {
+                container.innerHTML = 'Failed to load logs';
+                return;
+            }
+            const logs = await response.json();
+            let html = '<table>';
+            logs.forEach(log => {
+                // Format the 'created' field to local time string
+                let createdLocal = '';
+                if (log.created) {
+                  createdLocal = new Date(log.created * 1000).toLocaleString();
+                }
+                html += `<tr><td>` +
+                    `<b>Created:</b> ${createdLocal}<br>` +
+                    `<pre style="white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(log, null, 2)}</pre>` +
+                    `</td></tr>`;
+            });
+            html += '</table>';
+            container.innerHTML = html;
+        } catch (error) {
+            console.error(error);
+            container.innerHTML = 'Error loading logs';
+        }
+    }
+  </script>
 
   <title>{{ onebox }} - konik.ai Admin</title>
 </head>
@@ -486,6 +740,7 @@
   <header>
     <div class="header-container">
       <a href="/" class="logo">konik.ai Admin</a>
+      <a href="/cloudlogs" class="btn btn-primary">Cloud Logs</a>
       <a href="/auth/logout" class="btn btn-secondary">Sign out</a>
     </div>
   </header>
@@ -493,13 +748,11 @@
     <form class="search-form">
       <input name="onebox" class="search-input" placeholder="Search for username, route, or dongle ID" value="{{ onebox }}">
     </form>
-
     <div class="info-card">
       <div class="info-card-header">
         <h3 class="info-card-title">Results: {{ onebox }}</h3>
       </div>
     </div>
-
     {% if users.defined is defined %}
     <details>
       <summary>Registered Users</summary>
@@ -507,30 +760,29 @@
       <table id="table_users">
         <tbody>
           <tr>
-            <td style="white-space: nowrap">name</td>
-            <td style="white-space: nowrap">created at</td>
-            <td style="white-space: nowrap">updated at</td>
-            <td style="white-space: nowrap">id</td>
-            <td style="white-space: nowrap">identity</td>
-            <td style="white-space: nowrap">points</td>
-            <td style="white-space: nowrap">superuser</td>
+            <td>name</td>
+            <td>created at</td>
+            <td>updated at</td>
+            <td>id</td>
+            <td>identity</td>
+            <td>points</td>
+            <td>superuser</td>
           </tr>
           {% for user in users.users %}
           <tr>
-            <td style="white-space: nowrap"><a href="/?onebox={{ user.name }}">{{ user.name }}</a></td>
-            <td style="white-space: nowrap">{{ user.created_at }}</td>
-            <td style="white-space: nowrap">{{ user.updated_at }}</td>
-            <td style="white-space: nowrap">{{ user.id }}</td>
-            <td style="white-space: nowrap">{{ user.identity }}</td>
-            <td style="white-space: nowrap">{{ user.points }}</td>
-            <td style="white-space: nowrap">{{ user.superuser }}</td>
+            <td><a href="/?onebox={{ user.name }}">{{ user.name }}</a></td>
+            <td>{{ user.created_at }}</td>
+            <td>{{ user.updated_at }}</td>
+            <td>{{ user.id }}</td>
+            <td>{{ user.identity }}</td>
+            <td>{{ user.points }}</td>
+            <td>{{ user.superuser }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </details>
     {% endif %}
-    
     {% if devices.defined is defined %}
     <details>
       <summary>Devices</summary>
@@ -538,34 +790,30 @@
       <table id="table_devices">
         <tbody>
           <tr>
-            <td style="white-space: nowrap"></td>
-            <td style="white-space: nowrap">dongle_id</td>
-            <td style="white-space: nowrap">serial</td>
-            <td style="white-space: nowrap">server storage used</td>
-            <td style="white-space: nowrap">alias</td>
-            <td style="white-space: nowrap">last_athena_ping</td>
-            <td style="white-space: nowrap">uploads allowed</td>
+            <td></td>
+            <td>dongle_id</td>
+            <td>serial</td>
+            <td>server storage used</td>
+            <td>alias</td>
+            <td>last_athena_ping</td>
+            <td>uploads allowed</td>
           </tr>
           {% for device in devices.devices %}
           <tr>
-            <td style="white-space: nowrap">
-              <button onclick="deleteDevice('{{ device.dongle_id }}')">
-                Unpair and Delete Device Data
-              </button>
-            </td>
-            <td style="white-space: nowrap"><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
-            <td style="white-space: nowrap">{{ device.serial }}</td>
-            <td style="white-space: nowrap">{{ device.server_storage / 1000000000 }} GB</td> 
-            <td style="white-space: nowrap">{{ device.alias }}</td>
+            <td><button onclick="deleteDevice('{{ device.dongle_id }}')">Unpair and Delete Device Data</button></td>
+            <td><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
+            <td>{{ device.serial }}</td>
+            <td>{{ device.server_storage / 1000000000 }} GB</td>
+            <td>{{ device.alias }}</td>
             {% if device.online %}
-            <td style="white-space: nowrap"><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+            <td><span class="timestamp" style="color: green;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
             {% else %}
-            <td style="white-space: nowrap"><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
+            <td><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
             {% endif %}
             {% if device.uploads_allowed %}
-            <td style="white-space: nowrap"><span style="color: green;">uploads allowed</span></td>
+            <td><span style="color: green;">uploads allowed</span></td>
             {% else %}
-            <td style="white-space: nowrap"><span style="color: red;">uploads ignored</span></td>
+            <td><span style="color: red;">uploads ignored</span></td>
             {% endif %}
           </tr>
           {% endfor %}
@@ -573,17 +821,10 @@
       </table>
     </details>
     {% endif %}
-    
     {% if segments.defined is defined %}
     <details>
       <summary>Segments</summary>
       <hr>
-      <a href="link" style="color: green">connect</a>
-      <a onclick="unpublicizeRoute('{{ onebox | replace(from="/", to="|") }}')" style="color: blue; text-decoration: underline; cursor: pointer;">make private</a>
-      <hr>
-      {% for segment in segments.segments %}
-        {% set_global canonical_name = segment.canonical_name %}
-      {% endfor %}
       <b>dongle id:</b> <a href="/?onebox={{ dongle_id }}">{{ dongle_id }}</a><br>
       <hr>
       <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
@@ -593,92 +834,31 @@
           <tr>
             <th>#</th>
             <th>Parsed Data</th>
-            <th>qlog</th>
-            <th>qcam</th>
-            <th>rlog</th>
-            <th>fcam</th>
-            <th>dcam</th>
-            <th>ecam</th>
+            <th>qlog <button onclick="uploadAllOfType('qlog')">Upload All</button></th>
+            <th>qcam <button onclick="uploadAllOfType('qcam')">Upload All</button></th>
+            <th>rlog <button onclick="uploadAllOfType('rlog')">Upload All</button></th>
+            <th>fcam <button onclick="uploadAllOfType('fcam')">Upload All</button></th>
+            <th>dcam <button onclick="uploadAllOfType('dcam')">Upload All</button></th>
+            <th>ecam <button onclick="uploadAllOfType('ecam')">Upload All</button></th>
           </tr>
         </thead>
         {% for segment in segments.segments %}
         <tbody>
           <tr>
-            <td style="white-space: nowrap">{{ segment.number }}</td>
-            <td style="white-space: nowrap">
-              {% if segment.qlog_url != "" %}
-              <a href="/qlog?url={{ segment.ulog_url }}&event=initData">
-                {{ segment.canonical_name }}
-              </a>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.qlog_url != "" %}
-              <a href="{{ segment.qlog_url }}">qlog</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_qlog" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qlog', '{{ segment.number }}', 'qlog')">Upload</button>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.qcam_url != "" %}
-              <a href="{{ segment.qcam_url }}">camera.ts</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_qcam" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_qcam" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_qcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qcamera.ts', '{{ segment.number }}', 'qcam')">Upload</button>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.rlog_url != "" %}
-              <a href="{{ segment.rlog_url }}">rlog</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_rlog" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog', '{{ segment.number }}', 'rlog')">Upload</button>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.fcam_url != "" %}
-              <a href="{{ segment.fcam_url }}">fcamera.hevc</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_fcam" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcamera.hevc', '{{ segment.number }}', 'fcam')">Upload</button>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.dcam_url != "" %}
-              <a href="{{ segment.dcam_url }}">dcamera.hevc</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_dcam" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcamera.hevc', '{{ segment.number }}', 'dcam')">Upload</button>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if segment.ecam_url != "" %}
-              <a href="{{ segment.ecam_url }}">ecamera.hevc</a>
-              {% else %}
-              <div id="progressContainer_{{ segment.number }}_ecam" style="display:none;">
-                <progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress>
-              </div>
-              <button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecamera.hevc', '{{ segment.number }}', 'ecam')">Upload</button>
-              {% endif %}
-            </td>
+            <td>{{ segment.number }}</td>
+            <td>{% if segment.qlog_url != "" %}<a href="/qlog?url={{ segment.ulog_url }}&event=errorLogMessage">{{ segment.canonical_name }}</a>{% endif %}</td>
+            <td>{% if segment.qlog_url != "" %}<a href="{{ segment.qlog_url }}">qlog</a>{% else %}<div id="progressContainer_{{ segment.number }}_qlog" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_qlog" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qlog', '{{ segment.number }}', 'qlog')">Upload</button>{% endif %}</td>
+            <td>{% if segment.qcam_url != "" %}<a href="{{ segment.qcam_url }}">camera.ts</a>{% else %}<div id="progressContainer_{{ segment.number }}_qcam" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_qcam" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_qcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'qcamera.ts', '{{ segment.number }}', 'qcam')">Upload</button>{% endif %}</td>
+            <td>{% if segment.rlog_url != "" %}<a href="{{ segment.rlog_url }}">rlog</a>{% else %}<div id="progressContainer_{{ segment.number }}_rlog" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_rlog" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_rlog" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'rlog', '{{ segment.number }}', 'rlog')">Upload</button>{% endif %}</td>
+            <td>{% if segment.fcam_url != "" %}<a href="{{ segment.fcam_url }}">fcamera.hevc</a>{% else %}<div id="progressContainer_{{ segment.number }}_fcam" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_fcam" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_fcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'fcamera.hevc', '{{ segment.number }}', 'fcam')">Upload</button>{% endif %}</td>
+            <td>{% if segment.dcam_url != "" %}<a href="{{ segment.dcam_url }}">dcamera.hevc</a>{% else %}<div id="progressContainer_{{ segment.number }}_dcam" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_dcam" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_dcam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'dcamera.hevc', '{{ segment.number }}', 'dcam')">Upload</button>{% endif %}</td>
+            <td>{% if segment.ecam_url != "" %}<a href="{{ segment.ecam_url }}">ecamera.hevc</a>{% else %}<div id="progressContainer_{{ segment.number }}_ecam" style="display:none;"><progress id="uploadProgress_{{ segment.number }}_ecam" value="0" max="100"></progress></div><button id="uploadButton_{{ segment.number }}_ecam" onclick="uploadFile('{{ dongle_id }}', '{{ segment.number }}', '{{ segment.canonical_route_name }}', 'ecamera.hevc', '{{ segment.number }}', 'ecam')">Upload</button>{% endif %}</td>
           </tr>
         </tbody>
         {% endfor %}
       </table>
     </details>
     {% endif %}
-    
     {% if routes.defined is defined %}
     <details>
       <summary>Routes</summary>
@@ -686,62 +866,37 @@
       <table id="table_routes">
         <tbody>
           <tr>
-            <td style="white-space: nowrap"></td>
-            <td style="white-space: nowrap">start_time</td>
-            <td style="white-space: nowrap">route_name</td>
-            <td style="white-space: nowrap">connect</td>
-            <td style="white-space: nowrap">preserve</td>
-            <td style="white-space: nowrap">miles</td>
-            <td style="white-space: nowrap">maxlog</td>
-            <td style="white-space: nowrap">maxqlog</td>
-            <td style="white-space: nowrap">maxqcamera</td>
-            <td style="white-space: nowrap">platform</td>
-            <td style="white-space: nowrap">git_remote</td>
-            <td style="white-space: nowrap">git_branch</td>
-            <td style="white-space: nowrap">git_commit</td>
+            <td></td>
+            <td>start_time</td>
+            <td>route_name</td>
+            <td>miles</td>
+            <td>maxlog</td>
+            <td>maxqlog</td>
+            <td>maxqcamera</td>
+            <td>platform</td>
+            <td>git_remote</td>
+            <td>git_branch</td>
+            <td>git_commit</td>
           </tr>
           {% for route in routes.routes %}
           <tr>
-            <td style="white-space: nowrap">
-              <button onclick="deleteRoute('{{ route.fullname }}')">
-                Delete Route
-              </button>
-            </td>
-            <td style="white-space: nowrap">{{ route.start_time }}</td>
-            <td style="white-space: nowrap">
-              <a href="/?onebox={{ route.fullname }}">
-                {{ route.fullname }}
-              </a>
-            </td>
-            <td style="white-space: nowrap">
-              {% if route.connect_url is defined %}
-              <a href="{{ route.connect_url }}">
-                connect
-              </a>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">
-              {% if route.preserve_url is defined %}
-              <a href="{{ route.preserve_url }}">
-                preserve
-              </a>
-              {% endif %}
-            </td>
-            <td style="white-space: nowrap">{{ route.length }}</td>
-            <td style="white-space: nowrap">{{ route.maxlog }}</td>
-            <td style="white-space: nowrap">{{ route.maxqlog }}</td>
-            <td style="white-space: nowrap">{{ route.maxqcamera }}</td>
-            <td style="white-space: nowrap">{{ route.platform }}</td>
-            <td style="white-space: nowrap">{{ route.git_remote }}</td>
-            <td style="white-space: nowrap">{{ route.git_branch }}</td>
-            <td style="white-space: nowrap">{{ route.git_commit }}</td>
+            <td><button onclick="deleteRoute('{{ route.fullname }}')">Delete Route</button></td>
+            <td>{{ route.start_time }}</td>
+            <td><a href="/?onebox={{ route.fullname }}">{{ route.fullname }}</a></td>
+            <td>{{ route.length }}</td>
+            <td>{{ route.maxlog }}</td>
+            <td>{{ route.maxqlog }}</td>
+            <td>{{ route.maxqcamera }}</td>
+            <td>{{ route.platform }}</td>
+            <td>{{ route.git_remote }}</td>
+            <td>{{ route.git_branch }}</td>
+            <td>{{ route.git_commit }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </details>
     {% endif %}
-    
     {% if device_users.defined is defined %}
     <details>
       <summary>Authorized Users</summary>
@@ -749,28 +904,23 @@
       <table id="table_device_users">
         <tbody>
           <tr>
-            <td style="white-space: nowrap">email</td>
-            <td style="white-space: nowrap"></td>
-            <td style="white-space: nowrap">access_level</td>
-            <td style="white-space: nowrap"></td>
+            <td>email</td>
+            <td></td>
+            <td>access_level</td>
+            <td></td>
           </tr>
           {% for device_user in device_users %}
           <tr>
-            <td style="white-space: nowrap"><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
-            <td style="white-space: nowrap"></td>
-            <td style="white-space: nowrap">{{ device_user.access_level }}</td>
-            <td style="white-space: nowrap">
-              <a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">
-                remove
-              </a>
-            </td>
+            <td><a href="/?onebox={{ device_user.email }}">{{ device_user.email }}</a></td>
+            <td></td>
+            <td>{{ device_user.access_level }}</td>
+            <td><a onclick="unbind('{{ device_user.dongle_id }}');" style="color: red; text-decoration: underline; cursor: pointer;">remove</a></td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </details>
     {% endif %}
-    
     {% if bootlogs.defined is defined %}
     <details>
       <summary>Boot Logs</summary>
@@ -778,27 +928,18 @@
       <table id="table_bootlogs">
         <tbody>
           <tr>
-            <td style="white-space: nowrap">Parsed Boot log</td>
-            <td style="white-space: nowrap">download</td>
+            <td>Parsed Boot log</td>
+            <td>download</td>
           </tr>
           {% for bootlog in bootlogs.bootlogs %}
           <tr>
-            <td style="white-space: nowrap">
-              <a href="{{ bootlog.unlog_url }}">
-                {{ bootlog.date_time }}
-              </a>
-            </td>
-            <td style="white-space: nowrap">
-              <a href="{{ bootlog.bootlog_url }}">
-                download
-              </a>
-            </td>
+            <td><a href="{{ bootlog.unlog_url }}">{{ bootlog.date_time }}</a></td>
+            <td><a href="{{ bootlog.bootlog_url }}">download</a></td>
           {% endfor %}
         </tbody>
       </table>
     </details>
     {% endif %}
-    
     {% if cloudlogs.defined %}
     <details>
       <summary>Cloud Logs Cache Summary</summary>
@@ -807,25 +948,14 @@
         <tbody>
           {% for branch, modules in cloudlogs.cloudlogs %}
           <tr>
-            <!-- A single table row that spans all columns for the details element -->
             <td colspan="2" style="padding: 0; border: none;">
-              <!-- Wrap each branch in its own details block -->
               <details>
                 <summary><b>Branch:</b> {{ branch }}</summary>
                 <table style="width: 100%;">
                   {% for module, count in modules %}
                   <tr>
-                    <!-- The module name/counter -->
-                    <td style="white-space: nowrap;">
-                      <b>{{ module }}</b> ({{ count }} logs)
-                    </td>
-                    <!-- The button and logs container -->
-                    <td>
-                      <button onclick="loadModuleLogs('{{ dongle_id }}', '{{ branch }}', '{{ module }}')">
-                        Load Logs
-                      </button>
-                      <div id="logs-{{ branch }}-{{ module }}"></div>
-                    </td>
+                    <td><b>{{ module }}</b> ({{ count }} logs)</td>
+                    <td><button onclick="loadModuleLogs('{{ dongle_id }}', '{{ branch }}', '{{ module }}')">Load Logs</button><div id="logs-{{ branch }}-{{ module }}"></div></td>
                   </tr>
                   {% endfor %}
                 </table>
@@ -838,8 +968,13 @@
     </details>
     {% endif %}
   </div>
-
-    <hr>
-    <a href="/auth/logout">Sign out</a>
+  <hr>
+  <a href="/auth/logout">Sign out</a>
+  <div id="videoModal" class="modal" onclick="if(event.target===this)closeVideoModal()">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeVideoModal()">&times;</button>
+      <video id="videoPlayer" controls></video>
+    </div>
+  </div>
 </body>
 </html>

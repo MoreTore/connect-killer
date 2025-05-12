@@ -2,16 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cloudlogs Viewer</title>
   <style>
-    body { font-family: sans-serif; margin: 2em; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 13px; }
-    th { background: #f0f0f0; }
-    input, select { margin: 0 4px 8px 0; }
-    pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #181c20;
+      color: #e3e6eb;
+      margin: 0;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    h2 {
+      color: #6cb6ff;
+    }
+    form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      align-items: center;
+      margin-bottom: 16px;
+      background: #23272e;
+      color: #e3e6eb;
+      padding: 12px 8px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    form label {
+      font-weight: 500;
+      margin-right: 8px;
+    }
+    input, select, button {
+      font-family: inherit;
+      font-size: 1em;
+      background: #23272e;
+      color: #e3e6eb;
+      border: 1px solid #333a44;
+      border-radius: 3px;
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      transition: border 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: #6cb6ff;
+      outline: none;
+    }
+    button {
+      background: #23272e;
+      color: #e3e6eb;
+      border: 1px solid #333a44;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #2c313a;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+      font-size: 13px;
+      background: #23272e;
+      color: #e3e6eb;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid #23272e;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    th {
+      background: #23272e;
+      color: #b3b8c3;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tr:nth-child(even) {
+      background: #20242a;
+    }
+    tr:hover {
+      background: #23272e;
+    }
+    pre {
+      background: #181c20;
+      padding: 1em;
+      border-radius: 4px;
+      font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+      font-size: 12px;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #b3b8c3;
+    }
     .expandable-row { cursor: pointer; }
-    .raw-log { display: none; background: #f9f9f9; }
+    .raw-log { display: none; background: #20242a; }
+    #resultCount {
+      margin: 8px 0 16px 0;
+      font-size: 1em;
+      color: #6cb6ff;
+    }
+    @media (max-width: 768px) {
+      body { padding: 4px; }
+      form { flex-direction: column; gap: 0; }
+      th, td { padding: 4px 4px; font-size: 12px; }
+      h2 { font-size: 1.1em; color: #6cb6ff; }
+    }
   </style>
 </head>
 <body>
@@ -28,7 +131,14 @@
     <input name="branch" placeholder="Branch">
     <input name="module" placeholder="Module">
     <input name="level" placeholder="Level">
-    <input name="levelnum" type="number" placeholder="Levelnum">
+    <div style="display:inline-flex;align-items:center;gap:2px;">
+      <select name="levelnum_op" id="levelnum_op" style="width:40px;">
+        <option value="eq">=</option>
+        <option value="gt">&gt;</option>
+        <option value="lt">&lt;</option>
+      </select>
+      <input name="levelnum" type="number" placeholder="Levelnum" style="width:80px;" title="Levelnum">
+    </div>
     <input name="funcName" placeholder="Function Name">
     <!-- ctx fields -->
     <input name="ctx_branch" placeholder="ctx.branch">
@@ -41,6 +151,7 @@
     <input name="limit" type="number" min="1" max="5000" value="500" style="width:60px;" title="Limit">
     <button type="submit">Filter</button>
   </form>
+  <p id="resultCount"></p>
   <table id="logsTable">
     <thead>
       <tr>
@@ -78,7 +189,13 @@
           if (el.name === 'ctx_dirty') {
             if (el.value.toLowerCase() === 'true') params.append('ctx_dirty', 'true');
             else if (el.value.toLowerCase() === 'false') params.append('ctx_dirty', 'false');
-          } else {
+          } else if (el.name === 'levelnum') {
+            const op = form.elements['levelnum_op'].value;
+            if (el.value) {
+              params.append('levelnum', el.value);
+              params.append('levelnum_op', op);
+            }
+          } else if (el.name !== 'levelnum_op') {
             params.append(el.name, el.value);
           }
         }
@@ -111,7 +228,7 @@
           <td>${log._branch || ''}</td>
           <td>${log._module || ''}</td>
           <td>${log.level || ''}</td>
-          <td>${msg.substring(0, 120)}${msg.length > 120 ? '…' : ''}${execInfo ? ' <span style=\"color:#b00;\">[exec_info]</span>' : ''}</td>
+          <td>${msg.substring(0, 120)}${msg.length > 120 ? '…' : ''}${execInfo ? ' <span style="color:#b00;">[exec_info]</span>' : ''}</td>
         `;
         // Add a hidden row for the raw log
         const rawTr = document.createElement('tr');
@@ -124,6 +241,8 @@
         tbody.appendChild(tr);
         tbody.appendChild(rawTr);
       });
+      // Display the number of results that are showing
+      document.getElementById('resultCount').textContent = `Showing ${logs.length} results`;
       function escapeHtml(str) {
         return str.replace(/[&<>"']/g, function(m) {
           return ({

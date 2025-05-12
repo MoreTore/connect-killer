@@ -5,12 +5,16 @@ use std::io::{self, Write, BufRead, BufReader};
 use std::path::Path;
 
 fn main() -> io::Result<()> {
-    println!("cargo:rerun-if-changed=cereal/");
-    println!("cargo:rerun-if-changed=src/cereal");
-    let src_prefix = "cereal";
-    let capnp_files = ["log.capnp", "car.capnp", "custom.capnp", "legacy.capnp", "maptile.capnp"];
+    println!("cargo:rerun-if-changed=openpilot/cereal");
+    let src_prefix = "openpilot/cereal";
+    let capnp_files = ["log.capnp", "car.capnp", "custom.capnp", "legacy.capnp"];
     let out_dir = Path::new("src/cereal");
 
+    // Ensure the openpilot/cereal directory exists
+    if !Path::new(src_prefix).exists() {
+        eprintln!("Error: Directory not found: {}", src_prefix);
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("Directory not found: {}", src_prefix)));
+    }
 
     // Ensure the output directory exists
     create_dir_all(&out_dir)?;
@@ -27,7 +31,7 @@ fn main() -> io::Result<()> {
         command.file(file_path);
     }
     command.default_parent_module(vec!["cereal".into()]);
-    command.run(); // Propagate errors using `?`
+    command.run().unwrap();
 
     // Create or truncate the mod.rs file
     let mod_rs_path = out_dir.join("mod.rs");
@@ -41,7 +45,7 @@ fn main() -> io::Result<()> {
     }
 
     // --- BEGIN: Generate get_event_type_name match arms from log.capnp ---
-    let log_capnp_path = Path::new("cereal/log.capnp");
+    let log_capnp_path = Path::new("openpilot/cereal/log.capnp");
     let generated_path = Path::new("src/cereal/generated_event_type_names.rs");
     let log_file = File::open(log_capnp_path)?;
     let reader = BufReader::new(log_file);

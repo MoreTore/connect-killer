@@ -159,22 +159,44 @@ pub async fn asset_download(
     match res {
         Ok(response) => {
             let status = response.status();
-            // Build the response, copying all headers from the backend
             let mut response_builder = Response::builder().status(status);
+            let mut is_video = false;
+            let mut content_type = None;
+            if lookup_key.ends_with(".ts") {
+                is_video = true;
+                content_type = Some("video/mp2t");
+            } else if lookup_key.ends_with(".mp4") {
+                is_video = true;
+                content_type = Some("video/mp4");
+            } else if lookup_key.ends_with(".hevc") {
+                is_video = true;
+                content_type = Some("video/mp4"); // browser support
+            }
             for (key, value) in response.headers().iter() {
-                // Skip hop-by-hop headers (e.g., transfer-encoding)
                 if key == hyper::header::TRANSFER_ENCODING {
+                    continue;
+                }
+                // Don't forward backend's Content-Type or Content-Disposition for video files
+                if is_video && (key == hyper::header::CONTENT_TYPE || key == hyper::header::CONTENT_DISPOSITION) {
                     continue;
                 }
                 response_builder = response_builder.header(key, value);
             }
-            // Optionally add/override cache control and content disposition
-            response_builder = response_builder
-                .header(
+            if let Some(ct) = content_type {
+                response_builder = response_builder.header(hyper::header::CONTENT_TYPE, ct);
+            }
+            if is_video {
+                response_builder = response_builder.header(
+                    hyper::header::CONTENT_DISPOSITION,
+                    format!("inline; filename=\"{lookup_key}\"")
+                );
+            } else {
+                response_builder = response_builder.header(
                     hyper::header::CONTENT_DISPOSITION,
                     format!("attachment; filename=\"{lookup_key}\"")
-                )
-                .header(hyper::header::CACHE_CONTROL, "public, max-age=31536000");
+                );
+            }
+            response_builder = response_builder.header(hyper::header::CACHE_CONTROL, "public, max-age=31536000");
             let body = reqwest::Body::wrap_stream(response.bytes_stream());
             let proxy_response = response_builder.body(body).unwrap();
             Ok(proxy_response)
@@ -511,6 +533,7 @@ pub struct CloudlogAllQuery {
     pub module: Option<String>,
     pub level: Option<String>,
     pub levelnum: Option<u64>,
+    pub levelnum_op: Option<String>, // eq, gt, lt
     pub func_name: Option<String>,
     pub date_from: Option<f64>, // unix timestamp (seconds)
     pub date_to: Option<f64>,   // unix timestamp (seconds)
@@ -592,7 +615,16 @@ pub async fn get_all_cloudlogs(
                     // Filter by levelnum
                     if let Some(filter_levelnum) = query.levelnum {
                         if let Some(levelnum) = log.get("levelnum").and_then(|v| v.as_u64()) {
-                            if levelnum != filter_levelnum { continue; }
+                            if let Some(ref op) = query.levelnum_op {
+                                match op.as_str() {
+                                    "eq" => if levelnum != filter_levelnum { continue; },
+                                    "gt" => if levelnum <= filter_levelnum { continue; },
+                                    "lt" => if levelnum >= filter_levelnum { continue; },
+                                    _ => continue,
+                                }
+                            } else {
+                                if levelnum != filter_levelnum { continue; }
+                            }
                         } else { continue; }
                     }
                     // Filter by funcName (now func_name)

@@ -10,6 +10,8 @@ use axum::{
 use tokio_util::io::StreamReader;
 extern crate url;
 use std::{collections::HashMap, env, io::Cursor};
+use axum::response::{Redirect, IntoResponse};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 
 use crate::{
     cereal::log_capnp::event as LogEvent, 
@@ -358,10 +360,49 @@ pub async fn login(
     )
 }
 
+pub async fn logout() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    // Expire the jwt cookie
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_static("jwt=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax;")
+    );
+    // Redirect to login page
+    (StatusCode::FOUND, headers, Redirect::to("/login"))
+}
+
+pub async fn param_stats(
+    ViewEngine(v): ViewEngine<TeraView>,
+    State(ctx): State<AppContext>,
+) -> Result<impl IntoResponse> {
+    // Load the param stats file (e.g., Model.json)
+    let bytes = ctx.storage.download::<Vec<u8>>(std::path::Path::new("params/Model.json")).await?;
+    let value_counts: HashMap<String, u64> = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| HashMap::new());
+
+    #[derive(Serialize)]
+    struct ParamStatsTemplate {
+        param_name: String,
+        values: Vec<(String, u64)>,
+    }
+
+    let mut values: Vec<_> = value_counts.into_iter().collect();
+    values.sort_by(|a, b| b.1.cmp(&a.1)); // Sort descending by count
+
+    let template = ParamStatsTemplate {
+        param_name: "Model".to_string(),
+        values,
+    };
+
+    Ok(v.render("stats/param_stats.html", &template))
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .add("/", get(onebox_handler))
         .add("/login", get(login))
         .add("/cloudlogs", get(cloudlogs_view))
         .add("/qlog", get(qlog_render))
+        .add("/auth/logout", get(logout))
+        .add("/params_stats", get(param_stats))
 }

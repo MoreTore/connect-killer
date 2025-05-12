@@ -1,182 +1,203 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        header, footer {
-            background-color: #1e1e1e;
-            padding: 1em;
-            text-align: center;
-        }
-        main {
-            padding: 2em;
-        }
-        button, input[type="button"], input[type="submit"] {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border: 1px solid #ffffff;
-            padding: 0.5em 1em;
-            cursor: pointer;
-        }
-        button:hover, input[type="button"]:hover, input[type="submit"]:hover {
-            background-color: #333333;
-        }
-        a {
-            color: #4CAF50;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect Useradmin</title>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-    <script>
-        window.ATHENA_HOST = "https://api.konik.ai/ws";
-        window.API_HOST = "https://api.konik.ai";
-        window.BILLING_HOST = "https://billing.comma.ai";
-        if (typeof window.API_HOST === 'undefined') {
-            window.API_HOST = 'https://api.konik.ai';
-            window.ATHENA_HOST = 'https://api.konik.ai/ws';
-            window.BILLING_HOST = 'https://billing.comma.ai';
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect Useradmin Login</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #181c20;
+      color: #e3e6eb;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .login-container {
+      background: #23272e;
+      color: #e3e6eb;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+      padding: 32px 24px;
+      margin-top: 10vh;
+      min-width: 320px;
+      max-width: 90vw;
+      text-align: center;
+    }
+    h1 {
+      color: #6cb6ff;
+      margin-bottom: 16px;
+      font-size: 1.5em;
+    }
+    a {
+      color: #6cb6ff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1.1em;
+      border: 1px solid #6cb6ff;
+      border-radius: 4px;
+      padding: 10px 24px;
+      background: #181c20;
+      transition: background 0.2s, color 0.2s;
+      display: inline-block;
+      margin-top: 16px;
+    }
+    a:hover {
+      background: #6cb6ff;
+      color: #181c20;
+    }
+    @media (max-width: 600px) {
+      .login-container {
+        padding: 18px 6px;
+        min-width: unset;
+      }
+      h1 { font-size: 1.1em; }
+      a { font-size: 1em; padding: 8px 12px; }
+    }
+  </style>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script>
+    window.ATHENA_HOST = "https://api.konik.ai/ws";
+    window.API_HOST = "https://api.konik.ai";
+    window.BILLING_HOST = "https://billing.comma.ai";
+    if (typeof window.API_HOST === 'undefined') {
+        window.API_HOST = 'https://api.konik.ai';
+        window.ATHENA_HOST = 'https://api.konik.ai/ws';
+        window.BILLING_HOST = 'https://billing.comma.ai';
+    }
 
-        Date.prototype.toLocalString = function() {
-            return this.getUTCFullYear() +
-                '-' + (this.getMonth() + 1).toString().padStart(2, '0') +
-                '-' + this.getDate().toString().padStart(2, '0') +
-                ' ' + this.getHours().toString().padStart(2, '0') +
-                ':' + this.getMinutes().toString().padStart(2, '0') +
-                ':' + this.getSeconds().toString().padStart(2, '0');
-        };
+    Date.prototype.toLocalString = function() {
+        return this.getUTCFullYear() +
+            '-' + (this.getMonth() + 1).toString().padStart(2, '0') +
+            '-' + this.getDate().toString().padStart(2, '0') +
+            ' ' + this.getHours().toString().padStart(2, '0') +
+            ':' + this.getMinutes().toString().padStart(2, '0') +
+            ':' + this.getSeconds().toString().padStart(2, '0');
+    };
 
-        $(document).ready(function() {
-            // convert epoch times to localtime
-            $('time').each(function(i, e) {
-                var dt = parseInt($(e).attr('datetime'));
-                if (dt) {
-                    $(e).text(new Date(dt * 1000).toLocalString());
-                }
-            });
+    $(document).ready(function() {
+        // convert epoch times to localtime
+        $('time').each(function(i, e) {
+            var dt = parseInt($(e).attr('datetime'));
+            if (dt) {
+                $(e).text(new Date(dt * 1000).toLocalString());
+            }
         });
+    });
 
-        function api_request(method, endpoint, callback, extraOptions) {
-            var options = $.extend(true, {}, {
-                method: method,
-                headers: {
-                    'Authorization': getCookie('Authorization')
-                },
-                url: window.API_HOST + "/" + endpoint,
-                success: callback
-            }, extraOptions);
-            return $.ajax(options);
+    function api_request(method, endpoint, callback, extraOptions) {
+        var options = $.extend(true, {}, {
+            method: method,
+            headers: {
+                'Authorization': getCookie('Authorization')
+            },
+            url: window.API_HOST + "/" + endpoint,
+            success: callback
+        }, extraOptions);
+        return $.ajax(options);
+    }
+    function api_post(endpoint, data, callback) {
+        return api_request('POST', endpoint, callback, { data: JSON.stringify(data), contentType: 'application/json' });
+    }
+    function api_patch(endpoint, data, callback) {
+        return api_request('PATCH', endpoint, callback, { data: JSON.stringify(data) , contentType: 'application/json' });
+    }
+    function api_get(endpoint, callback) {
+        return api_request('GET', endpoint, callback);
+    }
+    function api_delete(endpoint) {
+        return api_request('DELETE', endpoint);
+    }
+    function bind(dongle_id) {
+        var email = prompt("Granting access for " + dongle_id + " to email?");
+        // check if user clicked cancel
+        if (email === null) {
+            return;
         }
-        function api_post(endpoint, data, callback) {
-            return api_request('POST', endpoint, callback, { data: JSON.stringify(data), contentType: 'application/json' });
+        api_post("v1/devices/" + dongle_id + "/add_user", {email: email}, function(x) { alert('Bound ' + email + ' to ' + dongle_id); });
+        window.location.reload();
+    }
+    function unbind(dongle_id, email) {
+        var x = confirm("Remove " + (email || "self") + " from " + dongle_id + "?");
+        if (x === false) {
+            return;
         }
-        function api_patch(endpoint, data, callback) {
-            return api_request('PATCH', endpoint, callback, { data: JSON.stringify(data) , contentType: 'application/json' });
-        }
-        function api_get(endpoint, callback) {
-            return api_request('GET', endpoint, callback);
-        }
-        function api_delete(endpoint) {
-            return api_request('DELETE', endpoint);
-        }
-        function bind(dongle_id) {
-            var email = prompt("Granting access for " + dongle_id + " to email?");
-            // check if user clicked cancel
-            if (email === null) {
-                return;
-            }
-            api_post("v1/devices/" + dongle_id + "/add_user", {email: email}, function(x) { alert('Bound ' + email + ' to ' + dongle_id); });
+        api_post("v1/devices/" + dongle_id + "/del_user", email ? {email: email} : {}, function(x) { alert('Unbound ' + (email || 'self') + ' from ' + dongle_id); });
+        if (email) {
             window.location.reload();
+        } else {
+            window.location.href = '/';
         }
-        function unbind(dongle_id, email) {
-            var x = confirm("Remove " + (email || "self") + " from " + dongle_id + "?");
-            if (x === false) {
-                return;
+    }
+    function unpair(dongle_id) {
+        if (confirm("Unpair " + dongle_id + "?")) {
+            api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) { alert('Unpaired ' + dongle_id); });
+        }
+        window.location.reload();
+    }
+
+    function preserveRoute(route) {
+        api_post('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
+            if (xhr.status === 200) {
+                alert('Preserved ' + route);
+                window.location.reload();
+            } else if (xhr.status === 403) {
+                alert('Maximum number of drives have been preserved. Unpreserve a drive and try again.');
+            } else {
+                console.log('failed to preserve route', route, xhr.url, xhr.status, data);
             }
-            api_post("v1/devices/" + dongle_id + "/del_user", email ? {email: email} : {}, function(x) { alert('Unbound ' + (email || 'self') + ' from ' + dongle_id); });
-            if (email) {
+        });
+    }
+    function unpreserveRoute(route) {
+        api_delete('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
+            if (xhr.status === 200) {
+                alert('Unpreserved ' + route);
                 window.location.reload();
             } else {
-                window.location.href = '/';
+                console.log('failed to unpreserve route', route, xhr.url, xhr.status, data);
             }
-        }
-        function unpair(dongle_id) {
-            if (confirm("Unpair " + dongle_id + "?")) {
-                api_post("v1/devices/" + dongle_id + "/unpair", {}, function(x) { alert('Unpaired ' + dongle_id); });
-            }
-            window.location.reload();
+        });
+    }
+    function publicizeRoute(route) {
+        var x = confirm("Publicizing " + route + ". This will allow any comma user with the route name to access all route files.");
+        if (x === false) {
+            return;
         }
 
-        function preserveRoute(route) {
-            api_post('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-                if (xhr.status === 200) {
-                    alert('Preserved ' + route);
-                    window.location.reload();
-                } else if (xhr.status === 403) {
-                    alert('Maximum number of drives have been preserved. Unpreserve a drive and try again.');
-                } else {
-                    console.log('failed to preserve route', route, xhr.url, xhr.status, data);
-                }
-            });
-        }
-        function unpreserveRoute(route) {
-            api_delete('v1/route/' + route + '/preserve').then(function(data, _, xhr) {
-                if (xhr.status === 200) {
-                    alert('Unpreserved ' + route);
-                    window.location.reload();
-                } else {
-                    console.log('failed to unpreserve route', route, xhr.url, xhr.status, data);
-                }
-            });
-        }
-        function publicizeRoute(route) {
-            var x = confirm("Publicizing " + route + ". This will allow any comma user with the route name to access all route files.");
-            if (x === false) {
-                return;
+        api_patch('v1/route/' + route + '/', {'is_public': true}).then(function(data, _, xhr) {
+            if (xhr.status === 200) {
+                alert(route + ' is now public.');
+                window.location.reload();
+            } else {
+                console.log('failed to publicize route', route, xhr.url, xhr.status, data);
             }
-
-            api_patch('v1/route/' + route + '/', {'is_public': true}).then(function(data, _, xhr) {
-                if (xhr.status === 200) {
-                    alert(route + ' is now public.');
-                    window.location.reload();
-                } else {
-                    console.log('failed to publicize route', route, xhr.url, xhr.status, data);
-                }
-            });
-        }
-        function unpublicizeRoute(route) {
-            api_patch('v1/route/' + route + '/', {'is_public': false}).then(function(data, _, xhr) {
-                if (xhr.status === 200) {
-                    alert(route + ' is now private.');
-                    window.location.reload();
-                } else {
-                    console.log('failed to privatize route', route, xhr.url, xhr.status, data);
-                }
-            });
-        }
-        function getCookie(name) {
-            var value = "; " + document.cookie;
-            var parts = value.split("; " + name + "=");
-            if (parts.length == 2) return parts.pop().split(";").shift().replace(/^"(.*)"$/, '$1');
-        }
-    </script>
+        });
+    }
+    function unpublicizeRoute(route) {
+        api_patch('v1/route/' + route + '/', {'is_public': false}).then(function(data, _, xhr) {
+            if (xhr.status === 200) {
+                alert(route + ' is now private.');
+                window.location.reload();
+            } else {
+                console.log('failed to privatize route', route, xhr.url, xhr.status, data);
+            }
+        });
+    }
+    function getCookie(name) {
+        var value = "; " + document.cookie;
+        var parts = value.split("; " + name + "=");
+        if (parts.length == 2) return parts.pop().split(";").shift().replace(/^"(.*)"$/, '$1');
+    }
+  </script>
 </head>
 <body>
-    <p>
-        <a href="https://github.com/login/oauth/authorize?client_id=Ov23liy0AI1YCd15pypf&redirect_uri=https%3A%2F%2Fapi.konik.ai%2Fv2%2Fauth%2Fh%2Fredirect%2F&state=service%2Cuseradmin.konik.ai&scope=read%3Auser">
-            Sign in with GitHub</a>
-        </p>
+  <div class="login-container">
+    <h1>Connect Useradmin</h1>
+    <a href="https://github.com/login/oauth/authorize?client_id=Ov23liy0AI1YCd15pypf&redirect_uri=https%3A%2F%2Fapi.konik.ai%2Fv2%2Fauth%2Fh%2Fredirect%2F&state=service%2Cuseradmin.konik.ai&scope=read%3Auser">
+      Sign in with GitHub
+    </a>
+  </div>
 </body>
 </html>

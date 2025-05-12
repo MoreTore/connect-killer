@@ -49,7 +49,9 @@ services:
       - .env
     network_mode: "host"
     volumes:
+      - ./assets:/usr/src/connect/assets
       - cargo-cache:/usr/local/cargo
+      - /mnt/raid5/params:/params
     logging:
       driver: "json-file"
       options:

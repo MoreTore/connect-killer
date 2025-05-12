@@ -1,19 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Log Event Viewer</title>
-    <style>
-        body { font-family: monospace; }
-        select { min-width: 128px; }
-        pre { background: #f8f8f8; padding: 1em; border-radius: 4px; }
-    </style>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Event Viewer</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #181c20;
+      color: #e3e6eb;
+      margin: 0;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    select {
+      min-width: 128px;
+      padding: 6px 8px;
+      border: 1px solid #333a44;
+      border-radius: 3px;
+      font-size: 1em;
+      background: #23272e;
+      color: #e3e6eb;
+      margin-bottom: 12px;
+    }
+    select:focus {
+      border-color: #6cb6ff;
+      outline: none;
+    }
+    pre {
+      background: #181c20;
+      padding: 1em;
+      border-radius: 4px;
+      font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+      font-size: 13px;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #b3b8c3;
+    }
+    b {
+      color: #6cb6ff;
+      font-size: 1.1em;
+    }
+    @media (max-width: 768px) {
+      body { padding: 4px; font-size: 13px; }
+      pre { font-size: 12px; }
+    }
+  </style>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 </head>
 <body>
     <b>log:</b>
     <select>
-        <option value="">-- Select event --</option>
+        <option value="">-- Select  event --</option>
         {% for event in events %}
           <option value="{{ event }}"{% if selected_event == event %} selected{% endif %}>{{ event }}</option>
         {% endfor %}

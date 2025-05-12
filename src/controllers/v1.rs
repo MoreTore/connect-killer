@@ -1,4 +1,3 @@
-
 use loco_rs::prelude::*;
 use axum::{
     extract::{Path, Query, State}, routing::patch, Extension
@@ -19,7 +18,7 @@ use sha2::Sha256;
 use jsonwebtoken::get_current_timestamp;
 
 use crate::{common, 
-    middleware::jwt, 
+    middleware::{jwt, auth::MyJWT}, 
     models::{
         devices::DM,
         segments::SM,
@@ -85,7 +84,7 @@ struct UrlResponse {
 }
 
 pub async fn get_route_files(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(route_id): Path<String>,
     Extension(client): Extension<Client>
@@ -97,7 +96,7 @@ pub async fn get_route_files(
         let response = get_links_for_route(&route_id, &client, &token).await;
         match response {
             Ok((_status, body)) => Ok(format::json(body)),
-            Err(e) => unauthorized("err"),
+            Err(_) => unauthorized("err"),
         }
     } else {
         return unauthorized("err");
@@ -105,30 +104,35 @@ pub async fn get_route_files(
 
 }
 
-async fn get_qcam_stream(
-    auth: crate::middleware::auth::MyJWT,
+// Generic camera stream generator
+async fn get_camera_stream<F>(
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(canonical_route_name): Path<String>,
-) -> Result<Response> {
-    // Do not need to check for data ownership because its done when you try to fetch the data
+    mut url_and_duration: F,
+    url_field: &'static str,
+) -> Result<Response>
+where
+    F: FnMut(&mut SM) -> Option<(String, f64)> + Send,
+{
     let mut segment_models = SM::find_segments_by_route(&ctx.db, &canonical_route_name).await?;
-    //segment_models.retain(|segment| segment.start_time_utc_millis != 0); // exclude ones where the qlog is missing
-    segment_models.retain(|segment| segment.qcam_url != ""); // exclude ones where the qcam is missing
+    segment_models.retain(|segment| {
+        match url_field {
+            "qcam_url" => !segment.qcam_url.is_empty(),
+            "fcam_url" => !segment.fcam_url.is_empty(),
+            "dcam_url" => !segment.dcam_url.is_empty(),
+            "ecam_url" => !segment.ecam_url.is_empty(),
+            _ => false,
+        }
+    });
     segment_models.sort_by(|a, b| a.number.cmp(&b.number));
-    let exp = (3600 * 24 as u64);
+    let exp = 3600 * 24 as u64;
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
-        .generate_token(
-        &exp,
-        auth.claims.identity.to_string()).unwrap_or_default();
-    
-    for seg in segment_models.iter_mut() {
-        seg.qcam_url = format!("{}?exp={}&sig={}",seg.qcam_url, exp, token)
-    }
+        .generate_token(&exp, auth.claims.identity.to_string())
+        .unwrap_or_default();
 
-    
     let mut response = String::new();
-
     response.push_str("#EXTM3U\n");
     response.push_str("#EXT-X-VERSION:3\n");
     response.push_str("#EXT-X-TARGETDURATION:61\n");
@@ -136,32 +140,37 @@ async fn get_qcam_stream(
     response.push_str("#EXT-X-PLAYLIST-TYPE:VOD\n");
 
     let mut prev_seg_number = 0;
-    for segment in segment_models {
-        // Fill any missing segments until we catch up
+    for segment in segment_models.iter_mut() {
         if prev_seg_number < segment.number {
-
             response.push_str("#EXT-X-DISCONTINUITY\n");
             prev_seg_number = segment.number;
         }
-
-        // Now prev_seg_number == segment.number, so we write the real segment
-        response.push_str(&format!("#EXTINF:{},{}\n", segment.qcam_duration, segment.number));
-        response.push_str(&format!("{}\n", segment.qcam_url));
-
-        // Increment to the next number for subsequent segments
+        if let Some((url, duration)) = url_and_duration(segment) {
+            let url = format!("{}?exp={}&sig={}", url, exp, token);
+            response.push_str(&format!("#EXTINF:{},{}\n", duration, segment.number));
+            response.push_str(&format!("{}\n", url));
+        }
         prev_seg_number += 1;
     }
-
     response.push_str("#EXT-X-ENDLIST\n");
-
     Ok(response.into_response())
 }
 
+// Wrappers for each camera type
+async fn get_qcam_stream(auth: MyJWT, State(ctx): State<AppContext>, Path(canonical_route_name): Path<String>) -> Result<Response> {
+    get_camera_stream(auth, State(ctx), Path(canonical_route_name), |seg| {
+        if !seg.qcam_url.is_empty() {
+            Some((seg.qcam_url.clone(), seg.qcam_duration as f64))
+        } else {
+            None
+        }
+    }, "qcam_url").await
+}
 
 async fn get_share_signature(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
-    Path(fullname): Path<String>,
+    Path(_fullname): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     let jwt_secret = ctx.config.get_jwt_config()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get secret"))?;
@@ -254,7 +263,7 @@ async fn sort_keys_to_response(keys: Vec<String>) -> FilesResponse {
 }
 
 async fn get_upload_url(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(mut params): Query<UploadUrlQuery>
@@ -308,7 +317,7 @@ async fn get_upload_url(
 }
 
 async fn upload_urls_handler(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(mut data): Json<UploadUrlsQuery>,
@@ -396,7 +405,7 @@ fn transform_route_string(input_string: &str) -> String {
 }
 
 async fn unpair(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -416,7 +425,7 @@ async fn unpair(
 }
 
 async fn device_info(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -449,7 +458,7 @@ async fn device_info(
 }
 
 async fn device_location(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -476,7 +485,7 @@ async fn device_location(
 }
 
 async fn device_stats(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -532,7 +541,7 @@ async fn device_stats(
 }
 
 async fn device_users(
-    _auth: crate::middleware::auth::MyJWT,
+    _auth: MyJWT,
     State(_ctx): State<AppContext>,
     Path(_dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -548,7 +557,7 @@ struct DeviceSegmentQuery {
 }
 
 async fn route_segment(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Query(params): Query<DeviceSegmentQuery>,
@@ -572,7 +581,7 @@ async fn route_segment(
     };
     
     route_models.retain(|route| route.maxqlog != -1); // exclude ones wher the qlog is missing
-    let exp = (3600 * 24 as u64);
+    let exp = 3600 * 24 as u64;
     let jwt_secret = ctx.config.get_jwt_config()?;
     let token = jwt::JWT::new(&jwt_secret.secret)
         .generate_token(
@@ -588,7 +597,7 @@ async fn route_segment(
 }
 
 async fn route_info(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(fullname): Path<String>,
 ) -> Result<Response> {
@@ -609,7 +618,7 @@ async fn route_info(
 
 
 async fn patch_route(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(fullname): Path<String>,
     Json(patch): Json<RoutePatch>,
@@ -636,7 +645,7 @@ async fn patch_route(
 
 
 async fn preserved_routes( // TODO
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -657,7 +666,7 @@ async fn preserved_routes( // TODO
 
 
 async fn get_my_devices(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // TODO: implement authorized devices!
@@ -696,7 +705,7 @@ async fn get_my_devices(
 
 
 async fn get_me(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
 ) -> Result<Response> {
     let user_model = UM::find_by_identity(&ctx.db, &auth.claims.identity).await?;
@@ -716,7 +725,7 @@ struct AliasJson {
 }
 
 async fn update_device_alias(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(alias): Json<AliasJson>,
@@ -762,7 +771,7 @@ struct Destination {
 }
 
 async fn set_destination(
-    auth: crate::middleware::auth::MyJWT,   
+    auth: MyJWT,   
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(destination): Json<Destination>,
@@ -860,7 +869,7 @@ async fn set_destination(
 
 
 async fn get_next_destination(
-    auth: crate::middleware::auth::MyJWT,   
+    auth: MyJWT,   
     State(ctx): State<AppContext>,
     //Path(dongle_id): Path<String>,
 ) -> impl IntoResponse {
@@ -933,7 +942,7 @@ struct PutSavedLocation {
 }
 
 async fn put_locations(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(destination): Json<PutSavedLocation>,
@@ -1006,7 +1015,7 @@ async fn put_locations(
 }
 
 async fn get_locations(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
 ) -> Result<Response> {
@@ -1052,7 +1061,7 @@ fn generate_turn_credentials(secret_key: &str) -> (String, String) {
 }
 
 async fn get_ice_servers(
-    _auth: crate::middleware::auth::MyJWT,
+    _auth: MyJWT,
 ) -> Result<Json<Vec<RTCIceServer>>, StatusCode> {
     tracing::info!("Getting ICE servers");
 
@@ -1085,7 +1094,7 @@ struct DeleteLocation {
 }
 
 async fn delete_location(
-    auth: crate::middleware::auth::MyJWT,
+    auth: MyJWT,
     State(ctx): State<AppContext>,
     Path(dongle_id): Path<String>,
     Json(payload): Json<DeleteLocation>,

@@ -1,12 +1,9 @@
-[submodule "unlogger/cereal"]
-	path = unlogger/cereal
-	url = https://github.com/commaai/cereal.git
-[submodule "cereal"]
-	path = cereal
-	url = https://github.com/MoreTore/cereal.git
 [submodule "minikeyvalue"]
 	path = minikeyvalue
 	url = https://github.com/MoreTore/minikeyvalue.git
 [submodule "frontend"]
 	path = frontend
 	url = https://github.com/MoreTore/connect.git
+[submodule "openpilot"]
+	path = openpilot
+	url = https://github.com/MoreTore/openpilot.git

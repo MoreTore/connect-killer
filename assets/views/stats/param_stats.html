@@ -1,0 +1,17 @@
+<h1>Stats for param: {{ param_name }}</h1>
+<table>
+    <thead>
+        <tr>
+            <th>Value</th>
+            <th>Count</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for value, count in values %}
+        <tr>
+            <td>{{ value }}</td>
+            <td>{{ count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
