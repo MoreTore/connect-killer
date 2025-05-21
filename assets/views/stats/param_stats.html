@@ -1,17 +1,50 @@
-<h1>Stats for param: {{ param_name }}</h1>
-<table>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Param Stats</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Stats for param: <span id="param-name"></span></h1>
+  <table>
     <thead>
-        <tr>
-            <th>Value</th>
-            <th>Count</th>
-        </tr>
+      <tr>
+        <th>Value</th>
+        <th>Count</th>
+      </tr>
     </thead>
-    <tbody>
-        {% for value, count in values %}
-        <tr>
-            <td>{{ value }}</td>
-            <td>{{ count }}</td>
-        </tr>
-        {% endfor %}
+    <tbody id="param-table-body">
+      <!-- Data will be inserted here by JavaScript -->
     </tbody>
-</table>
+  </table>
+  <script>
+    // You can set the param name here or get it from the URL
+    const paramName = 'example_param'; // Change as needed or parse from location
+    document.getElementById('param-name').textContent = paramName;
+    fetch(`https://api.konik.ai/params?name=${encodeURIComponent(paramName)}`)
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.getElementById('param-table-body');
+        tbody.innerHTML = '';
+        if (data && data.values) {
+          Object.entries(data.values).forEach(([value, count]) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${value}</td><td>${count}</td>`;
+            tbody.appendChild(row);
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="2">No data found</td></tr>';
+        }
+      })
+      .catch(err => {
+        document.getElementById('param-table-body').innerHTML = '<tr><td colspan="2">Error loading data</td></tr>';
+      });
+  </script>
+</body>
+</html>

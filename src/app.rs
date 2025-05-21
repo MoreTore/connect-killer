@@ -31,7 +31,7 @@ use crate::{
     initializers,
     controllers::ws::ConnectionManager, 
     models::_entities::{devices, users},
-    workers::log_helpers::persist_param_value_counts
+    workers::log_helpers::{persist_param_value_counts, persist_device_params}
 };
 
 pub struct App {}
@@ -64,6 +64,7 @@ impl Hooks for App {
     fn routes(ctx: &AppContext) -> AppRoutes {
         if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) { 
             return AppRoutes::with_default_routes();
+            
         }
         AppRoutes::with_default_routes()
             .add_route(controllers::ws::routes())
@@ -73,6 +74,7 @@ impl Hooks for App {
             .add_route(controllers::connectdata::routes())
             .add_route(controllers::v1::routes())
             .add_route(controllers::maps::routes())
+            .add_route(controllers::params::routes())
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
@@ -145,6 +147,7 @@ impl Hooks for App {
                 loop {
                     interval.tick().await;
                     persist_param_value_counts(&storage).await.unwrap();
+                    persist_device_params(&storage).await.unwrap();
                     tracing::info!("Persisted param value counts");
                 }
             }

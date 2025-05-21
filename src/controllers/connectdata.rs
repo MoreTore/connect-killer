@@ -165,12 +165,6 @@ pub async fn asset_download(
             if lookup_key.ends_with(".ts") {
                 is_video = true;
                 content_type = Some("video/mp2t");
-            } else if lookup_key.ends_with(".mp4") {
-                is_video = true;
-                content_type = Some("video/mp4");
-            } else if lookup_key.ends_with(".hevc") {
-                is_video = true;
-                content_type = Some("video/mp4"); // browser support
             }
             for (key, value) in response.headers().iter() {
                 if key == hyper::header::TRANSFER_ENCODING {

@@ -371,31 +371,6 @@ pub async fn logout() -> impl IntoResponse {
     (StatusCode::FOUND, headers, Redirect::to("/login"))
 }
 
-pub async fn param_stats(
-    ViewEngine(v): ViewEngine<TeraView>,
-    State(ctx): State<AppContext>,
-) -> Result<impl IntoResponse> {
-    // Load the param stats file (e.g., Model.json)
-    let bytes = ctx.storage.download::<Vec<u8>>(std::path::Path::new("params/Model.json")).await?;
-    let value_counts: HashMap<String, u64> = serde_json::from_slice(&bytes)
-        .unwrap_or_else(|_| HashMap::new());
-
-    #[derive(Serialize)]
-    struct ParamStatsTemplate {
-        param_name: String,
-        values: Vec<(String, u64)>,
-    }
-
-    let mut values: Vec<_> = value_counts.into_iter().collect();
-    values.sort_by(|a, b| b.1.cmp(&a.1)); // Sort descending by count
-
-    let template = ParamStatsTemplate {
-        param_name: "Model".to_string(),
-        values,
-    };
-
-    Ok(v.render("stats/param_stats.html", &template))
-}
 
 pub fn routes() -> Routes {
     Routes::new()
@@ -404,5 +379,5 @@ pub fn routes() -> Routes {
         .add("/cloudlogs", get(cloudlogs_view))
         .add("/qlog", get(qlog_render))
         .add("/auth/logout", get(logout))
-        .add("/params_stats", get(param_stats))
+
 }

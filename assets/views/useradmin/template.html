@@ -563,9 +563,10 @@
             if (!response.ok) {
               throw new Error('Network response was not ok');
             }
+            let result = await response.json();
+            console.log(result);
 
-            console.log(await response.json());
-            // Check the response for success or failure
+
           }
           document.getElementById(`progressContainer_${segmentNum}_${fileType}`).style.display = 'block';
           document.getElementById(`uploadButton_${segmentNum}_${fileType}`).style.display = 'none';

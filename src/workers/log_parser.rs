@@ -46,8 +46,22 @@ pub struct LogSegmentWorkerArgs {
     pub create_time      : i64, // This is the time the call was made to the worker.
 }
 
+struct QLogResult {
+    car_fingerprint: String,
+    git_branch: String,
+    git_remote: String,
+    git_commit: String,
+    openpilot_version: String,
+    device_type: log_capnp::init_data::DeviceType,
+    start_time: i64,
+    end_time: i64,
+    total_time: i64,
+}
+
 use sea_orm::{DatabaseConnection, DbErr};
 use async_trait::async_trait;
+
+use super::log_helpers::{increment_param_value, save_device_param};
 
 pub struct LockManager {
     keys: Mutex<HashMap<u32, bool>>,
@@ -469,17 +483,6 @@ async fn handle_qlog(
     Ok(parse_qlog(&client, seg, decompressed_data, args, ctx).await?)
 }
 
-struct QLogResult {
-    car_fingerprint: String,
-    git_branch: String,
-    git_remote: String,
-    git_commit: String,
-    openpilot_version: String,
-    device_type: log_capnp::init_data::DeviceType,
-    start_time: i64,
-    end_time: i64,
-    total_time: i64,
-}
 
 impl Default for QLogResult {
     fn default() -> Self {
@@ -521,17 +524,15 @@ async fn parse_qlog(
 ) -> worker::Result<QLogResult> {
     let api_endpoint = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     seg.ulog_url = ActiveValue::Set(
-        format!(
-            "{api_endpoint}/connectdata/logs?url={}",
                 common::mkv_helpers::get_mkv_file_url(
                     &format!("{}_{}--{}--{}",
                         args.dongle_id,
                         args.timestamp,
                         args.segment,
-                        args.file.replace("bz2", "unlog").replace(".zst", ".unlog")
+                        args.file
                     )
             )
-        ));
+        );
     seg.qlog_url = ActiveValue::Set(format!("{api_endpoint}/connectdata/qlog/{}/{}/{}/{}", args.dongle_id, args.timestamp, args.segment, args.file));
 
     let mut unlog_data = Vec::new();
@@ -650,6 +651,16 @@ async fn parse_qlog(
                             qlog_result.device_type = init_data
                                 .get_device_type().ok()
                                 .map_or(log_capnp::init_data::DeviceType::Unknown, |d| d);
+
+
+                            let params = init_data
+                                .get_params().ok();
+
+                            if let Some(params) = params {
+                                if let Some(entries) = params.get_entries().ok() {
+                                    handle_device_params(&args.dongle_id, entries);
+                                }
+                            }
                         }
         
                         writeln!(unlog_data, "{:#?}", event).ok();
@@ -839,4 +850,32 @@ async fn get_qcam_duration(response: Response) -> Result<f32, FfmpegError> {
     let context = ffmpeg_format::input(&temp_file.path())?;
     let duration = context.duration() as f32 / 1_000_000.0;
     Ok(duration)
+}
+
+fn handle_device_params<'a>(
+    dongle_id: &str,
+    entries: capnp::struct_list::Reader<'a, crate::cereal::log_capnp::map::entry::Owned<capnp::text::Owned, capnp::data::Owned>>,
+) {
+    for entry in entries.iter() {
+        if let Ok(key) = entry.get_key() {
+            let mut key_str = key.to_str().unwrap_or_default();
+            // Skip keys containing "key" or "Key"
+            if key_str.contains("key") || key_str.contains("Key") || key_str.contains("GPS") || key_str.contains("GithubUsername") {
+                continue;
+            }
+            if let Ok(value) = entry.get_value() {
+                let mut string = String::from_utf8(value.to_vec()).unwrap_or_default();
+                if string.len() > 24 {
+                    continue;
+                }
+                increment_param_value(key_str, &string);
+                // Also just save the key and value for that device
+                save_device_param(
+                    &dongle_id,
+                    key_str,
+                    &string,
+                );
+            }
+        }
+    }
 }
