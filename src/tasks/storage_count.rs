@@ -4,6 +4,7 @@ use serde_json::{Value, from_str};
 use regex::Regex;
 use std::collections::HashMap;
 use loco_rs::prelude::*;
+use std::io::{self, Write};
 
 use crate::common::mkv_helpers;
 use crate::common::re::*;
@@ -18,12 +19,16 @@ impl Task for StorageCount {
             detail: "Task generator".to_string(),
         }
     }
-    async fn run(&self, ctx: &AppContext, _vars: &task::Vars) -> Result<()> {
+    async fn run(&self, ctx: &AppContext, vars: &task::Vars) -> Result<()> {
         println!("Task StorageCount generated");
+        let dongle_id_filter = vars
+            .cli_arg("dongle_id")
+            .ok();
+
         let client = Client::new();
         
         // Hex characters for prefix chunking
-        let hex_chars = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
+        let mut hex_chars: Vec<&str> = vec!["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
                         "a", "b", "c", "d", "e", "f"];
         
         let mut total_bytes: i128 = 0;
@@ -35,6 +40,11 @@ impl Task for StorageCount {
             r"^({DONGLE_ID})_({ROUTE_NAME})--({NUMBER})--({ALLOWED_FILENAME}$)"
         );
         let segment_file_regex = Regex::new(&segment_file_regex_string).unwrap();
+
+        if let Some(dongle_id_filter) = dongle_id_filter {
+            // If a specific dongle ID is provided, filter the hex characters
+            hex_chars = vec![dongle_id_filter.as_str()];
+        }
 
         // Process each hex prefix sequentially
         for prefix in hex_chars.iter() {
@@ -50,6 +60,8 @@ impl Task for StorageCount {
             let json: Value = from_str(&body).unwrap();
 
             if let Some(keys) = json["keys"].as_array() {
+                tracing::info!("Found {} keys for prefix {}", keys.len(), prefix);
+                let mut count = 0;
                 for key_value in keys {
                     let file_name = key_value.as_str().unwrap().trim_start_matches('/').to_string();
                     let file_url = mkv_helpers::get_mkv_file_url(&file_name);
@@ -84,15 +96,33 @@ impl Task for StorageCount {
                     } else {
                         tracing::info!("Failed to get file size for {}", file_name);
                     }
+
+                    // Progress indicator
+                    count += 1;
+                    if count % 100 == 0 {
+                        print!(".");
+                        io::stdout().flush().unwrap();
+                    }
+                    if count % 1000 == 0 {
+                        println!(" {} files processed", count);
+                    }
+                }
+                if count > 0 {
+                    println!(" Processed {} files for prefix {}", count, prefix);
                 }
             }
         }
 
+        let mut report = String::new();
         let total_gb = total_bytes as f64 / 1_000_000_000.0;
         let unmatched_gb = unmatched_files_total as f64 / 1_000_000_000.0;
 
         println!("Total storage used: {:.2} GB", total_gb);
         println!("Storage used by each DONGLE_ID (in GB):");
+
+        // Prepare report content
+        report.push_str(&format!("Total storage used: {:.2} GB\n", total_gb));
+        report.push_str("Storage used by each DONGLE_ID (in GB):\n");
 
         // Update database with storage information
         for (dongle_id, storage) in &storage_by_dongle {
@@ -105,9 +135,32 @@ impl Task for StorageCount {
                 }
             }
             println!("{}: {:.2} GB", dongle_id, storage_gb);
+            report.push_str(&format!("{}: {:.2} GB\n", dongle_id, storage_gb));
         }
 
         println!("Unmatched files storage: {:.2} GB", unmatched_gb);
+        report.push_str(&format!("Unmatched files storage: {:.2} GB\n", unmatched_gb));
+
+        // Add largest files section
+        report.push_str("\nTop 100 largest files:\n");
+        for (file_name, size) in &largest_files {
+            let size_gb = *size as f64 / 1_000_000_000.0;
+            report.push_str(&format!("{}: {:.2} GB\n", file_name, size_gb));
+        }
+
+        // Write report to file
+        match std::fs::File::create("storage_report.txt") {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(report.as_bytes()) {
+                    tracing::error!("Failed to write report file: {}", e);
+                } else {
+                    println!("Report written to storage_report.txt");
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to create report file: {}", e);
+            }
+        }
         Ok(())
     }
 }
