@@ -11,20 +11,9 @@
         --input-border: #333a44;
         --table-bg: #23272e;
         --table-alt-bg: #20242a;
-        --primary: #6cb6ff;
+        --primary: #6cb6ff; 
         --success: #4CAF50;
         --danger: #FF5252;
-      }
-      [data-theme="light"] {
-        --bg-color: #f5f6fa;
-        --text-color: #23272e;
-        --input-bg: #fff;
-        --input-border: #b3b8c3;
-        --table-bg: #fff;
-        --table-alt-bg: #f0f1f4;
-        --primary: #0074d9;
-        --success: #388e3c;
-        --danger: #d32f2f;
       }
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -149,6 +138,73 @@
       @media (max-width: 768px) {
         body { padding: 4px; }
         th, td { padding: 2px 4px; }
+        
+        /* Make tables horizontally scrollable on mobile */
+        details {
+          overflow-x: auto;
+        }
+        
+        table {
+          min-width: 100%;
+          white-space: nowrap;
+        }
+        
+        /* Specific table optimizations */
+        #table_devices {
+          min-width: 800px; /* Ensure minimum width for device table */
+        }
+        
+        #data-table {
+          min-width: 600px; /* Ensure minimum width for segments table */
+        }
+        
+        /* Make buttons smaller on mobile */
+        button {
+          padding: 2px 4px;
+          font-size: 10px;
+        }
+        
+        /* Adjust modal for mobile */
+        .modal-content {
+          padding: 8px;
+          max-width: 95vw;
+          max-height: 95vh;
+          margin: 10px;
+          overflow-y: auto;
+        }
+        
+        .modal video {
+          max-width: 90vw;
+          max-height: 60vh;
+          width: 100%;
+          height: auto;
+        }
+        
+        .modal-close {
+          font-size: 20px;
+          padding: 12px;
+          min-width: 44px;
+          min-height: 44px;
+        }
+        
+        #uploadQueueModal .modal-content {
+          max-width: 98vw;
+        }
+        
+        #uploadQueueContent table {
+          font-size: 11px;
+          min-width: 300px;
+        }
+        
+        #uploadQueueContent th,
+        #uploadQueueContent td {
+          padding: 2px 4px;
+          word-break: break-word;
+        }
+        
+        #uploadQueueContent progress {
+          width: 60px;
+        }
       }
       .modal {
         display: none;
@@ -159,7 +215,7 @@
         width: 100vw;
         height: 100vh;
         overflow: auto;
-        background: rgba(0,0,0,0.7);
+        background: rgba(0, 0, 0, 0.705);
         justify-content: center;
         align-items: center;
       }
@@ -209,21 +265,7 @@
               el.textContent = localString + ' (' + rel + ')';
             }
         });
-        // Theme init
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        setTheme(savedTheme);
-        // Add toggle button
-        const btn = document.createElement('button');
-        btn.textContent = savedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        btn.style.position = 'fixed';
-        btn.style.top = '10px';
-        btn.style.right = '10px';
-        btn.style.zIndex = 1000;
-        btn.onclick = function() {
-          toggleTheme();
-          btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        };
-        document.body.appendChild(btn);
+        
         // Add play buttons for .ts and .hevc links
         document.querySelectorAll('a').forEach(function(link) {
           if (link.href && (link.href.endsWith('.ts'))) {
@@ -251,7 +293,20 @@
             localStorage.setItem(key, el.open);
           });
         });
+        
+        // --- Get network status for online devices ---
+        loadNetworkStatusForOnlineDevices();
       });
+
+      function setFirehose(dongle_id, firehose) {
+        fetch(`https://api.konik.ai/v1/devices/${dongle_id}/firehose`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ firehose })
+        })
+      }
+
       function deleteDevice(dongle_id) {
         if (confirm("Are you sure you want to delete this device? You will need to repair the device.")) {
           fetch(`https://api.konik.ai/connectdata/delete/${dongle_id}`, {
@@ -264,6 +319,7 @@
           .catch(() => { alert("Failed to delete the device."); });
         }
       }
+
       function deleteRoute(fullname) {
         const formattedFullname = fullname.replace('|', '/');
         fetch(`https://api.konik.ai/connectdata/delete/${formattedFullname}`, {
@@ -274,14 +330,7 @@
         .then(response => response.json())
         .catch(() => {});
       }
-      function setTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('theme', theme);
-      }
-      function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme') || 'dark';
-        setTheme(current === 'dark' ? 'light' : 'dark');
-      }
+      
       let hlsInstance = null;
       function showVideoModal(url) {
         console.log('[showVideoModal] called with url:', url);
@@ -339,6 +388,7 @@
         video.load();
         video.play();
       }
+
       function closeVideoModal() {
         var modal = document.getElementById('videoModal');
         var video = document.getElementById('videoPlayer');
@@ -351,6 +401,152 @@
         video.load();
         modal.style.display = 'none';
       }
+
+      async function listUploadQueue(dongleId) {
+        try {
+          const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
+          const payload = {
+            jsonrpc: "2.0",
+            method: "listUploadQueue",
+            id: 0
+          };
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          return data.result || [];
+        } catch (e) {
+          console.error('Error fetching upload queue:', e);
+          return [];
+        }
+      }
+
+      async function getNetworkMetered(dongleId) {
+        try {
+          const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
+          const payload = {
+            jsonrpc: "2.0",
+            method: "getNetworkMetered",
+            id: 0
+          };
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          return data.result ? 'metered' : 'unmetered';
+        } catch (e) {
+          console.error('Error fetching network type:', e);
+          return '';
+        }
+      }
+
+      // --- Load network status for online devices ---
+      async function loadNetworkStatusForOnlineDevices() {
+        const onlineDevices = document.querySelectorAll('#table_devices tr[data-device-id]');
+        
+        // Collect all online devices and their network cells
+        const onlineDeviceData = [];
+        for (const row of onlineDevices) {
+          const dongleId = row.getAttribute('data-device-id');
+          const isOnline = row.getAttribute('data-device-online') === 'true';
+          
+          if (isOnline) {
+            const networkCell = row.querySelector('.network-status');
+            if (networkCell) {
+              networkCell.textContent = 'Loading...';
+              onlineDeviceData.push({ dongleId, networkCell });
+            }
+          }
+        }
+        
+        // Dispatch all network status requests at once
+        const networkPromises = onlineDeviceData.map(({ dongleId }) => 
+          getNetworkMetered(dongleId)
+        );
+        
+        // Wait for all requests to complete
+        const networkResults = await Promise.all(networkPromises);
+        
+        // Update all network cells with results
+        onlineDeviceData.forEach(({ networkCell }, index) => {
+          networkCell.textContent = networkResults[index] || 'Unknown';
+        });
+      }
+
+      // --- Show upload queue in modal ---
+      let uploadQueueModalInterval = null;
+      
+      function showUploadQueueModal(dongleId) {
+        const modal = document.getElementById('uploadQueueModal');
+        const content = document.getElementById('uploadQueueContent');
+        const title = document.getElementById('uploadQueueTitle');
+        
+        title.textContent = `Upload Queue - ${dongleId}`;
+        content.innerHTML = 'Loading...';
+        modal.style.display = 'flex';
+        
+        // Load initial data
+        loadUploadQueueData(dongleId);
+        
+        // Start auto-refresh every 10 seconds
+        uploadQueueModalInterval = setInterval(() => {
+          loadUploadQueueData(dongleId);
+        }, 10000);
+      }
+
+      function closeUploadQueueModal() {
+        const modal = document.getElementById('uploadQueueModal');
+        modal.style.display = 'none';
+        
+        // Stop auto-refresh when modal is closed
+        if (uploadQueueModalInterval) {
+          clearInterval(uploadQueueModalInterval);
+          uploadQueueModalInterval = null;
+        }
+      }
+
+      async function loadUploadQueueData(dongleId) {
+        const content = document.getElementById('uploadQueueContent');
+        const queue = await listUploadQueue(dongleId);
+        
+        if (queue.length === 0) {
+          content.innerHTML = '<p>No files in upload queue</p>';
+          return;
+        }
+        
+        let html = '<table style="width: 100%; font-size: 12px;"><thead><tr><th>File</th><th>Progress</th><th>Status</th></tr></thead><tbody>';
+        
+        queue.forEach(item => {
+          const fileName = item.path.split('/').pop();
+          const routeName = item.path.split('/').slice(-2, -1).join('/');
+          
+          const progress = Math.round(item.progress * 100);
+          const status = item.current ? (progress >= 100 ? 'Complete' : 'Uploading') : 'Pending';
+
+          html += `
+            <tr>
+                <td><a href="/?onebox=${dongleId}|${routeName}">${routeName}/${fileName}</a></td>
+              <td>
+                <progress value="${progress}" max="100" style="width: 100px;"></progress>
+                ${progress}%
+              </td>
+              <td>${status}</td>
+            </tr>
+          `;
+        });
+        
+        html += '</tbody></table>';
+        content.innerHTML = html;
+      }
+
       // --- Poll upload queue and update progress bars ---
       let uploadQueueInterval = null;
       function startUploadQueuePolling(dongleId) {
@@ -364,6 +560,7 @@
           uploadQueueInterval = null;
         }
       }
+
       async function listUploadQueueAndUpdateProgress(dongleId) {
         try {
           const apiUrl = `${userAdminUrl}/ws/${dongleId}`;
@@ -788,20 +985,28 @@
     <details>
       <summary>Devices</summary>
       <hr>
-      <table id="table_devices">
-        <tbody>
-          <tr>
-            <td></td>
-            <td>dongle_id</td>
-            <td>serial</td>
-            <td>server storage used</td>
-            <td>alias</td>
-            <td>last_athena_ping</td>
-            <td>uploads allowed</td>
-          </tr>
+      <div class="scrollable-container">
+        <table id="table_devices">
+          <tbody>
+            <tr>
+              <td></td>
+              <td>firehose</td>
+              <td>dongle_id</td>
+              <td>serial</td>
+              <td>server storage used</td>
+              <td>alias</td>
+              <td>last_athena_ping</td>
+              <td>network type</td>
+              <td>upload queue</td>
+            </tr>
           {% for device in devices.devices %}
-          <tr>
-            <td><button onclick="deleteDevice('{{ device.dongle_id }}')">Unpair and Delete Device Data</button></td>
+          <tr data-device-id="{{ device.dongle_id }}" data-device-online="{{ device.online }}">
+            <td><button class="upload" style="padding: 3px 10px; font-size: 12px;" onclick="showUploadQueueModal('{{ device.dongle_id }}')">Upload Queue</button></td>
+            <td>
+              <button onclick="setFirehose('{{ device.dongle_id }}', !{{ device.firehose }})" {% if device.firehose %}style="background-color: #2d4a2d; border-color: #4a7c4a; color: #4CAF50;"{% endif %}>
+                {% if device.firehose %}Disable Firehose 🔥{% else %}Enable Firehose 🔥{% endif %}
+              </button>
+            </td>
             <td><a href="/?onebox={{ device.dongle_id }}">{{ device.dongle_id }}</a></td>
             <td>{{ device.serial }}</td>
             <td>{{ device.server_storage / 1000000000 }} GB</td>
@@ -811,15 +1016,18 @@
             {% else %}
             <td><span class="timestamp" style="color: red;" data-timestamp="{{ device.last_athena_ping }}"></span></td>
             {% endif %}
-            {% if device.uploads_allowed %}
-            <td><span style="color: green;">uploads allowed</span></td>
+
+            {% if device.online %}
+            <td class="network-status">Loading...</td>
             {% else %}
-            <td><span style="color: red;">uploads ignored</span></td>
+            <td class="network-status">Offline</td>
             {% endif %}
+            <td><button onclick="deleteDevice('{{ device.dongle_id }}')" title="Unpair and Delete Device Data">🗑️</button></td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+      </div>
     </details>
     {% endif %}
     {% if segments.defined is defined %}
@@ -830,19 +1038,20 @@
       <hr>
       <button id="uploadAllButton" onclick="uploadAllFiles()">Upload All Files</button>
       <b>segments:</b><br>
-      <table id="data-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Parsed Data</th>
-            <th>qlog <button onclick="uploadAllOfType('qlog')">Upload All</button></th>
-            <th>qcam <button onclick="uploadAllOfType('qcam')">Upload All</button></th>
-            <th>rlog <button onclick="uploadAllOfType('rlog')">Upload All</button></th>
-            <th>fcam <button onclick="uploadAllOfType('fcam')">Upload All</button></th>
-            <th>dcam <button onclick="uploadAllOfType('dcam')">Upload All</button></th>
-            <th>ecam <button onclick="uploadAllOfType('ecam')">Upload All</button></th>
-          </tr>
-        </thead>
+      <div class="scrollable-container">
+        <table id="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Parsed Data</th>
+              <th>qlog <button onclick="uploadAllOfType('qlog')">Upload All</button></th>
+              <th>qcam <button onclick="uploadAllOfType('qcam')">Upload All</button></th>
+              <th>rlog <button onclick="uploadAllOfType('rlog')">Upload All</button></th>
+              <th>fcam <button onclick="uploadAllOfType('fcam')">Upload All</button></th>
+              <th>dcam <button onclick="uploadAllOfType('dcam')">Upload All</button></th>
+              <th>ecam <button onclick="uploadAllOfType('ecam')">Upload All</button></th>
+            </tr>
+          </thead>
         {% for segment in segments.segments %}
         <tbody>
           <tr>
@@ -858,6 +1067,7 @@
         </tbody>
         {% endfor %}
       </table>
+      </div>
     </details>
     {% endif %}
     {% if routes.defined is defined %}
@@ -975,6 +1185,13 @@
     <div class="modal-content">
       <button class="modal-close" onclick="closeVideoModal()">&times;</button>
       <video id="videoPlayer" controls></video>
+    </div>
+  </div>
+  <div id="uploadQueueModal" class="modal" onclick="if(event.target===this)closeUploadQueueModal()">
+    <div class="modal-content" style="max-width: 600px;">
+      <button class="modal-close" onclick="closeUploadQueueModal()">&times;</button>
+      <h3 id="uploadQueueTitle">Upload Queue</h3>
+      <div id="uploadQueueContent">Loading...</div>
     </div>
   </div>
 </body>
