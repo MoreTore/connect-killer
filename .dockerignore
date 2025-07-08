@@ -1,2 +1,14 @@
 target/
 frontend/node_modules
+target/
+.git/
+**/*.rs.bk
+**/*.swp
+**/__pycache__/
+**/.pytest_cache/
+**/node_modules/
+**/*.log
+**/*.tar.gz
+**/*.zip
+tmp/
+.cargo/
