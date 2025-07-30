@@ -64,7 +64,6 @@ impl Hooks for App {
     fn routes(ctx: &AppContext) -> AppRoutes {
         if ctx.environment == loco_rs::environment::Environment::Any("connect".to_string()) { 
             return AppRoutes::with_default_routes();
-            
         }
         AppRoutes::with_default_routes()
             .add_route(controllers::ws::routes())
@@ -75,6 +74,7 @@ impl Hooks for App {
             .add_route(controllers::v1::routes())
             .add_route(controllers::maps::routes())
             .add_route(controllers::params::routes())
+            .add_route(controllers::stats::routes())
     }
 
     fn connect_workers<'a>(p: &'a mut Processor, ctx: &'a AppContext) {
