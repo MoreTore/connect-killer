@@ -83,6 +83,12 @@ struct UrlResponse {
     url: String,
 }
 
+#[derive(Serialize)]
+struct GenericResponse {
+    success: bool,
+    message: String,
+}
+
 pub async fn get_route_files(
     auth: MyJWT,
     State(ctx): State<AppContext>,
@@ -484,6 +490,49 @@ async fn device_location(
     
 }
 
+// post /devices/:dongle_id/firehose
+//         fetch(`https://api.konik.ai/v1/devices/${dongle_id}/firehose`, {
+//           method: 'POST',
+//           headers: { 'Content-Type': 'application/json' },
+//           credentials: 'include',
+//           body: JSON.stringify({ firehose: newFirehose })
+//         })
+#[derive(Serialize, Deserialize, Debug)]
+struct FirehoseRequest {
+    firehose: bool,
+}
+
+async fn set_firehose(
+    auth: MyJWT,
+    State(ctx): State<AppContext>,
+    Path(dongle_id): Path<String>,
+    Json(data): Json<FirehoseRequest>,
+) -> Result<Response> {
+    if let Some(user_model) = auth.user_model {
+        if !user_model.superuser {
+            DM::ensure_user_device(&ctx.db, user_model.id, &dongle_id).await?; // just error if not found
+        }
+    } else {
+        return loco_rs::controller::bad_request("devices can't do this")
+    }
+
+    let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+    if device_model.dongle_id != dongle_id {
+        return loco_rs::controller::unauthorized("device does not match dongle_id in request")
+    }
+    
+    let mut active_device_model = device_model.into_active_model();
+    active_device_model.firehose = ActiveValue::Set(data.firehose);
+    active_device_model.update(&ctx.db).await?;
+
+    format::json(
+        GenericResponse {
+            success: true,
+            message: format!("Firehose set to {}", data.firehose)
+        }
+    )
+}
+
 async fn device_stats(
     auth: MyJWT,
     State(ctx): State<AppContext>,
@@ -716,6 +765,23 @@ async fn get_me(
        points: user_model.points,
        superuser: user_model.superuser,
        username: user_model.name, // TODO change the usermode names to match comma api to simplify this
+    })
+}
+
+async fn get_me_jwt(
+    auth: MyJWT,
+    State(ctx): State<AppContext>,
+) -> Result<Response> {
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    let token = jwt::JWT::new(&jwt_secret.secret)
+        .generate_token(
+            &(3600 * 24 as u64), 
+            auth.claims.identity.to_string())
+        .map_err(|_e| loco_rs::Error::Message("Failed to generate JWT token".to_string()))?;
+    
+    format::json(GenericResponse {
+        success: true,
+        message: token,
     })
 }
 
@@ -1150,6 +1216,7 @@ pub fn routes() -> Routes {
         //.add("/echo", post(echo))
         .add("/me", get(get_me))
         .add("/me/devices", get(get_my_devices))
+        .add("/me/jwt", get(get_me_jwt))
         .add("/route/:fullname", get(route_info))
         .add("/route/:fullname", patch(patch_route))
         .add("/route/:fullname/files", get(get_route_files))
@@ -1161,6 +1228,7 @@ pub fn routes() -> Routes {
         .add("/devices/:dongle_id/routes/preserved", get(preserved_routes))
         .add("/devices/:dongle_id/unpair", post(unpair))
         .add("/devices/:dongle_id/location", get(device_location))
+        .add("/devices/:dongle_id/firehose", post(set_firehose))
         .add(".1/devices/:dongle_id/stats", get(device_stats))
         .add("/devices/:dongle_id/users", get(device_users))
         .add("/devices/:dongle_id", patch(update_device_alias))
@@ -1169,4 +1237,5 @@ pub fn routes() -> Routes {
         .add("/navigation/:dongle_id/locations", get(get_locations).put(put_locations).delete(delete_location))
         .add("/navigation/:dongle_id/next", get(get_next_destination))
         .add("/iceservers", get(get_ice_servers))
+        
     }

@@ -49,6 +49,7 @@ impl DM {
                     prime: true,
                     prime_type: 2,
                     alias: "Please set to discord username".to_string(),
+                    firehose: true,
                     ..Default::default()
                 };
                 device.into_active_model().insert(&txn).await?;
@@ -147,4 +148,22 @@ impl DM {
         Ok(device.locations)
     }
 
+    pub async fn get_registered_devices(
+        db: &DatabaseConnection,
+        online_now: Option<bool>,
+        registered_after: Option<DateTime>,
+        last_ping_time_after: Option<u64>,
+    ) -> Result<u64, DbErr> {
+        let mut q = Entity::find();
+        if let Some(online_now) = online_now {
+            q = q.filter(Column::Online.gte(online_now))
+        }
+        if let Some(registered_after) = registered_after {
+            q = q.filter(Column::CreatedAt.gte(registered_after))
+        }
+        if let Some(last_ping_time_after) = last_ping_time_after {
+            q = q.filter(Column::LastAthenaPing.gte(last_ping_time_after))
+        }
+        q.count(db).await
+    }
 }

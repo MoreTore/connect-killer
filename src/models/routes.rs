@@ -1,7 +1,7 @@
 use chrono::prelude::Utc;
 use loco_rs::model::{ModelError, ModelResult};
 use loco_rs::prelude::*;
-use sea_orm::{ActiveValue, TransactionTrait, QuerySelect, DeleteResult, QueryOrder};
+use sea_orm::{ActiveValue, DeleteResult, PaginatorTrait, QueryOrder, QuerySelect, SelectColumns, TransactionTrait};
 pub use super::_entities::routes::{self, ActiveModel, Entity, Model as RM, Column};
 
 
@@ -233,6 +233,25 @@ impl RM {
         let route_count = routes.len() as u32; // Count the number of routes
         
         Ok((total_length, route_count, total_route_time))
+    }
+
+    pub async fn get_miles(db: &DatabaseConnection) -> ModelResult<f32> {
+        let sum: Option<f32> = Entity::find()
+            .select_only()
+            .column_as(Column::Length.sum(), "sum")
+            .into_tuple::<f32>()
+            .one(db)
+            .await?;
+
+        Ok(sum.unwrap_or(0.0))
+    }
+
+    pub async fn get_drive_count(
+        db: &DatabaseConnection
+    ) -> ModelResult<u64, DbErr> {
+        Entity::find()
+            .count(db)
+            .await
     }
 
 

@@ -16,6 +16,7 @@ mod m20240826_165428_add_devices_storage;
 //mod m20240831_002142_add_users_locations;
 mod m20240831_010827_add_devices_locations;
 mod m20240831_053056_device_msg_queues;
+mod m20250706_165202_add_firehose_to_devices;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -37,6 +38,7 @@ impl MigratorTrait for Migrator {
             //Box::new(m20240831_002142_add_users_locations::Migration),
             Box::new(m20240831_010827_add_devices_locations::Migration),
             Box::new(m20240831_053056_device_msg_queues::Migration),
+            Box::new(m20250706_165202_add_firehose_to_devices::Migration),
         ]
     }
 }

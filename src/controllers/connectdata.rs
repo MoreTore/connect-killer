@@ -27,56 +27,6 @@ use crate::{
 use super::ws::ConnectionManager;
 use chrono::{Timelike, Datelike, Utc, TimeZone};
 
-// Helper function to sanitize control characters within JSON string literals
-fn sanitize_json_string_content(data: &str) -> String {
-    let mut sanitized = String::with_capacity(data.len());
-    let mut in_string = false;
-    let mut last_char_was_escape = false;
-
-    for c in data.chars() {
-        if last_char_was_escape {
-            sanitized.push(c);
-            last_char_was_escape = false;
-            continue;
-        }
-
-        if c == '\\' { // Backslash character
-            sanitized.push(c);
-            last_char_was_escape = true;
-            continue;
-        }
-
-        if c == '\"' { // Double quote character
-            in_string = !in_string;
-            sanitized.push(c);
-            continue;
-        }
-
-        if in_string {
-            if c.is_control() {
-                // Standard JSON escapes for common control characters
-                match c {
-                    '\u{0008}' => sanitized.push_str("\\\\b"), // Backspace
-                    '\u{000C}' => sanitized.push_str("\\\\f"), // Form feed
-                    '\u{000A}' => sanitized.push_str("\\\\n"), // Line feed
-                    '\u{000D}' => sanitized.push_str("\\\\r"), // Carriage return
-                    '\u{0009}' => sanitized.push_str("\\\\t"), // Tab
-                    _ => {
-                        // For other control characters, use \\uXXXX unicode escape
-                        sanitized.push_str(&format!("\\\\u{:04x}", c as u32));
-                    }
-                }
-            } else {
-                sanitized.push(c);
-            }
-        } else {
-            // Outside a string, push character as is.
-            sanitized.push(c);
-        }
-    }
-    sanitized
-}
-
 
 #[derive(Deserialize)]
 pub struct UlogQuery {
