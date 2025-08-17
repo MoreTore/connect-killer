@@ -123,7 +123,7 @@ pub async fn proxy_mapbox(
     _headers: HeaderMap,
     body: Body,
 ) -> Result<Response, ErrorResponse> {
-    tracing::info!("Proxying request to Mapbox API: {}", uri);
+    tracing::trace!("Proxying request to Mapbox API: {}", uri);
 
     let user_limiter = USER_LIMITERS
         .entry(auth.claims.identity.clone())
@@ -132,7 +132,7 @@ pub async fn proxy_mapbox(
         .clone();
 
     if user_limiter.check().is_err() {
-        tracing::warn!("User {} exceeded their personal quota", auth.claims.identity);
+        tracing::trace!("User {} exceeded their personal quota", auth.claims.identity);
         return Ok(AxumResponse::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
             .body(Body::from("Personal rate limit exceeded. Try again later."))
@@ -146,7 +146,7 @@ pub async fn proxy_mapbox(
     let monthly_check = GLOBAL_MONTHLY_LIMITER.check().is_err();
     
     if minute_check || hour_check || daily_check || monthly_check {
-        tracing::warn!("Rate limit exceeded");
+        tracing::trace!("Rate limit exceeded");
         return Ok(AxumResponse::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
             .header("Content-Type", "text/plain; charset=utf-8")
