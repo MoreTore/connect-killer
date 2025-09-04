@@ -14,9 +14,16 @@ use axum::response::{Redirect, IntoResponse};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 
 use crate::{
+    enforce_ownership_rule,
     cereal::log_capnp::event as LogEvent, 
     common::{mkv_helpers, re::*}, 
-    models::_entities, 
+    models::{
+        users::UM,
+        routes::RM,
+        devices::DM,
+        bootlogs::BM,
+        segments::SM,
+    },
     views,
 };
 
@@ -28,24 +35,28 @@ pub struct OneBox {
 #[derive(Serialize)]
 pub struct UsersTemplate {
     pub defined: bool,
-    pub users: Vec<_entities::users::Model>
+    pub users: Vec<UM>
 }
 #[derive(Serialize)]
 pub struct RoutesTemplate {
     pub defined: bool,
-    pub routes: Vec<_entities::routes::Model>
+    pub routes: Vec<RM>
 }
 #[derive(Serialize)]
 pub struct DevicesTemplate {
     pub defined: bool,
-    pub devices: Vec<_entities::devices::Model>
+    pub devices: Vec<DM>
 }
 #[derive(Serialize)]
 pub struct BootlogsTemplate {
     pub defined: bool,
-    pub bootlogs: Vec<_entities::bootlogs::Model>
+    pub bootlogs: Vec<BM>
 }
-
+#[derive(Serialize)]
+pub struct SegmentsTemplate {
+    pub defined: bool,
+    pub segments: Vec<SM>,
+}
 #[derive(Serialize)]
 pub struct CloudlogsTemplate {
     pub defined: bool,
@@ -53,11 +64,6 @@ pub struct CloudlogsTemplate {
     pub cloudlogs: std::collections::HashMap<String, std::collections::HashMap<String, usize>>,
 }
 
-#[derive(Serialize)]
-pub struct SegmentsTemplate {
-    pub defined: bool,
-    pub segments: Vec<_entities::segments::Model>,
-}
 
 #[derive(Serialize, Default)]
 pub struct MasterTemplate {
@@ -97,23 +103,29 @@ pub async fn onebox_handler(
     let re = regex::Regex::new(&route_match_string).unwrap();
 
     let mut canonical_route_name: Option<String> = None;
-    let mut dongle_id: Option<String> = None;
+    let mut dongle_id: String;
     let mut timestamp: Option<String> = None;
 
 
     // Check for route or dongle ID
     if let Some(caps) = re.captures(&onebox) {
-        dongle_id = Some(caps[1].to_string());
+        dongle_id = caps[1].to_string();
+        // check ownership here
         if let Some(ts) = caps.get(3) {
             timestamp = Some(ts.as_str().to_string());
-            canonical_route_name = Some(format!("{}|{}", dongle_id.as_ref().unwrap(), timestamp.as_ref().unwrap()));
+            canonical_route_name = Some(format!("{}|{}", dongle_id, timestamp.as_ref().unwrap()));
         }
+    } else {
+        dongle_id = "".to_string();
     }
+
+    // ensure ownership of the dongle
+
     let api_endpoint: String = env::var("API_ENDPOINT").expect("API_ENDPOINT env variable not set");
     let ws_endpoint: String = env::var("WS_ENDPOINT").expect("WS_ENDPOINT env variable not set");
 
     let mut master_template = MasterTemplate {
-        dongle_id: dongle_id.clone().unwrap_or_default(),
+        dongle_id: dongle_id.clone(),
         onebox: onebox,
         api_host: api_endpoint,
         ws_host: ws_endpoint,
@@ -122,7 +134,7 @@ pub async fn onebox_handler(
     if user_model.superuser {
         master_template.users = Some(UsersTemplate {
             defined: true,
-            users: _entities::users::Model::find_all_users(&ctx.db).await
+            users: UM::find_all_users(&ctx.db).await
         });
     } else {
         master_template.users = Some(UsersTemplate {
@@ -132,14 +144,14 @@ pub async fn onebox_handler(
     }
 
     // Parse cloudlogs from the connection manager's cache and add them to the template if available.
-    if let Some(ref d_id) = dongle_id {
+    if dongle_id != "" {
         // Retrieve the nested logs from the cloudlog cache.
         // Here we assume the cache is stored as:
         // HashMap<String, HashMap<String, HashMap<String, Vec<Value>>>>
         // where the outer key is the device id, then branch, then module.
         let nested_logs: Option<HashMap<String, HashMap<String, Vec<Value>>>> = {
             let cloudlog_cache = manager.cloudlog_cache.read().await;
-            cloudlog_cache.get(d_id).cloned()
+            cloudlog_cache.get(&dongle_id).cloned()
         };
     
         // Build a summary: for each branch and module, count the number of logs.
@@ -165,7 +177,7 @@ pub async fn onebox_handler(
     }
 
     if let Some(canonical_route) = canonical_route_name {
-        let mut segment_models = Some(_entities::segments::Model::find_segments_by_route(&ctx.db, &canonical_route).await?);
+        let mut segment_models = Some(SM::find_segments_by_route(&ctx.db, &canonical_route).await?);
         if let Some(segment_models) = segment_models.as_mut() {
             segment_models.sort_by(|a, b| a.number.cmp(&b.number));
         }
@@ -176,18 +188,18 @@ pub async fn onebox_handler(
         });
     
         views::route::admin_route(v, master_template)
-    } else if let Some(d_id) = dongle_id {
+    } else if dongle_id != "" {
         master_template.routes = Some(RoutesTemplate { 
             defined: true, 
-            routes: _entities::routes::Model::find_device_routes(&ctx.db, &d_id).await?, 
+            routes: RM::find_device_routes(&ctx.db, &dongle_id).await?, 
         });
         master_template.devices = Some(DevicesTemplate {
             defined: true,
-            devices: _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await,
+            devices: DM::find_user_devices(&ctx.db, user_model.id).await,  
         });
         master_template.bootlogs = Some(BootlogsTemplate {
             defined: true,
-            bootlogs: _entities::bootlogs::Model::find_device_bootlogs(&ctx.db, &d_id).await?,
+            bootlogs: BM::find_device_bootlogs(&ctx.db, &dongle_id).await?,
         });
         views::route::admin_route(v, master_template)
 
@@ -195,12 +207,12 @@ pub async fn onebox_handler(
         if user_model.superuser {
             master_template.devices = Some(DevicesTemplate {
                 defined: true,
-                devices: _entities::devices::Model::find_all_devices(&ctx.db).await
+                devices: DM::find_all_devices(&ctx.db).await
             });
         } else {
             master_template.devices = Some(DevicesTemplate {
                 defined: true,
-                devices: _entities::devices::Model::find_user_devices(&ctx.db, user_model.id).await
+                devices: DM::find_user_devices(&ctx.db, user_model.id).await
             });
 
         };
@@ -226,9 +238,9 @@ pub struct UlogText {
 
 
 pub async fn qlog_render(
-    _auth: crate::middleware::auth::MyJWT, // Using underscore to indicate it's required but not used
+    auth: crate::middleware::auth::MyJWT,
     ViewEngine(v): ViewEngine<TeraView>,
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     Extension(client): Extension<Client>,
     Query(params): Query<UlogQuery>
 ) -> Result<impl IntoResponse> {
@@ -238,8 +250,22 @@ pub async fn qlog_render(
     );
     let segment_file_regex = regex::Regex::new(&segment_file_regex_string).unwrap();
     let response = if let Some(captures) = segment_file_regex.captures(&params.url) {
+        let dongle_id = captures[2].to_string();
+        if let Some(user_model) = auth.user_model {
+            let device_model = DM::find_device(&ctx.db, &dongle_id).await?;
+            if !user_model.superuser {
+                enforce_ownership_rule!(
+                    user_model.id,
+                    device_model.owner_id,
+                    "Can only view your own devices data!"
+                );
+            }
+        } else {
+            return Err(Error::Message("Devices can't do this".to_string()));
+        }
+
         // Always use mkv_helpers::get_mkv_file_url with the second part (lookup key)
-        let internal_file_url = mkv_helpers::get_mkv_file_url(&captures[0]);
+        let internal_file_url = mkv_helpers::get_mkv_file_url(&captures[1]);
         
         // Proceed with the request using the `internal_file_url`
         let request = client.get(&internal_file_url);

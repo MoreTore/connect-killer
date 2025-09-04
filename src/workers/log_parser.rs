@@ -26,7 +26,7 @@ use capnp::{
     serialize::{read_message, write_message}
 };
 
-use crate::cereal::log_capnp;
+use crate::cereal::{legacy_capnp::nav_update::segment, log_capnp};
 use crate::common;
 use crate::cereal::log_capnp::event as LogEvent;
 use crate::models::_entities::{devices, routes, segments};
@@ -422,6 +422,8 @@ async fn update_route_info(
             active_route_model.maxecamera = ActiveValue::Set(segment_model.number as i32);
         }
     }
+    // if any segment has can then the route has can
+    active_route_model.can = ActiveValue::Set(segment_models.iter().any(|s| s.can));
 
     // We have looped through all the segments. If none have gps, then we need 
     // to set the start time based on the first segment created_at which
@@ -719,8 +721,11 @@ async fn parse_qlog(
                         }
                         writeln!(unlog_data, "{:#?}", event).ok();
                     }
+                    LogEvent::Can(_) => {
+                        seg.can = ActiveValue::Set(true);
+                        writeln!(unlog_data, "{:#?}", event).ok();
+                    },
                     LogEvent::PandaStates(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
-                    LogEvent::Can(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
                     LogEvent::Sendcan(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
                     LogEvent::ErrorLogMessage(_) => {writeln!(unlog_data, "{:#?}", event).ok();},
                     LogEvent::LogMessage(_) => {writeln!(unlog_data, "{:#?}", event).ok();},

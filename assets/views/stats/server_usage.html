@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Server Usage Statistics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-color: #181c20;
@@ -203,18 +204,62 @@
             color: var(--info);
         }
 
-        @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .network-stats {
-                grid-template-columns: 1fr;
-            }
-            
-            body {
-                padding: 12px;
-            }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            margin-right: 10px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            color: var(--text-color);
         }
     </style>
 </head>
@@ -283,6 +328,34 @@
             </div>
         </div>
 
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Miles Over Time</h3>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="miles-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Daily</span>
+                </div>
+                <canvas id="milesChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Devices Over Time</h3>
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="devices-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Daily</span>
+                </div>
+                <canvas id="devicesChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
         <!-- Disk Usage -->
         <div class="stat-card">
             <h3>Disk Usage</h3>
@@ -319,11 +392,6 @@
     </div>
 
     <script>
-        // Auto-refresh the page every 30 seconds
-        setTimeout(() => {
-            window.location.reload();
-        }, 30000);
-
         // Format large numbers
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -332,6 +400,82 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        // Miles over time chart
+        const milesLabels = [{% for point in miles_over_time %}'{{ point.date }}'{% if not loop.last %}, {% endif %}{% endfor %}];
+        const cumulativeMilesData = [{% for point in miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        const dailyMilesData = [{% for point in daily_miles_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+        const ctx = document.getElementById('milesChart').getContext('2d');
+        const milesChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: milesLabels,
+                datasets: [{
+                    label: 'Total Miles',
+                    data: cumulativeMilesData,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Devices over time chart
+        const devicesLabels = [{% for point in devices_over_time %}'{{ point.date }}'{% if not loop.last %}, {% endif %}{% endfor %}];
+        const cumulativeDevicesData = [{% for point in devices_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        const dailyDevicesData = [{% for point in daily_devices_over_time %}{{ point.miles }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+        const devicesCtx = document.getElementById('devicesChart').getContext('2d');
+        const devicesChart = new Chart(devicesCtx, {
+            type: 'line',
+            data: {
+                labels: devicesLabels,
+                datasets: [{
+                    label: 'Total Devices',
+                    data: cumulativeDevicesData,
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Toggle for miles chart
+        document.getElementById('miles-toggle').addEventListener('change', function() {
+            if (this.checked) {
+                milesChart.data.datasets[0].data = dailyMilesData;
+                milesChart.data.datasets[0].label = 'Daily Miles';
+            } else {
+                milesChart.data.datasets[0].data = cumulativeMilesData;
+                milesChart.data.datasets[0].label = 'Total Miles';
+            }
+            milesChart.update();
+        });
+
+        // Toggle for devices chart
+        document.getElementById('devices-toggle').addEventListener('change', function() {
+            if (this.checked) {
+                devicesChart.data.datasets[0].data = dailyDevicesData;
+                devicesChart.data.datasets[0].label = 'Daily Devices';
+            } else {
+                devicesChart.data.datasets[0].data = cumulativeDevicesData;
+                devicesChart.data.datasets[0].label = 'Total Devices';
+            }
+            devicesChart.update();
+        });
     </script>
 </body>
 </html>

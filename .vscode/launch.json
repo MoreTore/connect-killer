@@ -88,6 +88,20 @@
       ],
       "cwd": "${workspaceFolder}",
     },
+        {
+      "type": "lldb",
+      "request": "launch",
+      "name": "cleaner",
+      "program": "${workspaceFolder}/target/debug/connect-cli",
+      "preLaunchTask": "build_project",
+      "args": [
+        
+        "task",
+        "cleaner",
+
+      ],
+      "cwd": "${workspaceFolder}",
+    },
     {
       "type": "lldb",
       "request": "launch",

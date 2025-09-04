@@ -100,15 +100,22 @@ pub async fn asset_download(
     let mut request_builder = client.get(&internal_file_url);
 
     // Check for range header and forward it if present
-    if let Some(range) = headers.get(hyper::header::RANGE) { 
-        request_builder = request_builder.header(hyper::header::RANGE, range.clone());
-    };
+    let has_range = headers.get(hyper::header::RANGE).is_some();
+    if has_range {
+        if let Some(range) = headers.get(hyper::header::RANGE) {
+            request_builder = request_builder.header(hyper::header::RANGE, range.clone());
+        }
+    }
 
     let res = request_builder.send().await;
 
     match res {
         Ok(response) => {
-            let status = response.status();
+            let mut status = response.status();
+            if has_range && status == StatusCode::OK { // override the file servers response
+                status = StatusCode::PARTIAL_CONTENT;
+            }
+
             let mut response_builder = Response::builder().status(status);
             let mut is_video = false;
             let mut content_type = None;
@@ -262,17 +269,17 @@ pub async fn bootlog_file_download(
 }
 
 // TODO Migrate DB to remove the redundant file_type path
-pub async fn depreciated_auth_file_download(
-    auth: crate::middleware::auth::MyJWT,
-    Path((_file, dongle_id, route_name, segment, file)): Path<(String, String, String, String, String)>,
-    State(ctx): State<AppContext>,
-    Extension(client): Extension<reqwest::Client>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    ensure_user_is_owner(&auth, &ctx.db, &dongle_id).await?;
-    let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");  // Note that route_name does not include dongle_id
-    return asset_download(lookup_key, &client, headers).await;
-}
+// pub async fn depreciated_auth_file_download(
+//     auth: crate::middleware::auth::MyJWT,
+//     Path((_file, dongle_id, route_name, segment, file)): Path<(String, String, String, String, String)>,
+//     State(ctx): State<AppContext>,
+//     Extension(client): Extension<reqwest::Client>,
+//     headers: HeaderMap,
+// ) -> impl IntoResponse {
+//     ensure_user_is_owner(&auth, &ctx.db, &dongle_id).await?;
+//     let lookup_key = format!("{dongle_id}_{route_name}--{segment}--{file}");  // Note that route_name does not include dongle_id
+//     return asset_download(lookup_key, &client, headers).await;
+// }
 
 
 async fn delete_route(
@@ -720,7 +727,7 @@ pub fn routes() -> Routes {
         .add("/:dongle_id/:timestamp/:segment/events.json", get(events_download))
         .add("/:dongle_id/:timestamp/:segment/sprite.jpg", get(sprite_download))
         .add("/:dongle_id/:timestamp/:segment/:file", get(auth_file_download))
-        .add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
+        //.add("/:filetype/:dongle_id/:timestamp/:segment/:file", get(depreciated_auth_file_download))
         .add("/delete/:dongle_id", delete(delete_data))
         .add("/delete/:dongle_id/:timestamp", delete(delete_route))
         .add("/bootlog/:bootlog_file", get(bootlog_file_download))

@@ -45,12 +45,51 @@ def files_from_device(db, dongle_id, filters):
 
     return upload_files
 
+class File:
+    def __init__(self, path):
+        self.path = path
+        self.type = path.split('/')[1].split('.')[0]  # Extract the file type from the path
+        self.id = path.split('/')[0]  # Extract the id from the path
+        self.unique_id = self.id.split('--')[1]
+        self.monotonic_route_id = int(self.id.split('--')[0], 16)  # Extract the monotonic route id from the path 00000cb8 to int
+        self.segment_number = int(self.id.split('--')[-1])  # Extract the segment number from the path
+
+    def __repr__(self):
+        return f"File(path={self.path}, type={self.type}, id={self.id}, segment={self.segment_number})"
+
+def sort_upload_files(filtered_files):
+    """
+    Sorts the filtered files based on their type and sequence. Early qlog, rlog files are prioritized first, then
+    other types in the order they appear. Only requests the next priority item if there is nothing in the higher priority to upload.
+    format is like '00000cb8--a83c47336a--5/ecamera.hevc'
+    where the first part is the monotonic route id, the second part is the unique identifier which is just in case, the third part is the segment number
+    """
+    priority = ["qlog","qcamera", "rlog", "ecamera", "fcamera", "dcamera"]
+    sorted_files = {key: [] for key in priority}
+    for file in filtered_files:
+        file_obj = File(file)
+        if file_obj.type in priority:
+            sorted_files[file_obj.type].append(file_obj)
+    # Sort files by monotonic_route_id
+    for key in sorted_files:
+        sorted_files[key].sort(key=lambda x: x.monotonic_route_id)
+    # Sort each type by segment number
+    for key in sorted_files:
+        sorted_files[key].sort(key=lambda x: x.segment_number)
+    # Only return files from the highest priority category that has files
+    sorted_list = []
+    for key in priority:
+        if sorted_files[key]:
+            sorted_list.extend(file.path for file in sorted_files[key])
+            break  # Stop after finding the first priority category with files
+    return sorted_list
+        
 def main():
     parser = argparse.ArgumentParser(description="Filter files from devices based on given substrings.")
     parser.add_argument(
         "-f", "--filters",
         nargs="+",  # Accepts multiple filters as a list
-        default=["rlog", "qlog", "ecam", "dcam", "fcam", "qcam"],  # Default filters if none are provided
+        default=["rlog", "qlog", "ecam", "fcam", "qcam"],  # Default filters if none are provided
         help="List of substrings to filter files (e.g., -f rlog ecamera)"
     )
     
@@ -67,13 +106,14 @@ def main():
     while 1:
         db.connect()
         print("DATA COLLECTION PROCESS CONNECTED TO DATABASE!")
-        devices = db.query_with_desc("SELECT dongle_id, online FROM devices;")
+        devices = db.query_with_desc("SELECT dongle_id, online, firehose FROM devices;")
         uploads_dict = []
         for device in devices:
             dongle_id = device["dongle_id"]
-            if device["online"]:
+            if device["online"] and device["firehose"]:
                 log_dir = files_from_device(db, dongle_id, args.filters)
                 filtered_files = list(filter(lambda file: any(sub in file for sub in args.filters), log_dir))
+                filtered_files = sort_upload_files(filtered_files)
                 uploads_dict.append({"dongle_id": dongle_id, "files": filtered_files})
         for upload_dict in uploads_dict:
             dongle_id = upload_dict['dongle_id']
